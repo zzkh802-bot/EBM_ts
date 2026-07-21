@@ -19,7 +19,7 @@ The final product is a web agent service. A user opens a research workspace, ask
 
 ## Architecture decisions
 
-The governing architecture decisions are [ADR-0001: Pi-first architecture for EBM Agent TS](adr/0001-pi-first-architecture.md) and [ADR-0002: Initial product and integration choices](adr/0002-product-and-integration-choices.md). If future work conflicts with these documents, update the ADRs first.
+The governing architecture decisions are [ADR-0001: Pi-first architecture for EBM Agent TS](adr/0001-pi-first-architecture.md), [ADR-0002: Initial product and integration choices](adr/0002-product-and-integration-choices.md), and [ADR-0003: EBM tooling and runtime defaults](adr/0003-ebm-tooling-and-runtime-defaults.md). If future work conflicts with these documents, update the ADRs first.
 
 ### Runtime
 
@@ -45,7 +45,8 @@ Use Pi native `read`, `write`, `edit`, `grep`, `find`, `ls`, and optionally `bas
 - `web_search` adapter with source archive output
 - `web_read` adapter using Jina first, robust PDF detection/parsing, Firecrawl fallback, and explicit failure objects
 - `parse_document` adapter using MinerU for PDF/Office when configured
-- `pubmed_lookup` minimal NCBI E-utilities adapter
+- `pubmed_search` minimal NCBI E-utilities discovery adapter
+- `pubmed_read` PMID/PMCID/DOI detail/full-text adapter
 - `guideline_mcp_*` adapter for internal guideline MCP with tested failures/timeouts
 - `evidence_add` exact quote Markdown writer plus JSON/index companion
 - `evidence_list` / `evidence_read` Markdown-first readers

@@ -37,5 +37,6 @@ Add tests before implementation for:
 4. report generation fails if a citation references no evidence node.
 5. provider stream tests cover partial tool-call JSON and context overflow normalization.
 6. internal guideline MCP adapter returns structured errors for connect failure, timeout, and malformed tool JSON.
-7. PubMed adapter uses NCBI E-utilities for search/metadata/abstract/OA-link discovery and archives returned records.
-8. cloud API session isolation prevents one user reading another user's session directory when cloud work begins.
+7. PubMed adapters use NCBI E-utilities: `pubmed_search` for discovery/abstract/similar hints and `pubmed_read` for detail/OA/full-text acquisition; both archive returned records.
+8. source normalization turns pathological one-line reader output into deterministic multi-line Markdown before archive and model-visible line hints.
+9. cloud API session isolation prevents one user reading another user's session directory when cloud work begins.
