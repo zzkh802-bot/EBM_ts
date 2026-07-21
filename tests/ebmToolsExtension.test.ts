@@ -29,7 +29,13 @@ describe("EBM Pi extension tools", () => {
       registerTool: (tool: { name: string; execute: (...args: any[]) => Promise<any> }) => tools.set(tool.name, tool),
       events: { emit: (name: string, payload: unknown) => events.push([name, payload]) },
     } as never);
-    expect([...tools.keys()].sort()).toEqual(["evidence_add", "evidence_list", "evidence_read"]);
+    expect([...tools.keys()].sort()).toEqual([
+      "evidence_add",
+      "evidence_list",
+      "evidence_read",
+      "web_read",
+      "web_search",
+    ]);
 
     const cwd = await mkdtemp(path.join(os.tmpdir(), "ebm-pi-tools-"));
     const sessionId = "session-1";

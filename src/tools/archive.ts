@@ -16,6 +16,7 @@ export type SourceArchiveRecord = {
   sha256: string;
   chars: number;
   lines: number;
+  bodyLineOffset: number;
   content: string;
   sourceUrl?: string;
   title?: string;
@@ -42,11 +43,13 @@ export async function archiveSource(input: SourceArchiveInput): Promise<SourceAr
     "---",
   ].join("\n") + "\n\n";
   await writeFile(abs, `${frontmatter}${content}`, "utf8");
+  const bodyLineOffset = (frontmatter.match(/\n/g) ?? []).length;
   return {
     path: rel,
     sha256,
     chars: content.length,
     lines: content.split("\n").length,
+    bodyLineOffset,
     content,
     ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
     ...(input.title ? { title: input.title } : {}),

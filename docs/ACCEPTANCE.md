@@ -21,7 +21,8 @@ Expected:
 | Area | Test file | Invariant |
 | --- | --- | --- |
 | URL/Jina | `tests/urlSafety.test.ts` | metadata/private URLs rejected; Jina target preserves HTTPS |
-| Archive | `tests/archive.test.ts` | archive filenames are deterministic; metadata and body are persisted |
+| Archive | `tests/archive.test.ts` | archive filenames are deterministic; body offsets map model excerpts to stored files |
+| Web | `tests/web.test.ts` | Jina/Firecrawl failures are explicit; Tavily/Jina results are normalized and archived before exposure |
 | Evidence | `tests/evidence.test.ts` | Markdown evidence stores and verifies exact source slices; traversal/symlink escape rejected |
 | Session | `tests/sessionStore.test.ts` | JSON session store persists messages and compaction summaries |
 | Pi extension | `tests/ebmToolsExtension.test.ts` | project extension loads and evidence tools emit a domain event |
@@ -32,8 +33,8 @@ Expected:
 
 Add tests before implementation for:
 
-1. `web_read` returns explicit structured errors for Jina/Firecrawl/MinerU failures.
-2. `web_search` archives every result set before returning model-visible summaries.
+1. `web_read` adds MinerU/document detection and verifies redirect/DNS targets remain public.
+2. `web_search` adds Serper fallback when Tavily fails.
 3. `evidence_add` archives only exact source windows and `evidence_read` reports later source/hash mismatches.
 4. report generation fails if a citation references no evidence node.
 5. provider stream tests cover partial tool-call JSON and context overflow normalization.

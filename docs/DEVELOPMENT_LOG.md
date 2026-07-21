@@ -65,6 +65,16 @@ Persistent implementation memory for context compaction/recovery. Update after e
 
 Continue through archived web read/search, PubMed, guideline MCP, and verified Markdown report writing before optional polish. See `docs/CURRENT_STATE.md` for the executable milestone boundary.
 
+### Completed slice: archived web read/search
+
+- Added Jina-first `web_read` with Firecrawl scrape fallback and structured per-provider failures.
+- Added Tavily `web_search`; only result content is model-visible/archived, never quota or response telemetry.
+- Both tools normalize and archive output before exposure and emit `ebm:source_archived`.
+- Archive records now expose the absolute body line offset so evidence ranges match frontmatter-bearing files.
+- Tool output is bounded while the complete normalized source remains archived; large source content is excluded from Pi result details.
+- Real proxy-environment checks passed: Jina archived NCBI (8,973 chars); Tavily archived two results.
+- Verification: `npm run check` — 8 files, 17 tests passed.
+
 ### Active slice
 
-- Implement Jina-first `web_read` and Tavily-first `web_search`, with normalized archives and explicit errors.
+- Implement `pubmed_search` and `pubmed_read` against NCBI E-utilities with archived records.

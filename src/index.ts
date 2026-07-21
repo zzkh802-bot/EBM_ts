@@ -6,6 +6,8 @@ export { normalizeMarkdown } from "./tools/markdown.js";
 export type { MarkdownNormalizationOptions } from "./tools/markdown.js";
 export { addEvidence, listEvidence, readEvidence, renderEvidenceMarkdown, verifyEvidence } from "./tools/evidence.js";
 export { isPrivateAddress, jinaReaderUrl, validateOutboundUrl } from "./tools/urlSafety.js";
+export { readWeb, searchWeb } from "./tools/web.js";
+export type { WebReadResult, WebSearchResult, WebToolError } from "./tools/web.js";
 export { JsonSessionStore } from "./session/jsonSessionStore.js";
 export type { EvidenceNode, EvidenceRelation } from "./tools/evidence.js";
 export type { JsonSession, SessionMessage } from "./session/jsonSessionStore.js";

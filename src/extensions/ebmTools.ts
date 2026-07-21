@@ -9,11 +9,8 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { addEvidence, listEvidence, readEvidence } from "../tools/evidence.js";
-
-function sessionDirectory(cwd: string, sessionId: string): string {
-  if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) throw new Error("invalid Pi session id");
-  return path.join(cwd, "data", "sessions", sessionId);
-}
+import { piSessionDirectory } from "./sessionPath.js";
+import { registerWebTools } from "./webTools.js";
 
 export function registerEbmTools(pi: Pick<ExtensionAPI, "registerTool" | "events">): void {
   pi.registerTool({
@@ -34,7 +31,7 @@ export function registerEbmTools(pi: Pick<ExtensionAPI, "registerTool" | "events
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const sessionId = ctx.sessionManager.getSessionId();
-      const sessionDir = sessionDirectory(ctx.cwd, sessionId);
+      const sessionDir = piSessionDirectory(ctx.cwd, sessionId);
       const indexPath = path.join(sessionDir, "evidence", "EVIDENCE.md");
       const node = await withFileMutationQueue(indexPath, () => addEvidence({
         sessionDir,
@@ -64,7 +61,7 @@ export function registerEbmTools(pi: Pick<ExtensionAPI, "registerTool" | "events
     parameters: Type.Object({}),
     async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
       const sessionId = ctx.sessionManager.getSessionId();
-      const items = await listEvidence(sessionDirectory(ctx.cwd, sessionId));
+      const items = await listEvidence(piSessionDirectory(ctx.cwd, sessionId));
       return {
         content: [{ type: "text", text: items.length ? JSON.stringify(items, null, 2) : "No evidence records found." }],
         details: { items },
@@ -81,7 +78,7 @@ export function registerEbmTools(pi: Pick<ExtensionAPI, "registerTool" | "events
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const sessionId = ctx.sessionManager.getSessionId();
-      const record = await readEvidence(sessionDirectory(ctx.cwd, sessionId), params.evidence_id);
+      const record = await readEvidence(piSessionDirectory(ctx.cwd, sessionId), params.evidence_id);
       const truncated = truncateHead(record.markdown, { maxBytes: DEFAULT_MAX_BYTES, maxLines: DEFAULT_MAX_LINES });
       const suffix = truncated.truncated
         ? `\n\n[Evidence output truncated. Full record: evidence/${params.evidence_id}.md]`
@@ -92,4 +89,6 @@ export function registerEbmTools(pi: Pick<ExtensionAPI, "registerTool" | "events
       };
     },
   });
+
+  registerWebTools(pi);
 }

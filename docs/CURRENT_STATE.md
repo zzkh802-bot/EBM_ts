@@ -25,7 +25,9 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - Pi native `deepseek/deepseek-v4-flash` is the default; Xinqiong is an OpenAI-compatible endpoint using `OPENAI_API_KEY`.
 - Real direct calls verified DeepSeek thinking off/on, DeepSeek tool calls, and Xinqiong thinking/tool calls.
 - `npm run ebm` loads `.env`, launches native Pi TUI, and stores Pi sessions locally.
-- `npm run check`: 7 test files / 14 tests passing.
+- `web_read` (Jina → Firecrawl fallback) and `web_search` (Tavily) normalize/archive before model exposure and return explicit provider attempts on failure.
+- Real proxy-environment checks passed for Jina reading NCBI and Tavily search.
+- `npm run check`: 8 test files / 17 tests passing.
 
 ## Non-negotiable decisions
 
@@ -39,7 +41,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 
 ## Active task
 
-Implement archived `web_read` and `web_search` Pi tools with deterministic errors, beginning with Jina and Tavily and leaving clean provider fallback boundaries.
+Implement archived `pubmed_search` and `pubmed_read` tools using NCBI E-utilities.
 
 ## Next commands
 

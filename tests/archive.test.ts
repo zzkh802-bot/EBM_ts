@@ -27,5 +27,6 @@ describe("source archive", () => {
     expect(record.content).toBe(archivedBody);
     expect(record.content.split("\n").length).toBeGreaterThan(1);
     expect(record.lines).toBe(record.content.split("\n").length);
+    expect(saved.split("\n").slice(record.bodyLineOffset).join("\n")).toBe(record.content);
   });
 });
