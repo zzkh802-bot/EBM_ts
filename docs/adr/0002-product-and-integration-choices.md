@@ -84,7 +84,7 @@ Default to DeepSeek official. Keep Xinqiong as OpenAI-compatible fallback/altern
 
 Pi native skills are allowed, but any skill used in the EBM main research path must respect archive/provenance requirements.
 
-Before adopting external Pi search/read skills, confirm whether they have API quota/cost implications and whether their outputs can be archived deterministically.
+Before adopting external Pi search/read skills, confirm whether they have API quota/cost implications and whether their outputs can be archived deterministically. Current quota notes are recorded in `docs/NETWORK_QUOTAS.md`.
 
 ### 10. MCP
 
