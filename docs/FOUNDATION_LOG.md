@@ -14,6 +14,7 @@ Actions:
 - Added project-local Pi provider extension for DeepSeek Official and Xinqiong.
 - Added initial EBM skill under `.pi/skills/ebm-research/`.
 - Added specs and acceptance docs.
+- Recorded Pi-first architecture decision in `docs/adr/0001-pi-first-architecture.md`.
 
 Validated:
 

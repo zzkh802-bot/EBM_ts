@@ -19,9 +19,11 @@ The final product is a web agent service. A user opens a research workspace, ask
 
 ## Architecture decisions
 
+The governing architecture decision is [ADR-0001: Pi-first architecture for EBM Agent TS](adr/0001-pi-first-architecture.md). If future work conflicts with this document, update the ADR first.
+
 ### Runtime
 
-Use Pi SDK and project-local extensions. Keep Pi's native session/compaction/tool-call handling unless a failing test proves it is insufficient.
+Use Pi SDK and project-local extensions. Keep Pi's native async session, event stream, extension hooks, provider registry, compaction, and tool-call handling unless a failing executable test proves it is insufficient.
 
 ### Storage
 
