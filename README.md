@@ -60,22 +60,25 @@ Interactive local run after install:
 
 ```bash
 cd ~/dev/EBM_ts
-pi --approve
+npm run ebm
 ```
 
-Project-local settings load `.pi/extensions/ebm-providers.ts`, registering:
+The launcher loads `.env`, uses the project-local Pi binary/runtime, stores Pi conversations under `data/pi-sessions/`, and keeps EBM source/evidence data isolated under `data/sessions/{piSessionId}/`.
 
-- `deepseek-official/deepseek-chat`
-- `deepseek-official/deepseek-reasoner`
+Project settings default to Pi's native `deepseek/deepseek-v4-flash`. Pi already handles the official DeepSeek V4 protocol, thinking controls, streaming, and tool calls. The project extension adds only the Xinqiong OpenAI-compatible endpoint:
+
 - `xinqiong/deepseek-v4-flash`
 
-Pi already supports many native providers, including OpenAI/Codex. This project keeps those native providers instead of wrapping them.
+Pi's other native providers, including OpenAI/Codex, remain available.
 
 ## Development checks
 
 ```bash
 npm run typecheck
 npm run test
+npm run test:network           # one fast real DeepSeek smoke call; loads local .env
+npm run test:network:deepseek  # thinking-off plus thinking/tool-call checks
+npm run test:network:full      # DeepSeek and Xinqiong; intentionally slower
 npm run lint:boundaries
 npm run check
 ```

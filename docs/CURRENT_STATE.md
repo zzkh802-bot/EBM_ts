@@ -2,42 +2,49 @@
 
 Read this first after context compaction.
 
-## Active task
+## Basic-refactor target
 
-Expose source archive and evidence operations as project-local Pi extension tools.
+Continue without pausing for optional polish until this local Pi-first MVP works end to end:
 
-## Last known state
+1. launch native Pi TUI with DeepSeek V4 Flash;
+2. search/read web and PubMed sources with explicit errors;
+3. normalize and archive every model-visible external result;
+4. create/read/list exact-quote Markdown evidence;
+5. write a Markdown report whose evidence references can be verified;
+6. retain Xinqiong OpenAI-compatible and guideline MCP adapters;
+7. pass local checks plus small, separately-invoked network smoke checks.
 
-- Repository: `~/dev/EBM_ts`
-- Branch: `main`
-- Remote clean at commit `cd93237` before new implementation work (later docs commit `c67f755`; ADR implementation defaults `cd93237`; verify with git log).
-- Markdown normalization/archive and complete Markdown evidence add/list/read implemented; `npm run check`: 6 files / 12 tests passing.
-- `.env` exists locally and is ignored.
-- Pi runtime is vendored but extensions are preferred.
+Not required for this milestone: cloud API/multi-user auth, scheduler, subagents, SQLite, historical migration, advanced UI, or exhaustive provider benchmarking.
+
+## Last verified state
+
+- Repository: `~/dev/EBM_ts`; branch `main`.
+- Markdown normalization/archive and Markdown evidence add/list/read are implemented.
+- Project extension registers `evidence_add`, `evidence_list`, and `evidence_read` through Pi and emits `ebm:evidence_added`.
+- Concurrent evidence writes use Pi's file mutation queue.
+- Pi native `deepseek/deepseek-v4-flash` is the default; Xinqiong is an OpenAI-compatible endpoint using `OPENAI_API_KEY`.
+- Real direct calls verified DeepSeek thinking off/on, DeepSeek tool calls, and Xinqiong thinking/tool calls.
+- `npm run ebm` loads `.env`, launches native Pi TUI, and stores Pi sessions locally.
+- `npm run check`: 7 test files / 14 tests passing.
 
 ## Non-negotiable decisions
 
-- Normalize reader output before both archive and model-visible output; exact same line numbering.
-- Evidence source of truth is Markdown, no redundant raw JSON body.
-- Web pages: Jina first, Firecrawl fallback.
-- PDFs: MinerU Premium first; if remote fetch fails, local download then upload; local parser fallback.
-- General search: Tavily first. Biomedical: PubMed-specific tools.
-- PubMed split: `pubmed_search` and `pubmed_read`.
-- Internal guideline MCP retained from Python config.
-- Default model: DeepSeek V4 Flash using Pi provider support where possible.
-- No old session migration, no subagents, no SQLite.
+- Pi owns runtime, events, tool calling, provider streaming, compaction, and TUI.
+- Normalize network content before archive and model visibility; preserve identical line numbering.
+- Evidence source of truth is Markdown; no redundant raw JSON body.
+- Web pages: Jina first, Firecrawl fallback. PDFs: MinerU Premium first, then download/upload, then local fallback.
+- General search: Tavily first; biomedical search: PubMed-specific tools.
+- Guideline MCP calls are explicit, timeout-bounded, and initially sequential.
+- No old session migration, subagents, scheduler, or SQLite.
 
-## Recently completed
+## Active task
 
-- `src/tools/markdown.ts`: deterministic wrapping, fence/table preservation.
-- `archiveSource()` normalizes before hash/path/write/model-visible return.
-- `addEvidence()` writes Markdown exact-quote records and `EVIDENCE.md`; traversal/symlink escape is rejected.
-- `readEvidence()` parses and verifies records; `listEvidence()` gives deterministic summaries.
+Implement archived `web_read` and `web_search` Pi tools with deterministic errors, beginning with Jina and Tavily and leaving clean provider fallback boundaries.
 
-## Next command
+## Next commands
 
 ```bash
-cd ~/dev/EBM_ts && git status --short --branch && npm run check
+cd ~/dev/EBM_ts
+git status --short --branch
+npm run check
 ```
-
-Then add one failing behavior test that loads EBM tools through a Pi extension factory.

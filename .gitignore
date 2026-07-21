@@ -8,5 +8,6 @@ coverage/
 .pi/sessions/
 .pi/auth.json
 data/sessions/
+data/pi-sessions/
 data/tmp/
 *.log

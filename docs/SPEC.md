@@ -58,8 +58,8 @@ No duplicate code-vs-writing file tools.
 
 Keep Pi native providers such as OpenAI/Codex. Add project-local provider registration for:
 
-- DeepSeek Official API
-- Xinqiong/Infini-AI OpenAI-compatible endpoint
+- Pi's native DeepSeek provider (including DeepSeek V4 Flash)
+- Xinqiong/Infini-AI OpenAI-compatible endpoint as a project extension
 
 ### Skills
 

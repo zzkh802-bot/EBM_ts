@@ -8,11 +8,14 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:network": "bash scripts/smoke-deepseek.sh",
     "test:watch": "vitest",
+    "ebm": "bash scripts/ebm.sh",
     "lint:boundaries": "tsx scripts/check-boundaries.ts",
     "check": "npm run typecheck && npm run test && npm run lint:boundaries"
   },
   "dependencies": {
+    "@earendil-works/pi-ai": "^0.80.10",
     "@earendil-works/pi-coding-agent": "file:vendor/pi-coding-agent",
     "typebox": "^1.0.55",
     "zod": "^4.1.13"

@@ -50,10 +50,21 @@ Persistent implementation memory for context compaction/recovery. Update after e
 - TDD evidence: public list/read test failed before implementation.
 - Verification: `npm run check` — 6 files, 12 tests passed.
 
+### Completed slice: Pi evidence extension and provider/runtime validation
+
+- Registered `evidence_add`, `evidence_list`, and `evidence_read` as project-local Pi tools.
+- Tool writes are serialized with Pi's `withFileMutationQueue`; successful writes emit `ebm:evidence_added`.
+- Added a real Pi resource-loader test plus tool execution/event test.
+- Switched the default to Pi native `deepseek/deepseek-v4-flash`; removed the redundant custom official provider.
+- Kept Xinqiong as an OpenAI-compatible endpoint using the existing `OPENAI_API_KEY`.
+- Real calls verified DeepSeek thinking off/on and tool calls, plus Xinqiong thinking/tool calls.
+- Added `npm run ebm` and a simple timeout-bounded `npm run test:network` diagnostic.
+- Verification: `npm run check` — 7 files, 14 tests passed.
+
+### Basic-refactor milestone
+
+Continue through archived web read/search, PubMed, guideline MCP, and verified Markdown report writing before optional polish. See `docs/CURRENT_STATE.md` for the executable milestone boundary.
+
 ### Active slice
 
-- Expose archive/evidence functionality through project-local Pi extension tools, preserving Pi's event/runtime model.
-
-### Verification baseline
-
-- `npm run check`: 5 test files, 7 tests passing before implementation.
+- Implement Jina-first `web_read` and Tavily-first `web_search`, with normalized archives and explicit errors.

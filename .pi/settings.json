@@ -1,6 +1,7 @@
 {
-  "extensions": [".pi/extensions/ebm-providers.ts"],
-  "defaultModel": "deepseek-official/deepseek-chat",
+  "defaultProvider": "deepseek",
+  "defaultModel": "deepseek-v4-flash",
+  "defaultThinkingLevel": "high",
   "compaction": {
     "enabled": true
   },

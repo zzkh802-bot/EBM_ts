@@ -22,9 +22,10 @@ Expected:
 | --- | --- | --- |
 | URL/Jina | `tests/urlSafety.test.ts` | metadata/private URLs rejected; Jina target preserves HTTPS |
 | Archive | `tests/archive.test.ts` | archive filenames are deterministic; metadata and body are persisted |
-| Evidence | `tests/evidence.test.ts` | evidence JSON stores exact source slice and rejects traversal |
+| Evidence | `tests/evidence.test.ts` | Markdown evidence stores and verifies exact source slices; traversal/symlink escape rejected |
 | Session | `tests/sessionStore.test.ts` | JSON session store persists messages and compaction summaries |
-| Providers | `tests/providerCatalog.test.ts` | DeepSeek official and Xinqiong providers register as OpenAI-compatible Pi providers |
+| Pi extension | `tests/ebmToolsExtension.test.ts` | project extension loads and evidence tools emit a domain event |
+| Providers | `tests/providerCatalog.test.ts` | Pi owns native DeepSeek; Xinqiong registers only its OpenAI-compatible endpoint |
 | Bloat boundary | `scripts/check-boundaries.ts` | no SQLite/ORM/LangChain/LlamaIndex dependency in foundation |
 
 ## Future acceptance before web product
@@ -33,7 +34,7 @@ Add tests before implementation for:
 
 1. `web_read` returns explicit structured errors for Jina/Firecrawl/MinerU failures.
 2. `web_search` archives every result set before returning model-visible summaries.
-3. `evidence_add` rejects quotes that do not match archived source windows.
+3. `evidence_add` archives only exact source windows and `evidence_read` reports later source/hash mismatches.
 4. report generation fails if a citation references no evidence node.
 5. provider stream tests cover partial tool-call JSON and context overflow normalization.
 6. internal guideline MCP adapter returns structured errors for connect failure, timeout, and malformed tool JSON.
