@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { addEvidence, verifyEvidence } from "../src/tools/evidence.js";
+import { addEvidence, listEvidence, readEvidence, verifyEvidence } from "../src/tools/evidence.js";
 
 describe("Markdown evidence ledger", () => {
   it("stores exact source slices and verifies them", async () => {
@@ -28,6 +28,28 @@ describe("Markdown evidence ledger", () => {
     const index = await readFile(path.join(dir, "evidence", "EVIDENCE.md"), "utf8");
     expect(index).toContain(`[${node.id}](${node.id}.md)`);
     expect(index).toContain("Intervention improves outcome.");
+  });
+
+  it("lists and reads persisted Markdown evidence through public interfaces", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
+    await writeFile(path.join(dir, "source.md"), "background\nexact result", "utf8");
+    const node = await addEvidence({
+      sessionDir: dir,
+      question: "What is the effect?",
+      claim: "The intervention has an effect.",
+      relation: "supports",
+      sourcePath: "source.md",
+      offset: 1,
+      limit: 1,
+    });
+
+    expect(await listEvidence(dir)).toEqual([
+      expect.objectContaining({ id: node.id, relation: "supports", claim: node.claim, path: `evidence/${node.id}.md` }),
+    ]);
+    const read = await readEvidence(dir, node.id);
+    expect(read.node).toEqual(node);
+    expect(read.markdown).toContain("exact result");
+    expect(read.verification).toEqual({ ok: true, errors: [] });
   });
 
   it("rejects source symlinks that escape the session directory", async () => {

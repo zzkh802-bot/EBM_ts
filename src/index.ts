@@ -3,7 +3,7 @@ export { registerEbmProviders, DEEPSEEK_PROVIDER_ID, XINQIONG_PROVIDER_ID } from
 export { archiveSource, stableArchiveName } from "./tools/archive.js";
 export { normalizeMarkdown } from "./tools/markdown.js";
 export type { MarkdownNormalizationOptions } from "./tools/markdown.js";
-export { addEvidence, verifyEvidence } from "./tools/evidence.js";
+export { addEvidence, listEvidence, readEvidence, renderEvidenceMarkdown, verifyEvidence } from "./tools/evidence.js";
 export { isPrivateAddress, jinaReaderUrl, validateOutboundUrl } from "./tools/urlSafety.js";
 export { JsonSessionStore } from "./session/jsonSessionStore.js";
 export type { EvidenceNode, EvidenceRelation } from "./tools/evidence.js";

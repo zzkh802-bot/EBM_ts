@@ -42,9 +42,17 @@ Persistent implementation memory for context compaction/recovery. Update after e
 - TDD evidence: missing `.md`, missing index, and symlink escape tests each failed before implementation.
 - Verification: `npm run check` — 6 files, 11 tests passed.
 
+### Completed slice: evidence read/list interfaces
+
+- Added `readEvidence(sessionDir, id)` with frontmatter/exact-quote parsing, filename/id consistency check, and source verification.
+- Added deterministic `listEvidence(sessionDir)` summaries for Pi tools/UI.
+- Malformed evidence is an explicit error rather than silently skipped.
+- TDD evidence: public list/read test failed before implementation.
+- Verification: `npm run check` — 6 files, 12 tests passed.
+
 ### Active slice
 
-- Add public Markdown evidence read/list behavior, then expose archive/evidence functionality through a Pi extension tool interface.
+- Expose archive/evidence functionality through project-local Pi extension tools, preserving Pi's event/runtime model.
 
 ### Verification baseline
 
