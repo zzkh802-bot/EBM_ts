@@ -4,14 +4,14 @@ Read this first after context compaction.
 
 ## Active task
 
-Convert evidence storage from JSON-only to Markdown source of truth, using TDD vertical slices.
+Add Markdown evidence read/list behavior, then Pi extension tool exposure.
 
 ## Last known state
 
 - Repository: `~/dev/EBM_ts`
 - Branch: `main`
 - Remote clean at commit `cd93237` before new implementation work (later docs commit `c67f755`; ADR implementation defaults `cd93237`; verify with git log).
-- Markdown normalization/archive slice implemented; `npm run check`: 6 files / 10 tests passing.
+- Markdown normalization/archive and Markdown evidence persistence implemented; `npm run check`: 6 files / 11 tests passing.
 - `.env` exists locally and is ignored.
 - Pi runtime is vendored but extensions are preferred.
 
@@ -31,6 +31,7 @@ Convert evidence storage from JSON-only to Markdown source of truth, using TDD v
 
 - `src/tools/markdown.ts`: deterministic wrapping, fence/table preservation.
 - `archiveSource()` normalizes before hash/path/write/model-visible return.
+- `addEvidence()` writes Markdown exact-quote records and `EVIDENCE.md`; traversal/symlink escape is rejected.
 
 ## Next command
 
@@ -38,4 +39,4 @@ Convert evidence storage from JSON-only to Markdown source of truth, using TDD v
 cd ~/dev/EBM_ts && git status --short --branch && npm run check
 ```
 
-Then add one failing behavior test for Markdown evidence persistence.
+Then add one failing behavior test for public evidence listing/reading.

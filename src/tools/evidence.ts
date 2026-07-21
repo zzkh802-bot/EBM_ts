@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 
@@ -34,8 +34,76 @@ function assertRelativeSafe(rel: string): void {
   }
 }
 
+async function resolveExistingSessionPath(sessionDir: string, rel: string): Promise<string> {
+  assertRelativeSafe(rel);
+  const [root, target] = await Promise.all([
+    realpath(sessionDir),
+    realpath(path.join(sessionDir, rel)),
+  ]);
+  const relative = path.relative(root, target);
+  if (relative.startsWith(`..${path.sep}`) || relative === ".." || path.isAbsolute(relative)) {
+    throw new Error(`source path resolves outside session directory: ${rel}`);
+  }
+  return target;
+}
+
 function evidenceId(input: Omit<EvidenceNode, "id" | "createdAt" | "citationEligible">): string {
   return `ev_${createHash("sha256").update(JSON.stringify(input)).digest("hex").slice(0, 16)}`;
+}
+
+function yamlString(value: string): string {
+  return JSON.stringify(value);
+}
+
+function quoteFence(quote: string): string {
+  const longest = Math.max(0, ...Array.from(quote.matchAll(/`+/g), (match) => match[0].length));
+  return "`".repeat(Math.max(3, longest + 1));
+}
+
+export function renderEvidenceMarkdown(node: EvidenceNode): string {
+  const fence = quoteFence(node.quote);
+  return [
+    "---",
+    `evidence_id: ${node.id}`,
+    `question: ${yamlString(node.question)}`,
+    `claim: ${yamlString(node.claim)}`,
+    `relation: ${node.relation}`,
+    `source_path: ${yamlString(node.sourcePath)}`,
+    `source_line_start: ${node.lineStart}`,
+    `source_line_end: ${node.lineEnd}`,
+    `source_read_hint: ${yamlString(`read ${node.sourcePath} at offset ${node.lineStart} for ${node.lineEnd - node.lineStart + 1} lines`)}`,
+    `content_hash: ${node.contentHash}`,
+    `created_at: ${yamlString(node.createdAt)}`,
+    `interpretation_status: active`,
+    `citation_eligible: ${node.citationEligible}`,
+    "---",
+    "",
+    `# Evidence: ${node.claim}`,
+    "",
+    "## Claim Relation",
+    "",
+    `${node.relation}: ${node.claim}`,
+    "",
+    "## Exact Quote",
+    "",
+    `${fence}text`,
+    node.quote,
+    fence,
+    "",
+  ].join("\n");
+}
+
+async function updateEvidenceIndex(outDir: string, node: EvidenceNode): Promise<void> {
+  const indexPath = path.join(outDir, "EVIDENCE.md");
+  let current = "# Evidence Index\n\nEvidence records contain exact archived source quotes. Read a record before citing it.\n\n";
+  try {
+    current = await readFile(indexPath, "utf8");
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) throw error;
+  }
+  if (current.includes(`[${node.id}](`)) return;
+  const entry = `- [${node.id}](${node.id}.md) — **${node.relation}** — ${node.claim}\n`;
+  await writeFile(indexPath, `${current}${current.endsWith("\n") ? "" : "\n"}${entry}`, "utf8");
 }
 
 export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode> {
@@ -45,7 +113,7 @@ export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode
   if (!input.question.trim()) throw new Error("question is required");
   if (!input.claim.trim()) throw new Error("claim is required");
 
-  const sourceAbs = path.join(input.sessionDir, input.sourcePath);
+  const sourceAbs = await resolveExistingSessionPath(input.sessionDir, input.sourcePath);
   const text = await readFile(sourceAbs, "utf8");
   const lines = text.split("\n");
   const selected = lines.slice(input.offset, input.offset + input.limit);
@@ -70,15 +138,16 @@ export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode
   };
   const outDir = path.join(input.sessionDir, "evidence");
   await mkdir(outDir, { recursive: true });
-  await writeFile(path.join(outDir, `${node.id}.json`), `${JSON.stringify(node, null, 2)}\n`, "utf8");
+  await writeFile(path.join(outDir, `${node.id}.md`), renderEvidenceMarkdown(node), "utf8");
+  await updateEvidenceIndex(outDir, node);
   return node;
 }
 
 export async function verifyEvidence(sessionDir: string, node: EvidenceNode): Promise<{ ok: boolean; errors: string[] }> {
   const errors: string[] = [];
   try {
-    assertRelativeSafe(node.sourcePath);
-    const source = await readFile(path.join(sessionDir, node.sourcePath), "utf8");
+    const sourcePath = await resolveExistingSessionPath(sessionDir, node.sourcePath);
+    const source = await readFile(sourcePath, "utf8");
     const quote = source.split("\n").slice(node.lineStart, node.lineEnd + 1).join("\n");
     if (quote !== node.quote) errors.push("quote does not match source slice");
     const hash = createHash("sha256").update(node.quote).digest("hex");

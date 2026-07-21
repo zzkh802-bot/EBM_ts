@@ -32,9 +32,19 @@ Persistent implementation memory for context compaction/recovery. Update after e
 - TDD evidence: initial missing-module failure, table-row failure, archive/model-visible mismatch failure, then green.
 - Verification: `npm run check` — 6 files, 10 tests passed.
 
+### Completed slice: Markdown-first evidence persistence
+
+- `addEvidence()` now writes `evidence/{id}.md`, not JSON-only records.
+- Evidence frontmatter includes stable id, question, claim, relation, source path/range/read hint, hash, status, and citation eligibility.
+- Body contains readable claim relation and one exact quote fence; no redundant raw JSON body.
+- `evidence/EVIDENCE.md` is maintained as an agent-readable index.
+- Evidence source resolution rejects `..` and symlinks escaping the session directory.
+- TDD evidence: missing `.md`, missing index, and symlink escape tests each failed before implementation.
+- Verification: `npm run check` — 6 files, 11 tests passed.
+
 ### Active slice
 
-- Convert evidence storage from JSON-only to Markdown source of truth with exact quote and companion index.
+- Add public Markdown evidence read/list behavior, then expose archive/evidence functionality through a Pi extension tool interface.
 
 ### Verification baseline
 
