@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { normalizeMarkdown } from "./markdown.js";
 
 export type SourceArchiveInput = {
   sessionDir: string;
@@ -14,6 +15,8 @@ export type SourceArchiveRecord = {
   path: string;
   sha256: string;
   chars: number;
+  lines: number;
+  content: string;
   sourceUrl?: string;
   title?: string;
 };
@@ -24,24 +27,27 @@ export function stableArchiveName(input: Pick<SourceArchiveInput, "kind" | "sour
 }
 
 export async function archiveSource(input: SourceArchiveInput): Promise<SourceArchiveRecord> {
-  const sha256 = createHash("sha256").update(input.content).digest("hex");
-  const rel = path.posix.join("sources", input.kind, stableArchiveName(input));
+  const content = normalizeMarkdown(input.content);
+  const normalizedInput = { ...input, content };
+  const sha256 = createHash("sha256").update(content).digest("hex");
+  const rel = path.posix.join("sources", input.kind, stableArchiveName(normalizedInput));
   const abs = path.join(input.sessionDir, rel);
   await mkdir(path.dirname(abs), { recursive: true });
   const frontmatter = [
     "---",
     `kind: ${input.kind}`,
     `sha256: ${sha256}`,
-    input.sourceUrl ? `source_url: ${JSON.stringify(input.sourceUrl)}` : undefined,
-    input.title ? `title: ${JSON.stringify(input.title)}` : undefined,
+    ...(input.sourceUrl ? [`source_url: ${JSON.stringify(input.sourceUrl)}`] : []),
+    ...(input.title ? [`title: ${JSON.stringify(input.title)}`] : []),
     "---",
-    "",
-  ].filter(Boolean).join("\n");
-  await writeFile(abs, `${frontmatter}${input.content}`, "utf8");
+  ].join("\n") + "\n\n";
+  await writeFile(abs, `${frontmatter}${content}`, "utf8");
   return {
     path: rel,
     sha256,
-    chars: input.content.length,
+    chars: content.length,
+    lines: content.split("\n").length,
+    content,
     ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
     ...(input.title ? { title: input.title } : {}),
   };

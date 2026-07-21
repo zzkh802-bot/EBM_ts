@@ -15,4 +15,17 @@ describe("source archive", () => {
     expect(saved).toContain("body");
     expect(record.sha256).toHaveLength(64);
   });
+
+  it("normalizes content before hashing, archiving, and returning model-visible text", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
+    const input = Array.from({ length: 30 }, (_, index) => `sentence-${index} has biomedical evidence content.`).join(" ");
+
+    const record = await archiveSource({ sessionDir, kind: "read", content: input });
+    const saved = await readFile(path.join(sessionDir, record.path), "utf8");
+    const archivedBody = saved.split("---\n\n", 2)[1]!;
+
+    expect(record.content).toBe(archivedBody);
+    expect(record.content.split("\n").length).toBeGreaterThan(1);
+    expect(record.lines).toBe(record.content.split("\n").length);
+  });
 });
