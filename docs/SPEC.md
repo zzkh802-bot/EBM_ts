@@ -19,7 +19,7 @@ The final product is a web agent service. A user opens a research workspace, ask
 
 ## Architecture decisions
 
-The governing architecture decision is [ADR-0001: Pi-first architecture for EBM Agent TS](adr/0001-pi-first-architecture.md). If future work conflicts with this document, update the ADR first.
+The governing architecture decisions are [ADR-0001: Pi-first architecture for EBM Agent TS](adr/0001-pi-first-architecture.md) and [ADR-0002: Initial product and integration choices](adr/0002-product-and-integration-choices.md). If future work conflicts with these documents, update the ADRs first.
 
 ### Runtime
 
@@ -27,26 +27,28 @@ Use Pi SDK and project-local extensions. Keep Pi's native async session, event s
 
 ### Storage
 
-Use files and JSON:
+Use files, Markdown, and JSON:
 
 ```text
 data/sessions/{sessionId}.json       # user/session metadata and message summaries
 data/sessions/{sessionId}/sources/   # archived search/read/upload outputs
-data/sessions/{sessionId}/evidence/  # evidence node JSON files
+data/sessions/{sessionId}/evidence/  # Markdown evidence files as source of truth + JSON/index companions
 data/sessions/{sessionId}/reports/   # final Markdown reports
 ```
 
-No SQLite in v1. Search indexes can be added later as generated cache files, not source of truth.
+No SQLite in v1. Search indexes can be added later as generated cache files, not source of truth. Evidence is Markdown-first because it is friendlier for Pi native `read`/`grep` and agent self-review.
 
 ### Tools
 
 Use Pi native `read`, `write`, `edit`, `grep`, `find`, `ls`, and optionally `bash` for local development. Add only EBM-specific tools:
 
 - `web_search` adapter with source archive output
-- `web_read` adapter using Jina first, Firecrawl fallback, and explicit failure objects
+- `web_read` adapter using Jina first, robust PDF detection/parsing, Firecrawl fallback, and explicit failure objects
 - `parse_document` adapter using MinerU for PDF/Office when configured
-- `evidence_add` exact quote JSON writer
-- `evidence_list` / `evidence_read` JSON readers
+- `pubmed_lookup` minimal NCBI E-utilities adapter
+- `guideline_mcp_*` adapter for internal guideline MCP with tested failures/timeouts
+- `evidence_add` exact quote Markdown writer plus JSON/index companion
+- `evidence_list` / `evidence_read` Markdown-first readers
 - `report_write` convenience writer for Markdown reports
 
 No duplicate code-vs-writing file tools.
@@ -60,7 +62,7 @@ Keep Pi native providers such as OpenAI/Codex. Add project-local provider regist
 
 ### Skills
 
-Use Pi's native progressive-disclosure skills. Keep one small EBM research skill initially. Web-search skills from Pi ecosystem can be integrated only if they archive sources and expose deterministic errors.
+Use Pi's native progressive-disclosure skills. Keep one small EBM research skill initially. Web-search skills from Pi ecosystem can be integrated only after confirming quota/cost implications and only if they archive sources and expose deterministic errors.
 
 ### Context and compaction
 

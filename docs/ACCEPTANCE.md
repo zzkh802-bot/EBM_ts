@@ -36,4 +36,6 @@ Add tests before implementation for:
 3. `evidence_add` rejects quotes that do not match archived source windows.
 4. report generation fails if a citation references no evidence node.
 5. provider stream tests cover partial tool-call JSON and context overflow normalization.
-6. cloud API session isolation prevents one user reading another user's session directory.
+6. internal guideline MCP adapter returns structured errors for connect failure, timeout, and malformed tool JSON.
+7. PubMed adapter uses NCBI E-utilities for search/metadata/abstract/OA-link discovery and archives returned records.
+8. cloud API session isolation prevents one user reading another user's session directory when cloud work begins.
