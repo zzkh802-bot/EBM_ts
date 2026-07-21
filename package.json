@@ -1,0 +1,29 @@
+{
+  "name": "ebm-agent-ts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "TypeScript EBM research agent built on a vendored Pi coding-agent runtime.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint:boundaries": "tsx scripts/check-boundaries.ts",
+    "check": "npm run typecheck && npm run test && npm run lint:boundaries"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "file:vendor/pi-coding-agent",
+    "typebox": "^1.0.55",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.15"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
