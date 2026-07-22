@@ -31,7 +31,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - `pubmed_read` resolves identifiers and acquires PMC JATS full text when available.
 - Without usable PMC text, it performs one bounded OpenAlex OA-PDF lookup, validates DNS and every redirect, downloads at most 50 MB, and uploads local bytes to MinerU; failures remain explicit abstract-only results.
 - Real checks passed for PMC full text (PMID 33884067) and OpenAlex → local download → MinerU upload (PMID 36780904, 53,742 archived characters).
-- Evidence records carry provenance classes; discovery-only snippets and unverified guideline mirrors are mechanically citation-ineligible.
+- Evidence records carry provenance classes; discovery-only snippets and unverified guideline mirrors are mechanically citation-ineligible. PubMed abstracts remain citation-eligible for claims explicitly present in them.
 - The EBM skill now pivots from unavailable target guidelines to verified mirrors, attributed secondary evidence, or independent guidelines without conflating their claims.
 - `report_write` verifies every Markdown evidence reference against its archived source; evidence-gap reports require explicit opt-in.
 - `guideline_mcp_search` and `guideline_mcp_read` use a sequential Streamable HTTP client and archive all output; real internal search/read checks passed.
@@ -39,7 +39,9 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - Migrated the Python clinical report-writing skill and adapted obsolete tool references to Pi/evidence IDs.
 - Vertical acceptance covers discovery archive → exact evidence → verified report.
 - Pi `session_compact` summaries are atomically mirrored as project-local JSON artifacts without replacing Pi compaction behavior.
-- `npm run check`: 15 test files / 42 tests passing.
+- Source and report artifacts now use Unicode-preserving semantic filenames with numeric collision suffixes; SHA-256 remains metadata rather than filename content.
+- No dedicated user-upload workflow is planned; MinerU remains the direct document capability.
+- `npm run check`: 15 test files / 44 tests passing.
 
 ## Non-negotiable decisions
 

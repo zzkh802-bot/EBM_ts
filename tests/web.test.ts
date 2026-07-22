@@ -26,7 +26,7 @@ describe("archived web tools", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.provider).toBe("jina");
-    expect(result.archive.path).toMatch(/^sources\/read\/read-/);
+    expect(result.archive.path).toBe("sources/read/study.md");
     const saved = await readFile(path.join(sessionDir, result.archive.path), "utf8");
     expect(saved.split("\n").slice(result.archive.bodyLineOffset).join("\n")).toBe(result.archive.content);
     expect(mock.calls[0]!.input).toBe("https://r.jinaai.cn/https://example.com/study");

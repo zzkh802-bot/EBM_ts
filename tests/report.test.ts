@@ -36,6 +36,17 @@ describe("verified Markdown reports", () => {
     expect(saved).toContain(`Evidence ${evidence.id}`);
   });
 
+  it("uses semantic report filenames without hash suffixes", async () => {
+    const { sessionDir, evidence } = await fixture();
+    const content = `# 结论\n\n治疗降低死亡率 [Evidence ${evidence.id}](../evidence/${evidence.id}.md).`;
+    const first = await writeReport({ sessionDir, title: "高血压治疗循证报告 2025", content });
+    const duplicate = await writeReport({ sessionDir, title: "高血压治疗循证报告 2025", content });
+    const revised = await writeReport({ sessionDir, title: "高血压治疗循证报告 2025", content: `${content}\n\n更新说明。` });
+    expect(first.path).toBe("reports/高血压治疗循证报告-2025.md");
+    expect(duplicate.path).toBe(first.path);
+    expect(revised.path).toBe("reports/高血压治疗循证报告-2025-2.md");
+  });
+
   it("rejects unknown or source-mismatched evidence references", async () => {
     const { sessionDir, evidence } = await fixture();
     await expect(writeReport({

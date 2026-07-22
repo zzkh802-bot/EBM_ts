@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { normalizeMarkdown } from "./markdown.js";
@@ -22,18 +22,39 @@ export type SourceArchiveRecord = {
   title?: string;
 };
 
+function semanticSlug(value: string): string {
+  const normalized = value.normalize("NFKC").toLowerCase()
+    .replace(/[\p{P}\p{S}\s]+/gu, "-")
+    .replace(/[^\p{L}\p{N}-]+/gu, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return Array.from(normalized).slice(0, 96).join("").replace(/-$/g, "");
+}
+
+function urlSemanticName(sourceUrl?: string): string {
+  if (!sourceUrl) return "";
+  try {
+    const url = new URL(sourceUrl);
+    const basename = decodeURIComponent(url.pathname.split("/").filter(Boolean).at(-1) ?? "").replace(/\.[a-z0-9]{1,8}$/i, "");
+    return basename || url.hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
 export function stableArchiveName(input: Pick<SourceArchiveInput, "kind" | "sourceUrl" | "title" | "content">): string {
-  const seed = [input.kind, input.sourceUrl ?? "", input.title ?? "", input.content.slice(0, 4096)].join("\u001f");
-  return `${input.kind}-${createHash("sha256").update(seed).digest("hex").slice(0, 16)}.md`;
+  const firstReadableLine = input.content.split("\n").map((line) => line.replace(/^#+\s*/, "").trim()).find(Boolean) ?? "";
+  const stem = semanticSlug(input.title || urlSemanticName(input.sourceUrl) || firstReadableLine || `${input.kind}-source`);
+  return `${stem || `${input.kind}-source`}.md`;
 }
 
 export async function archiveSource(input: SourceArchiveInput): Promise<SourceArchiveRecord> {
   const content = normalizeMarkdown(input.content);
   const normalizedInput = { ...input, content };
   const sha256 = createHash("sha256").update(content).digest("hex");
-  const rel = path.posix.join("sources", input.kind, stableArchiveName(normalizedInput));
-  const abs = path.join(input.sessionDir, rel);
-  await mkdir(path.dirname(abs), { recursive: true });
+  const baseName = stableArchiveName(normalizedInput).replace(/\.md$/, "");
+  const outDir = path.join(input.sessionDir, "sources", input.kind);
+  await mkdir(outDir, { recursive: true });
   const frontmatter = [
     "---",
     `kind: ${input.kind}`,
@@ -42,7 +63,23 @@ export async function archiveSource(input: SourceArchiveInput): Promise<SourceAr
     ...(input.title ? [`title: ${JSON.stringify(input.title)}`] : []),
     "---",
   ].join("\n") + "\n\n";
-  await writeFile(abs, `${frontmatter}${content}`, "utf8");
+  const archived = `${frontmatter}${content}`;
+  let rel = "";
+  for (let suffix = 1; ; suffix += 1) {
+    const name = `${baseName}${suffix === 1 ? "" : `-${suffix}`}.md`;
+    const abs = path.join(outDir, name);
+    try {
+      await writeFile(abs, archived, { encoding: "utf8", flag: "wx" });
+      rel = path.posix.join("sources", input.kind, name);
+      break;
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
+      if (await readFile(abs, "utf8") === archived) {
+        rel = path.posix.join("sources", input.kind, name);
+        break;
+      }
+    }
+  }
   const bodyLineOffset = (frontmatter.match(/\n/g) ?? []).length;
   return {
     path: rel,

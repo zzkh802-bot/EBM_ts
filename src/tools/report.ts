@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { readEvidence } from "./evidence.js";
 import { normalizeMarkdown } from "./markdown.js";
@@ -20,8 +20,12 @@ export type ReportRecord = {
 };
 
 function slug(value: string): string {
-  const result = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
-  return result || "report";
+  const result = value.normalize("NFKC").toLowerCase()
+    .replace(/[\p{P}\p{S}\s]+/gu, "-")
+    .replace(/[^\p{L}\p{N}-]+/gu, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return Array.from(result).slice(0, 96).join("").replace(/-$/g, "") || "report";
 }
 
 export async function writeReport(input: ReportWriteInput): Promise<ReportRecord> {
@@ -42,8 +46,8 @@ export async function writeReport(input: ReportWriteInput): Promise<ReportRecord
   }
   const sha256 = createHash("sha256").update(`${title}\n${content}`).digest("hex");
   const createdAt = new Date().toISOString();
-  const rel = path.posix.join("reports", `${slug(title)}-${sha256.slice(0, 12)}.md`);
-  const abs = path.join(input.sessionDir, rel);
+  const outDir = path.join(input.sessionDir, "reports");
+  const baseName = slug(title);
   const frontmatter = [
     "---",
     `title: ${JSON.stringify(title)}`,
@@ -54,7 +58,28 @@ export async function writeReport(input: ReportWriteInput): Promise<ReportRecord
     "---",
     "",
   ].join("\n");
-  await mkdir(path.dirname(abs), { recursive: true });
-  await writeFile(abs, `${frontmatter}${content}\n`, "utf8");
-  return { path: rel, title, evidenceIds, sha256, createdAt };
+  await mkdir(outDir, { recursive: true });
+  const archived = `${frontmatter}${content}\n`;
+  for (let suffix = 1; ; suffix += 1) {
+    const name = `${baseName}${suffix === 1 ? "" : `-${suffix}`}.md`;
+    const rel = path.posix.join("reports", name);
+    const abs = path.join(outDir, name);
+    try {
+      await writeFile(abs, archived, { encoding: "utf8", flag: "wx" });
+      return { path: rel, title, evidenceIds, sha256, createdAt };
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
+      const existing = await readFile(abs, "utf8");
+      if (existing.includes(`\nsha256: ${sha256}\n`)) {
+        const existingCreatedAt = existing.match(/\ncreated_at: ("(?:[^"\\]|\\.)*")\n/)?.[1];
+        return {
+          path: rel,
+          title,
+          evidenceIds,
+          sha256,
+          createdAt: existingCreatedAt ? JSON.parse(existingCreatedAt) as string : createdAt,
+        };
+      }
+    }
+  }
 }

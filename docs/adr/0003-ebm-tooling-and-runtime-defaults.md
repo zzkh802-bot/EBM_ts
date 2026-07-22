@@ -100,6 +100,18 @@ Default model should be DeepSeek V4 Flash.
 
 Do not add bash restrictions for local development at this stage. Use Pi native TUI/tooling as-is.
 
+### Semantic model-facing filenames
+
+Source and report filenames should be derived from titles, queries, document names, or other readable identifiers. Do not put content hashes in model-facing filenames. Keep SHA-256 values inside metadata for integrity checks. If a semantic name collides with different content, append a small numeric suffix without overwriting the earlier artifact.
+
+Evidence IDs may remain stable machine identifiers because reports reference them directly; the evidence index supplies their claim semantics.
+
+### Lean document handling
+
+Do not add a separate EBM workflow for user-upload parsing. Use MinerU directly as the document capability. Keep the existing read fallback chain small and trust the base model to decide when a document is worth pursuing.
+
+PubMed abstracts are valid evidence for claims explicitly present in the abstract. Full text is preferable when methods, exact recommendations, subgroup details, or limitations matter, but lack of full text must not force endless retrieval.
+
 ### Historical data
 
 Do not migrate old Python sessions/data. The old repo remains reference material only.

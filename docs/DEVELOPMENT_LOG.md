@@ -147,3 +147,11 @@ The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening ra
 - A Wiley OA endpoint returned HTTP 403 in about 3.5 seconds and correctly degraded to an explicit abstract-only result rather than retrying additional locations.
 - Added evidence provenance classes. `discovery_only` and `guideline_mirror_unverified` records are not citation eligible.
 - Added a bounded guideline acquisition ladder: official source → verified mirror → attributed secondary source → independent guideline addressing the same clinical question.
+
+### Completed usability: semantic artifact names
+
+- Replaced hash-based source and report filenames with Unicode-preserving names derived from title, query, URL, or first readable heading.
+- Identical artifacts reuse the same path; different content with the same semantic name receives `-2`, `-3`, and so on without overwriting earlier evidence lineage.
+- SHA-256 remains in frontmatter and verification metadata, not in model-facing filenames.
+- Kept evidence IDs unchanged as stable report references; `EVIDENCE.md` provides their claim semantics.
+- Confirmed the lean policy: no separate user-upload workflow, no further document-chain abstraction, and PubMed abstracts remain valid evidence within their explicit scope.
