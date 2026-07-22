@@ -17,8 +17,9 @@ description: Evidence-Based Medicine research workflow. Use when answering clini
 ## Minimal workflow
 
 1. State the research question and PICO.
-2. Search and read sources.
-3. Archive sources.
-4. Add exact-quote Markdown evidence records.
-5. Read evidence records again before drafting citations that point to evidence IDs.
-6. Verify all claims before final answer.
+2. Use `pubmed_search` to review batched abstracts; similar-article hints are discovery only, not evidence.
+3. Use `pubmed_read` only for selected records whose full text could change the decision; it reports whether PMC full text was obtained.
+4. Search/read outputs are already archived before exposure.
+5. Add exact-quote Markdown evidence records early when an abstract or full-text passage is decision-relevant.
+6. Read evidence records again before drafting citations that point to evidence IDs.
+7. Verify all claims before final answer.

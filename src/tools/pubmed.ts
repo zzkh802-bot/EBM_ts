@@ -6,6 +6,7 @@ const ncbiDispatcher = new Agent({ connect: { family: 4 } });
 const defaultNcbiFetch = ((input: Parameters<typeof fetch>[0], init?: RequestInit) =>
   undiciFetch(input as string | URL, { ...(init as Record<string, unknown>), dispatcher: ncbiDispatcher }) as unknown as Promise<Response>
 ) as typeof fetch;
+const xmlParser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", textNodeName: "#text", trimValues: true });
 
 const EUTILS = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils";
 const IDCONV = "https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/api/v1/articles/";
@@ -17,11 +18,11 @@ export type PubMedError = {
 };
 
 export type PubMedSearchResult =
-  | { ok: true; pmids: string[]; archive: SourceArchiveRecord }
+  | { ok: true; pmids: string[]; relatedPmids: string[]; abstractCount: number; archive: SourceArchiveRecord }
   | { ok: false; error: PubMedError };
 
 export type PubMedReadResult =
-  | { ok: true; pmid: string; pmcid?: string; archive: SourceArchiveRecord; warnings: string[] }
+  | { ok: true; pmid: string; pmcid?: string; fullText: boolean; archive: SourceArchiveRecord; warnings: string[] }
   | { ok: false; error: PubMedError };
 
 type FetchOptions = {
@@ -30,6 +31,15 @@ type FetchOptions = {
   email?: string;
   apiKey?: string;
   retries?: number;
+};
+
+type ParsedArticle = {
+  pmid: string;
+  title: string;
+  journal?: string;
+  pmcid?: string;
+  doi?: string;
+  abstractParts: string[];
 };
 
 async function fetchTimed(fetcher: typeof fetch, url: URL, timeoutMs: number, retries: number): Promise<Response> {
@@ -64,11 +74,7 @@ function addNcbiIdentity(url: URL, options: FetchOptions): void {
 async function requireOk(response: Response): Promise<PubMedError | undefined> {
   if (response.ok) return undefined;
   const body = (await response.text()).trim().slice(0, 300);
-  return {
-    code: "ncbi_request_failed",
-    message: body || `NCBI returned HTTP ${response.status}`,
-    status: response.status,
-  };
+  return { code: "ncbi_request_failed", message: body || `NCBI returned HTTP ${response.status}`, status: response.status };
 }
 
 function unknownError(error: unknown): PubMedError {
@@ -83,10 +89,146 @@ function unknownError(error: unknown): PubMedError {
   return { code: "ncbi_request_failed", message: error.message };
 }
 
+function asArray<T>(value: T | T[] | undefined): T[] {
+  return value === undefined ? [] : Array.isArray(value) ? value : [value];
+}
+
+function textOf(value: unknown): string {
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (Array.isArray(value)) return value.map(textOf).filter(Boolean).join(" ");
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => !key.startsWith("@_"))
+      .map(([, child]) => textOf(child))
+      .filter(Boolean)
+      .join(" ");
+  }
+  return "";
+}
+
+function parsePubmedArticles(xml: string): ParsedArticle[] {
+  const parsed = xmlParser.parse(xml) as any;
+  return asArray(parsed?.PubmedArticleSet?.PubmedArticle).map((article: any): ParsedArticle => {
+    const citation = article?.MedlineCitation ?? {};
+    const articleData = citation.Article ?? {};
+    const ids = asArray(article?.PubmedData?.ArticleIdList?.ArticleId);
+    const idValue = (type: string) => {
+      const found = ids.find((item: any) => item?.["@_IdType"] === type);
+      const value = found ? textOf(found).trim() : "";
+      return value || undefined;
+    };
+    const pmid = textOf(citation.PMID).trim() || idValue("pubmed") || "";
+    const pmcid = idValue("pmc");
+    const doi = idValue("doi");
+    const abstractParts = asArray(articleData.Abstract?.AbstractText).map((part: any) => {
+      const value = textOf(part).trim();
+      const label = part && typeof part === "object" && typeof part["@_Label"] === "string" ? part["@_Label"] : undefined;
+      return label && value ? `**${label}:** ${value}` : value;
+    }).filter(Boolean);
+    return {
+      pmid,
+      title: textOf(articleData.ArticleTitle).trim() || `PubMed ${pmid}`,
+      ...(textOf(articleData.Journal?.Title).trim() ? { journal: textOf(articleData.Journal.Title).trim() } : {}),
+      ...(pmcid ? { pmcid } : {}),
+      ...(doi ? { doi } : {}),
+      abstractParts,
+    };
+  }).filter((article) => /^\d+$/.test(article.pmid));
+}
+
+async function fetchPubmedArticles(
+  pmids: string[],
+  fetcher: typeof fetch,
+  timeoutMs: number,
+  retries: number,
+  options: FetchOptions,
+): Promise<ParsedArticle[]> {
+  if (!pmids.length) return [];
+  const url = new URL(`${EUTILS}/efetch.fcgi`);
+  url.searchParams.set("db", "pubmed");
+  url.searchParams.set("id", pmids.join(","));
+  url.searchParams.set("retmode", "xml");
+  addNcbiIdentity(url, options);
+  const response = await fetchTimed(fetcher, url, timeoutMs, retries);
+  const failure = await requireOk(response);
+  if (failure) throw Object.assign(new Error(failure.message), { pubmedError: failure });
+  return parsePubmedArticles(await response.text());
+}
+
+async function fetchRelated(
+  pmids: string[],
+  fetcher: typeof fetch,
+  timeoutMs: number,
+  retries: number,
+  options: FetchOptions,
+  limit: number,
+): Promise<{ pmids: string[]; summaries: Record<string, any> }> {
+  if (!pmids.length || limit <= 0) return { pmids: [], summaries: {} };
+  const linkUrl = new URL(`${EUTILS}/elink.fcgi`);
+  linkUrl.searchParams.set("dbfrom", "pubmed");
+  linkUrl.searchParams.set("db", "pubmed");
+  linkUrl.searchParams.set("id", pmids.join(","));
+  linkUrl.searchParams.set("linkname", "pubmed_pubmed");
+  linkUrl.searchParams.set("retmode", "json");
+  addNcbiIdentity(linkUrl, options);
+  const response = await fetchTimed(fetcher, linkUrl, timeoutMs, retries);
+  const failure = await requireOk(response);
+  if (failure) throw new Error(failure.message);
+  const payload = await response.json() as { linksets?: Array<{ linksetdbs?: Array<{ links?: unknown }> }> };
+  const original = new Set(pmids);
+  const related: string[] = [];
+  for (const linkset of payload.linksets ?? []) {
+    for (const database of linkset.linksetdbs ?? []) {
+      for (const id of Array.isArray(database.links) ? database.links : []) {
+        const value = String(id);
+        if (/^\d+$/.test(value) && !original.has(value) && !related.includes(value)) related.push(value);
+        if (related.length >= limit) break;
+      }
+      if (related.length >= limit) break;
+    }
+    if (related.length >= limit) break;
+  }
+  if (!related.length) return { pmids: [], summaries: {} };
+  const summaryUrl = new URL(`${EUTILS}/esummary.fcgi`);
+  summaryUrl.searchParams.set("db", "pubmed");
+  summaryUrl.searchParams.set("retmode", "json");
+  summaryUrl.searchParams.set("id", related.join(","));
+  addNcbiIdentity(summaryUrl, options);
+  const summaryResponse = await fetchTimed(fetcher, summaryUrl, timeoutMs, retries);
+  const summaryFailure = await requireOk(summaryResponse);
+  if (summaryFailure) throw new Error(summaryFailure.message);
+  const summaryPayload = await summaryResponse.json() as { result?: Record<string, any> };
+  return { pmids: related, summaries: summaryPayload.result ?? {} };
+}
+
+function renderSearch(query: string, pmids: string[], articles: ParsedArticle[], related: { pmids: string[]; summaries: Record<string, any> }): string {
+  const byPmid = new Map(articles.map((article) => [article.pmid, article]));
+  const lines = [`# PubMed search: ${query}`, "", `Results: ${pmids.length}`, ""];
+  pmids.forEach((pmid, index) => {
+    const article = byPmid.get(pmid);
+    lines.push(`## ${index + 1}. ${article?.title ?? `PMID ${pmid}`}`, "", `PMID: ${pmid}`, "Source status: PubMed abstract");
+    if (article?.pmcid) lines.push(`PMCID: ${article.pmcid}`);
+    if (article?.doi) lines.push(`DOI: ${article.doi}`);
+    if (article?.journal) lines.push(`Journal: ${article.journal}`);
+    lines.push("", "### Abstract", "", ...(article?.abstractParts.length ? article.abstractParts : ["No abstract available from PubMed."]), "");
+  });
+  if (related.pmids.length) {
+    lines.push("## Similar article hints", "", "Discovery hints only; these related records have not been read as evidence.", "");
+    related.pmids.forEach((pmid) => {
+      const item = related.summaries[pmid] ?? {};
+      lines.push(`- PMID ${pmid}: ${typeof item.title === "string" ? item.title : "Related PubMed record"}`);
+    });
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
 export async function searchPubMed(input: {
   sessionDir: string;
   query: string;
   maxResults?: number;
+  includeSimilar?: boolean;
+  maxSimilar?: number;
 } & FetchOptions): Promise<PubMedSearchResult> {
   if (!input.query.trim()) return { ok: false, error: { code: "invalid_input", message: "PubMed query is required" } };
   const fetcher = input.fetcher ?? defaultNcbiFetch;
@@ -107,60 +249,28 @@ export async function searchPubMed(input: {
       return { ok: false, error: { code: "invalid_ncbi_response", message: "NCBI esearch response has no idlist" } };
     }
     const pmids = searchPayload.esearchresult.idlist.filter((id): id is string => typeof id === "string" && /^\d+$/.test(id));
-    let summaries: Record<string, any> = {};
-    if (pmids.length) {
-      const summaryUrl = new URL(`${EUTILS}/esummary.fcgi`);
-      summaryUrl.searchParams.set("db", "pubmed");
-      summaryUrl.searchParams.set("retmode", "json");
-      summaryUrl.searchParams.set("id", pmids.join(","));
-      addNcbiIdentity(summaryUrl, input);
-      const summaryResponse = await fetchTimed(fetcher, summaryUrl, timeoutMs, retries);
-      const summaryFailure = await requireOk(summaryResponse);
-      if (summaryFailure) return { ok: false, error: summaryFailure };
-      const summaryPayload = await summaryResponse.json() as { result?: Record<string, any> };
-      if (!summaryPayload.result) {
-        return { ok: false, error: { code: "invalid_ncbi_response", message: "NCBI esummary response has no result" } };
-      }
-      summaries = summaryPayload.result;
-    }
-    const lines = [`# PubMed search: ${input.query}`, "", `Results: ${pmids.length}`, ""];
-    pmids.forEach((pmid, index) => {
-      const item = summaries[pmid] ?? {};
-      lines.push(`## ${index + 1}. ${typeof item.title === "string" ? item.title : `PMID ${pmid}`}`, "", `PMID: ${pmid}`);
-      if (typeof item.pubdate === "string") lines.push(`Published: ${item.pubdate}`);
-      if (typeof item.source === "string") lines.push(`Journal: ${item.source}`);
-      if (Array.isArray(item.authors)) {
-        const authors = item.authors.map((author: any) => author?.name).filter((name: unknown): name is string => typeof name === "string");
-        if (authors.length) lines.push(`Authors: ${authors.join(", ")}`);
-      }
-      lines.push("");
-    });
-    const publicUrl = `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(input.query)}`;
+    const articles = await fetchPubmedArticles(pmids, fetcher, timeoutMs, retries, input);
+    const related = input.includeSimilar === false
+      ? { pmids: [], summaries: {} }
+      : await fetchRelated(pmids, fetcher, timeoutMs, retries, input, Math.min(Math.max(input.maxSimilar ?? 5, 0), 10));
+    const content = renderSearch(input.query, pmids, articles, related);
     return {
       ok: true,
       pmids,
-      archive: await archiveSource({ sessionDir: input.sessionDir, kind: "search", sourceUrl: publicUrl, title: input.query, content: lines.join("\n") }),
+      relatedPmids: related.pmids,
+      abstractCount: articles.filter((article) => article.abstractParts.length > 0).length,
+      archive: await archiveSource({
+        sessionDir: input.sessionDir,
+        kind: "search",
+        sourceUrl: `https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(input.query)}`,
+        title: input.query,
+        content,
+      }),
     };
   } catch (error) {
-    return { ok: false, error: unknownError(error) };
+    const embedded = error && typeof error === "object" && "pubmedError" in error ? (error as any).pubmedError as PubMedError : undefined;
+    return { ok: false, error: embedded ?? unknownError(error) };
   }
-}
-
-function asArray<T>(value: T | T[] | undefined): T[] {
-  return value === undefined ? [] : Array.isArray(value) ? value : [value];
-}
-
-function textOf(value: unknown): string {
-  if (typeof value === "string" || typeof value === "number") return String(value);
-  if (Array.isArray(value)) return value.map(textOf).filter(Boolean).join(" ");
-  if (value && typeof value === "object") {
-    return Object.entries(value as Record<string, unknown>)
-      .filter(([key]) => !key.startsWith("@_"))
-      .map(([, child]) => textOf(child))
-      .filter(Boolean)
-      .join(" ");
-  }
-  return "";
 }
 
 async function resolvePmid(identifier: string, fetcher: typeof fetch, timeoutMs: number, retries: number, options: FetchOptions): Promise<string | undefined> {
@@ -176,10 +286,63 @@ async function resolvePmid(identifier: string, fetcher: typeof fetch, timeoutMs:
   return typeof pmid === "string" || typeof pmid === "number" ? String(pmid) : undefined;
 }
 
-export async function readPubMed(input: {
-  sessionDir: string;
-  identifier: string;
-} & FetchOptions): Promise<PubMedReadResult> {
+function collectPmcSections(body: unknown, depth = 2): string[] {
+  const lines: string[] = [];
+  for (const section of asArray((body as any)?.sec)) {
+    const title = textOf((section as any)?.title).trim();
+    if (title) lines.push(`${"#".repeat(Math.min(depth, 6))} ${title}`, "");
+    for (const paragraph of asArray((section as any)?.p)) {
+      const text = textOf(paragraph).trim();
+      if (text) lines.push(text, "");
+    }
+    lines.push(...collectPmcSections(section, depth + 1));
+  }
+  return lines;
+}
+
+function renderFullText(article: ParsedArticle, pmcXml: string): string {
+  const parsed = xmlParser.parse(pmcXml) as any;
+  const root = parsed?.article ?? parsed?.pmc?.article ?? parsed?.["pmc-articleset"]?.article;
+  if (!root?.body) throw new Error("PMC response has no article body");
+  const body = collectPmcSections(root.body);
+  if (!body.some((line) => line && !line.startsWith("#"))) throw new Error("PMC article body has no readable paragraphs");
+  return [
+    `# ${article.title}`,
+    "",
+    `PMID: ${article.pmid}`,
+    ...(article.pmcid ? [`PMCID: ${article.pmcid}`] : []),
+    ...(article.doi ? [`DOI: ${article.doi}`] : []),
+    ...(article.journal ? [`Journal: ${article.journal}`] : []),
+    "Source status: PMC full text",
+    "",
+    "## Abstract",
+    "",
+    ...(article.abstractParts.length ? article.abstractParts : ["No abstract available from PubMed."]),
+    "",
+    "## Full Text",
+    "",
+    ...body,
+  ].join("\n");
+}
+
+function renderAbstractOnly(article: ParsedArticle): string {
+  return [
+    `# ${article.title}`,
+    "",
+    `PMID: ${article.pmid}`,
+    ...(article.pmcid ? [`PMCID: ${article.pmcid}`] : []),
+    ...(article.doi ? [`DOI: ${article.doi}`] : []),
+    ...(article.journal ? [`Journal: ${article.journal}`] : []),
+    "Source status: PubMed abstract only; full text unavailable",
+    "",
+    "## Abstract",
+    "",
+    ...(article.abstractParts.length ? article.abstractParts : ["No abstract available from PubMed."]),
+    "",
+  ].join("\n");
+}
+
+export async function readPubMed(input: { sessionDir: string; identifier: string } & FetchOptions): Promise<PubMedReadResult> {
   const identifier = input.identifier.trim();
   if (!identifier) return { ok: false, error: { code: "invalid_input", message: "PMID, PMCID, or DOI is required" } };
   const fetcher = input.fetcher ?? defaultNcbiFetch;
@@ -188,60 +351,49 @@ export async function readPubMed(input: {
   try {
     const pmid = await resolvePmid(identifier, fetcher, timeoutMs, retries, input);
     if (!pmid) return { ok: false, error: { code: "identifier_not_found", message: `No PMID found for ${identifier}` } };
-    const url = new URL(`${EUTILS}/efetch.fcgi`);
-    url.searchParams.set("db", "pubmed");
-    url.searchParams.set("id", pmid);
-    url.searchParams.set("retmode", "xml");
-    addNcbiIdentity(url, input);
-    const response = await fetchTimed(fetcher, url, timeoutMs, retries);
-    const failure = await requireOk(response);
-    if (failure) return { ok: false, error: failure };
-    const xml = await response.text();
-    const parsed = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", textNodeName: "#text", trimValues: true }).parse(xml) as any;
-    const article = asArray(parsed?.PubmedArticleSet?.PubmedArticle)[0];
+    const articles = await fetchPubmedArticles([pmid], fetcher, timeoutMs, retries, input);
+    const article = articles[0];
     if (!article) return { ok: false, error: { code: "invalid_ncbi_response", message: "NCBI efetch response has no article" } };
-    const citation = article.MedlineCitation ?? {};
-    const articleData = citation.Article ?? {};
-    const ids = asArray(article.PubmedData?.ArticleIdList?.ArticleId);
-    const idValue = (type: string) => {
-      const found = ids.find((item: any) => item?.["@_IdType"] === type);
-      return found ? textOf(found) : undefined;
-    };
-    const pmcid = idValue("pmc");
-    const doi = idValue("doi");
-    const abstractParts = asArray(articleData.Abstract?.AbstractText).map((part: any) => {
-      const text = textOf(part);
-      const label = part && typeof part === "object" && typeof part["@_Label"] === "string" ? part["@_Label"] : undefined;
-      return label ? `**${label}:** ${text}` : text;
-    }).filter(Boolean);
-    const lines = [
-      `# ${textOf(articleData.ArticleTitle) || `PubMed ${pmid}`}`,
-      "",
-      `PMID: ${pmid}`,
-      ...(pmcid ? [`PMCID: ${pmcid}`] : []),
-      ...(doi ? [`DOI: ${doi}`] : []),
-      ...(textOf(articleData.Journal?.Title) ? [`Journal: ${textOf(articleData.Journal.Title)}`] : []),
-      "",
-      "## Abstract",
-      "",
-      ...(abstractParts.length ? abstractParts : ["No abstract available from PubMed."]),
-      "",
-    ];
-    const warnings = pmcid ? ["PMC full text is identified but not yet appended; use web_read on the PMCID URL if full text is required."] : [];
+
+    let content = renderAbstractOnly(article);
+    let fullText = false;
+    const warnings: string[] = [];
+    if (article.pmcid) {
+      const pmcUrl = new URL(`${EUTILS}/efetch.fcgi`);
+      pmcUrl.searchParams.set("db", "pmc");
+      pmcUrl.searchParams.set("id", article.pmcid.replace(/^PMC/i, ""));
+      pmcUrl.searchParams.set("retmode", "xml");
+      addNcbiIdentity(pmcUrl, input);
+      try {
+        const pmcResponse = await fetchTimed(fetcher, pmcUrl, timeoutMs, retries);
+        const pmcFailure = await requireOk(pmcResponse);
+        if (pmcFailure) throw new Error(pmcFailure.message);
+        content = renderFullText(article, await pmcResponse.text());
+        fullText = true;
+      } catch (error) {
+        warnings.push(`PMC full text retrieval failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    } else {
+      warnings.push("No PMCID is linked to this PubMed record; only the abstract is archived.");
+    }
     return {
       ok: true,
       pmid,
-      ...(pmcid ? { pmcid } : {}),
+      ...(article.pmcid ? { pmcid: article.pmcid } : {}),
+      fullText,
       warnings,
       archive: await archiveSource({
         sessionDir: input.sessionDir,
         kind: "read",
-        sourceUrl: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
-        title: textOf(articleData.ArticleTitle) || `PubMed ${pmid}`,
-        content: lines.join("\n"),
+        sourceUrl: fullText && article.pmcid
+          ? `https://pmc.ncbi.nlm.nih.gov/articles/${article.pmcid}/`
+          : `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
+        title: article.title,
+        content,
       }),
     };
   } catch (error) {
-    return { ok: false, error: unknownError(error) };
+    const embedded = error && typeof error === "object" && "pubmedError" in error ? (error as any).pubmedError as PubMedError : undefined;
+    return { ok: false, error: embedded ?? unknownError(error) };
   }
 }

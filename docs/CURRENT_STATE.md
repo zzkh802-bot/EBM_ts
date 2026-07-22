@@ -27,8 +27,9 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - `npm run ebm` loads `.env`, launches native Pi TUI, and stores Pi sessions locally.
 - `web_read` (Jina → Firecrawl fallback) and `web_search` (Tavily) normalize/archive before model exposure and return explicit provider attempts on failure.
 - Real proxy-environment checks passed for Jina reading NCBI and Tavily search.
-- `pubmed_search` and `pubmed_read` use official E-utilities parameters, direct IPv4, bounded retries, and archived Markdown outputs.
-- Real PubMed search/read checks passed with configured email and API key.
+- `pubmed_search` returns batched archived abstracts plus bounded ELink similar-article hints in one call.
+- `pubmed_read` resolves identifiers and acquires PMC JATS full text when available; abstract-only outcomes are explicitly marked partial.
+- Real PubMed checks passed with configured email/key, including PMC full text for PMID 33884067.
 - `report_write` verifies every Markdown evidence reference against its archived source; evidence-gap reports require explicit opt-in.
 - `guideline_mcp_search` and `guideline_mcp_read` use a sequential Streamable HTTP client and archive all output; real internal search/read checks passed.
 - `web_read` now routes PDF/Office/e-book URLs through MinerU Premium first; real demo PDF parsing returned 51,291 Markdown characters.
@@ -49,7 +50,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 
 ## Active task
 
-Basic refactor is complete. Next hardening priorities are DNS/redirect SSRF checks, MinerU local download/upload fallback, and PMC full text.
+Basic refactor is complete. Next hardening priorities are DNS/redirect SSRF checks, MinerU local download/upload fallback, and measuring whether batched abstracts/full text reduce model rounds before experimenting with lazy POMDP belief state.
 
 ## Next commands
 

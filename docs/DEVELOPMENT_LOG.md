@@ -129,3 +129,11 @@ The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening ra
 - The completed summary and lineage metadata are atomically mirrored to `data/sessions/{id}/compactions/{entryId}.json`.
 - The artifact includes reason, retry state, first kept entry, token count, source (Pi/extension), and summary.
 - Verification: `npm run check` — 14 files, 32 tests passed.
+
+### Completed hardening: PubMed abstracts and PMC full text
+
+- `pubmed_search` now batches EFetch so the first search call returns archived PubMed abstracts, avoiding one model round per abstract.
+- Optional ELink similar-article discovery returns bounded PMID/title hints clearly labeled as unread discovery records.
+- `pubmed_read` now means full-text acquisition: it resolves PMID/PMCID/DOI, detects PMCID, fetches PMC JATS XML, and archives readable full text.
+- Records without usable PMC full text return an explicit `fullText: false` abstract-only result and warning rather than pretending full-text success.
+- Real checks passed: 3 search results with 3 abstracts and 3 related hints; PMC full text for PMID 33884067 archived successfully.

@@ -19,11 +19,13 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
   pi.registerTool({
     name: "pubmed_search",
     label: "Search PubMed",
-    description: "Search PubMed through NCBI E-utilities and archive readable article metadata before exposure.",
-    promptSnippet: "Search biomedical literature in PubMed and archive the result set",
+    description: "Search PubMed and archive batched abstracts plus concise similar-article discovery hints in one call.",
+    promptSnippet: "Search biomedical literature with abstracts and related-article hints",
     parameters: Type.Object({
       query: Type.String({ minLength: 2, description: "PubMed query; field tags and Boolean operators are supported" }),
       max_results: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
+      include_similar: Type.Optional(Type.Boolean({ default: true })),
+      max_similar: Type.Optional(Type.Integer({ minimum: 0, maximum: 10, default: 5 })),
     }),
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
       onUpdate?.({ content: [{ type: "text", text: "Searching PubMed and archiving metadata…" }], details: {} });
@@ -32,6 +34,8 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
         sessionDir: piSessionDirectory(ctx.cwd, sessionId),
         query: params.query,
         ...(params.max_results === undefined ? {} : { maxResults: params.max_results }),
+        ...(params.include_similar === undefined ? {} : { includeSimilar: params.include_similar }),
+        ...(params.max_similar === undefined ? {} : { maxSimilar: params.max_similar }),
         ...ncbiOptions(),
       });
       if (!result.ok) throw toolError(result.error);
@@ -45,7 +49,13 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
       });
       return {
         content: [{ type: "text", text: output.text }],
-        details: { pmids: result.pmids, archive: archiveDetails(result.archive), truncated: output.truncated },
+        details: {
+          pmids: result.pmids,
+          relatedPmids: result.relatedPmids,
+          abstractCount: result.abstractCount,
+          archive: archiveDetails(result.archive),
+          truncated: output.truncated,
+        },
       };
     },
   });
@@ -53,8 +63,8 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
   pi.registerTool({
     name: "pubmed_read",
     label: "Read PubMed",
-    description: "Resolve a PMID, PMCID, or DOI; fetch the PubMed record and archive its readable abstract metadata.",
-    promptSnippet: "Read and archive one PubMed record by PMID, PMCID, or DOI",
+    description: "Resolve a PMID, PMCID, or DOI and fetch PMC full text when available; return an explicit abstract-only partial result otherwise.",
+    promptSnippet: "Acquire full text for one PubMed record, preferring PMC",
     parameters: Type.Object({ identifier: Type.String({ minLength: 1, description: "PMID, PMCID, or DOI" }) }),
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
       onUpdate?.({ content: [{ type: "text", text: "Reading and archiving PubMed record…" }], details: {} });
@@ -73,6 +83,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
         details: {
           pmid: result.pmid,
           ...(result.pmcid ? { pmcid: result.pmcid } : {}),
+          fullText: result.fullText,
           warnings: result.warnings,
           archive: archiveDetails(result.archive),
           truncated: output.truncated,

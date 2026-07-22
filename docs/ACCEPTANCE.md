@@ -24,7 +24,7 @@ Expected:
 | Archive | `tests/archive.test.ts` | archive filenames are deterministic; body offsets map model excerpts to stored files |
 | Web | `tests/web.test.ts` | MinerU/Jina/Firecrawl routing is ordered; Tavily/Jina/MinerU results are normalized and archived before exposure |
 | MinerU | `tests/mineru.test.ts` | Premium task polling and ZIP Markdown extraction succeed; task/ZIP failures are explicit |
-| PubMed | `tests/pubmed.test.ts` | ESearch/ESummary/EFetch outputs are archived; transient failures retry; API keys never enter archives |
+| PubMed | `tests/pubmed.test.ts` | search batches abstracts/related hints; read acquires PMC JATS full text or marks abstract-only partial results; secrets stay out of archives |
 | Guideline MCP | `tests/guidelineMcp.test.ts` | Streamable HTTP session/SSE works; malformed JSON and timeouts are explicit; output is archived |
 | Vertical flow | `tests/endToEnd.test.ts` | discovery archive becomes exact evidence and then a source-reverified report |
 | Pi resources | `tests/ebmToolsExtension.test.ts` | extension and both project skills load without diagnostics |
@@ -46,6 +46,6 @@ Add tests before implementation for:
 4. report generation audits citation placement/claim coverage beyond verifying referenced evidence IDs.
 5. provider stream tests cover partial tool-call JSON and context overflow normalization.
 6. internal guideline MCP reconnect/session-expiry behavior is covered if the server starts expiring long-lived sessions.
-7. `pubmed_read` appends PMC open-access full text when available instead of returning only a full-text warning.
+7. PubMed/PMC evaluation measures whether batched abstracts and full text reduce model rounds on representative EBM questions.
 8. source normalization turns pathological one-line reader output into deterministic multi-line Markdown before archive and model-visible line hints.
 9. cloud API session isolation prevents one user reading another user's session directory when cloud work begins.
