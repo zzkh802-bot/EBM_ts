@@ -84,6 +84,42 @@ describe("EBM Pi extension tools", () => {
     expect(names).not.toContain("guideline_mcp_read");
   });
 
+  it("returns readable session workspace paths from report_write", async () => {
+    const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
+    vi.stubEnv("GUIDELINE_MCP_URL", "");
+    registerEbmTools({
+      registerTool: (tool: { name: string; execute: (...args: any[]) => Promise<any> }) => tools.set(tool.name, tool),
+      on: () => undefined,
+      events: { emit: () => undefined },
+    } as never);
+
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "ebm-pi-tools-"));
+    const sessionId = "session-1";
+    const sessionDir = await initializePiSessionDirectory(cwd, sessionId, { sessionName: "Mortality report", firstPrompt: "Does it work?" });
+    await mkdir(path.join(sessionDir, "sources", "read"), { recursive: true });
+    await writeFile(path.join(sessionDir, "sources", "read", "study.md"), "header\nexact evidence", "utf8");
+    const ctx = { cwd, sessionManager: { getSessionId: () => sessionId } };
+    const evidence = await tools.get("evidence_add")!.execute("call-1", {
+      question: "Does it work?",
+      claim: "It works.",
+      relation: "supports",
+      source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
+      offset: 2,
+      limit: 1,
+    }, undefined, undefined, ctx);
+
+    const report = await tools.get("report_write")!.execute("call-2", {
+      title: "Mortality report",
+      markdown: "# Conclusion\n\nIt works [1].",
+      references: [{ number: 1, citation: "Study citation.", evidence_id: evidence.details.evidenceId }],
+    }, undefined, undefined, ctx);
+
+    const workspace = `data/sessions/${path.basename(sessionDir)}`;
+    expect(report.content[0].text).toContain(`Session workspace: ${workspace}`);
+    expect(report.content[0].text).toContain(`Verified report written: ${workspace}/reports/mortality-report.md`);
+    expect(report.details).toMatchObject({ readablePath: `${workspace}/reports/mortality-report.md`, sessionWorkspace: workspace });
+  });
+
   it("registers evidence tools and emits a domain event after evidence is archived", async () => {
     const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
     const handlers = new Map<string, (...args: any[]) => unknown>();

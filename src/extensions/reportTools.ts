@@ -1,7 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { writeReport } from "../tools/report.js";
-import { piSessionDirectory } from "./sessionPath.js";
+import path from "node:path";
+import { piReadableSessionPath, piSessionDirectory } from "./sessionPath.js";
 
 export function registerReportTools(pi: Pick<ExtensionAPI, "registerTool" | "events">): void {
   pi.registerTool({
@@ -27,20 +28,27 @@ export function registerReportTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const sessionId = ctx.sessionManager.getSessionId();
+      const sessionDir = piSessionDirectory(ctx.cwd, sessionId);
       const report = await writeReport({
-        sessionDir: piSessionDirectory(ctx.cwd, sessionId),
+        sessionDir,
         title: params.title,
         content: params.markdown,
         ...(params.references ? { references: params.references.map((reference) => ({ number: reference.number, citation: reference.citation, evidenceId: reference.evidence_id })) } : {}),
         ...(params.allow_no_evidence === undefined ? {} : { allowNoEvidence: params.allow_no_evidence }),
       });
       pi.events.emit("ebm:report_written", { sessionId, path: report.path, evidenceIds: report.evidenceIds });
+      const readableReportPath = piReadableSessionPath(ctx.cwd, sessionId, report.path);
       return {
         content: [{
           type: "text",
-          text: `Verified report written: ${report.path}\nEvidence records: ${report.evidenceIds.length}\nSHA-256: ${report.sha256}`,
+          text: [
+            `Session workspace: ${["data", "sessions", path.basename(sessionDir)].join("/")}`,
+            `Verified report written: ${readableReportPath}`,
+            `Evidence records: ${report.evidenceIds.length}`,
+            `SHA-256: ${report.sha256}`,
+          ].join("\n"),
         }],
-        details: report,
+        details: { ...report, readablePath: readableReportPath, sessionWorkspace: ["data", "sessions", path.basename(sessionDir)].join("/") },
       };
     },
   });
