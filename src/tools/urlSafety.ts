@@ -23,10 +23,24 @@ const metadataHosts = new Set([
 
 export type UrlSafetyResult = { ok: true; url: URL } | { ok: false; reason: string };
 
+function ipv4FromMappedIpv6(address: string): string | undefined {
+  const mapped = address.match(/^::ffff:(.+)$/i)?.[1];
+  if (!mapped) return undefined;
+  if (mapped.includes(".")) return mapped;
+  const parts = mapped.split(":");
+  if (parts.length !== 2) return undefined;
+  const high = Number.parseInt(parts[0]!, 16);
+  const low = Number.parseInt(parts[1]!, 16);
+  if (!Number.isInteger(high) || !Number.isInteger(low) || high < 0 || high > 0xffff || low < 0 || low > 0xffff) return undefined;
+  return [high >> 8, high & 0xff, low >> 8, low & 0xff].join(".");
+}
+
 export function isPrivateAddress(host: string): boolean {
   const normalized = host.toLowerCase().replace(/^\[|\]$/g, "");
   if (!isIP(normalized)) return false;
-  return privateCidrs.some((pattern) => pattern.test(normalized));
+  const mappedIpv4 = ipv4FromMappedIpv6(normalized);
+  const address = mappedIpv4 ?? normalized;
+  return privateCidrs.some((pattern) => pattern.test(address));
 }
 
 export function validateOutboundUrl(input: string): UrlSafetyResult {

@@ -75,6 +75,7 @@ export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on">): void {
   let runStartedAt: number | undefined;
   let agentStartedAt: number | undefined;
   let turnStartedAt: number | undefined;
+  let pendingSessionStart: Record<string, unknown> | undefined;
   const activeTools = new Map<string, ActiveTool>();
 
   const ensureWriter = (ctx: any): TrajectoryWriter => {
@@ -102,14 +103,18 @@ export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on">): void {
     runStartedAt = undefined;
     agentStartedAt = undefined;
     turnStartedAt = undefined;
-    await record(ctx, "session_start", {
+    pendingSessionStart = {
       reason: event.reason,
       previous_session_file: event.previousSessionFile,
       session_file: ctx.sessionManager.getSessionFile?.(),
-    });
+    };
   });
 
   pi.on("before_agent_start", async (event, ctx) => {
+    if (pendingSessionStart) {
+      await record(ctx, "session_start", pendingSessionStart);
+      pendingSessionStart = undefined;
+    }
     runCounter += 1;
     runId = `${compactTimestamp()}-${runCounter}`;
     turnIndex = undefined;

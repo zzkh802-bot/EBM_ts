@@ -30,10 +30,11 @@ Use Pi SDK and project-local extensions. Keep Pi's native async session, event s
 Use files, Markdown, and JSON:
 
 ```text
-data/sessions/{sessionId}.json       # user/session metadata and message summaries
-data/sessions/{sessionId}/sources/   # archived search/read/upload outputs
-data/sessions/{sessionId}/evidence/  # Markdown evidence files as source of truth + JSON/index companions
-data/sessions/{sessionId}/reports/   # final Markdown reports
+data/sessions/.metadata/workspaces/{fullPiSessionId}.json  # stable UUID → workspace mapping
+data/sessions/{shortId}_{semantic-name}/.metadata/session.json
+data/sessions/{shortId}_{semantic-name}/sources/           # archived search/read outputs
+data/sessions/{shortId}_{semantic-name}/evidence/          # Markdown evidence source of truth
+data/sessions/{shortId}_{semantic-name}/reports/           # final Markdown reports
 ```
 
 No SQLite in v1. Search indexes can be added later as generated cache files, not source of truth. Evidence is Markdown-first because it is friendlier for Pi native `read`/`grep` and agent self-review.

@@ -9,11 +9,31 @@ description: "教授如何围绕用户提出的循证问题展开临床论证：
 
 从用户的问题和临床决策出发组织报告。先识别用户真正要作出的总决策，再由 agent 将它拆成最少的、相互独立且能改变决策的内部循证问题。不要把问题强行归入有限的 treatment、diagnosis 或 screening 类型；问题类型只用于选择证据内容。报告可以有最低限度的病例背景、证据说明和结论，但循证分析的标题应对应这些内部循证问题，而不是预先规定的疾病分类或“问题1/问题2”。
 
-报告不是检索结果清单，也不是把论文名称和效应量排列在一起。每个循证问题都必须完成：
+报告不是检索结果清单，也不是把论文名称和效应量排列在一起。面向用户的最终文本必须像人类写的循证分析：先说明总决策，拆成少数能改变决策的循证子问题；每个子问题下提出需要裁决的 claim；再用证据作为论据去支持、限制或反驳这些 claim，最后回到病例回答原问题。
 
-`临床问题 -> 证据是什么 -> 研究做了什么 -> 发现什么 -> 对病例意味着什么`
+每个循证问题都必须完成：
 
-这条链描述的是推理关系，不是要求每篇研究各写一段。写作单位应是“待裁决的主张”：先说明本节要帮助医生决定什么，再把能够支持、限制或反驳该主张的证据放在同一条论证中比较。研究名称、样本量和效应量服务于主张，不能反过来成为文章目录。
+`临床问题 -> 待裁决claim -> 证据是什么 -> 证据为什么能/不能支持claim -> 对病例意味着什么`
+
+这条链描述的是推理关系，不是要求每篇研究各写一段。写作单位应是“待裁决的主张”：先说明本节要帮助医生决定什么，再把能够支持、限制或反驳该主张的证据放在同一条论证中比较。研究名称、样本量和效应量服务于主张，不能反过来成为文章目录。若删去所有文献名后，文章只剩下若干结论而没有推理过程，说明写作失败。
+
+## 医生式判断 know-how
+
+写报告前先像临床医生一样判断“这个信息在床边决策中承担什么角色”，再决定如何写。不要只把指南句子搬进报告。
+
+常见临床判断动作：
+
+- 先分清用户问的是“是否允许做”“是否应该做”“哪种方案更优”“风险是否可接受”，还是“还缺什么信息才能决定”。例如血压阈值问题首先是资格/禁忌判断，不是疗效大小判断。
+- 把病例事实分成三类：已经足以裁决的事实、必须补充后才可执行的事实、即使补充也不太会改变当前回答的事实。报告中优先解释前两类。
+- 对阈值类问题，说明阈值的临床含义：超过阈值是禁忌、需要先处理、需要监测，还是只是风险升高。不要把“低于阈值”直接写成“安全”，应写成“该指标本身不构成障碍”。写作前后必须核对数字比较，格式最好是“测量值 < 阈值”或“测量值 ≥ 阈值”，例如“舒张压95 mmHg < 100 mmHg”，不要误写成“舒张压低于95 mmHg”。
+- 对治疗问题，先判断当前证据是在证明获益、排除禁忌、比较方案，还是说明监测/停药条件。不同角色的证据不能混用。
+- 对指南推荐，写清楚它是强制性边界、优先方案、可选方案，还是低证据等级的实践建议。推荐等级低时，语气要更条件化。
+- 对专家共识，写成“共识级支持”或“实践建议”，不要写成已验证的标准做法；如有权威指南，应先以指南定框架。
+- 对患者适用性，先问“这个病例是否满足来源中的关键入口条件”。没有提供的信息不要补造；把它写成会改变执行的待核实条件。
+- 对风险收益，避免空泛“综合考虑”。明确说哪一项获益、哪一项伤害、哪一项不确定性在当前病例中最可能改变选择。
+- 对“可以吗”类问题，结论通常分两层：该单项条件是否允许；在所有其他条件也满足时是否可实施。不要把单项允许误写成整体批准。
+
+写作时把这些判断自然嵌入段落。例如，不只写“指南阈值为180/100 mmHg”，还要说明“这是一条血压禁忌边界；患者165/95低于边界，所以血压这一项不阻止溶栓；但它不能替代凝血、血糖、影像范围等其他资格筛查”。
 
 ## 论证主线与段落推进
 
@@ -21,11 +41,11 @@ description: "教授如何围绕用户提出的循证问题展开临床论证：
 
 随后按“主张”而不是按“文献顺序”展开。一个可复用的论证单元是：
 
-`主张 → 证据模式 → 证据如何改变判断 → 反向证据/适用边界 → 回到病例`
+`主张 → 必要术语解释 → 证据模式 → 证据如何改变判断 → 反向证据/适用边界 → 回到病例`
 
 “证据模式”可以是多项研究的一致结果、直接比较、间接比较、冲突结果或指南与试验之间的关系。段落之间要显式说明关系：是在加强前一判断、缩小外推范围、提出反例，还是改变候选方案排序。不要用“第一项研究、第二项研究、第三项研究”作为主要连接方式。
 
-有论证的最低可检查标准是：每个主要结论都有支持它的证据、不能由证据推出的内容，以及会改变结论的条件；至少有一处把多项证据综合起来，或解释证据冲突后为何仍偏向某个方案。删去研究名称和数字后，段落仍应保留“为什么这会影响临床选择”的解释。标题、表格、项目符号不能替代这条解释链。
+有论证的最低可检查标准是：每个主要结论都有支持它的证据、不能由证据推出的内容，以及会改变结论的条件；至少有一处把多项证据综合起来，或解释证据冲突后为何仍偏向某个方案。删去研究名称和数字后，段落仍应保留“为什么这会影响临床选择”的解释。标题、表格、项目符号不能替代这条解释链。不要默认用户理解关键医学术语：首次出现会影响决策的术语、阈值、结局或研究设计时，用一两句话解释其含义和为什么重要，例如“静脉溶栓时间窗”“禁忌证”“非劣效”“相对风险”“症状性颅内出血”。
 
 ## 自然段的写法
 
@@ -84,6 +104,8 @@ description: "教授如何围绕用户提出的循证问题展开临床论证：
 
 > 对于已经存在大量蛋白尿的患者，SGLT2 抑制剂的早期价值不仅是改变一个实验室数值，而是降低持续高蛋白尿这一风险状态。DAPA-CKD 中，达格列净使 UACR 下降约 29%；原文将这一结果报告为治疗组相对于对照组的几何平均变化。[6] 这支持它能够改善蛋白尿这一中间结局，但并不能单凭 UACR 的变化证明患者一定获得同等幅度的长期肾功能获益，后者仍需结合肾脏硬终点和研究人群来判断。
 
+正文引用标记必须使用人类可读的编号格式，如 `[1]`、`[2]`，不要把 `ev_...` evidence ID 作为正文引用标记。`ev_...` 只用于 `report_write.references` 结构化参数和报告 metadata，不应出现在面向用户的 Markdown 正文或参考文献文本中。写作时先建立一个引用编号表：同一 evidence record 在正文中始终使用同一个编号；同一句若由多个 evidence 支持，可写 `[1,2]`。正文不得出现 `[ev_...]` 这种引用样式。
+
 引用应遵循以下取舍：
 
 - 优先引用能直接支撑当前裁决的连续短片段，不为每个数字都寻找引文；
@@ -93,6 +115,14 @@ description: "教授如何围绕用户提出的循证问题展开临床论证：
 - 不使用连续的“原文摘录—解释—原文摘录—解释”卡片结构。相邻证据应通过比较、转折或因果含义连接起来。
 
 如果一个原文片段无法改变当前判断、适用边界或读者对证据的理解，就不要为了满足引用数量把它放进正文。引用少而嵌入自然，优于引用多但打断文章。
+
+## Research frame as the writing state
+
+For complex, multi-claim, or comparator-heavy EBM reports, use `research_frame_init` early before broad retrieval. For narrow guideline-answerable questions such as thresholds, contraindications, eligibility, dosing boundaries, or monitoring rules, it is acceptable to use MCP first for cognition and initialize/append state only if it improves the next action, stop decision, or citation mapping. The frame is not a new rigid report template; it is the working canvas for the same case-report logic described below. Its section headings and order are fixed, using this TS EBM canvas: `Case / scenario facts` → `Clinical decision to answer` → `EBM sub-questions` → `Claim canvas` → `Evidence synthesis notes` → `Working belief scratchpad` → `Source and evidence gaps` → `Report logic plan` → `Citation map draft`. Section content is free Markdown; do not delete, rename, or reorder these headings. Use `Working belief scratchpad` as a private POMDP-like scratchpad: observations, current belief, uncertainty, candidate next actions, value of information, and stop/continue conditions. Do not copy this scratchpad verbatim into the final report.
+
+Update the frame only when evidence changes a claim, boundary, contradiction, next action, stop condition, or report plan. Do not turn the frame into a checklist. Use `research_frame_scratchpad_append` for lightweight observation/belief/action notes when this helps avoid drift or unnecessary retrieval. When a traceable source or MCP RAG chunk directly supports a claim, call `evidence_add` early; record state only if it changes the synthesis or citation plan. Before `report_write`, keep enough internal mapping to connect final claims with evidence IDs, source authority level (for example authoritative guideline vs expert consensus), and numbered citations. The frame may contain internal `ev_...` working IDs, but the final user-facing report should not show them; pass them to `report_write.references`.
+
+If the frame path or frame tools are unavailable, fall back to the same logic in your own working notes and proceed with evidence tools. Do not block the answer just because the experimental frame is disabled.
 
 ## 从总决策拆出循证问题，再形成分析标题
 
@@ -148,7 +178,7 @@ description: "教授如何围绕用户提出的循证问题展开临床论证：
 
 PMID只是文献身份标识，不是证据本身。正文应使用“研究/试验名称 + 设计和人群 + 比较方案 + 主要结果”解释证据，参考文献中再附 PMID。只有一篇研究直接回答某个子问题时，应明确说明“目前直接回答该子问题的主要证据为……”，不能只输出 PMID 或论文清单。
 
-不要把模型自行评估的来源质量写成正式GRADE。只有来源明确报告GRADE或推荐等级时，才能使用相应术语。
+不要把模型自行评估的来源质量写成正式GRADE。只有来源明确报告GRADE或推荐等级时，才能使用相应术语。必须区分“权威指南”和“专家共识”：在中国临床语境中，国家级/官方学会正式指南通常远强于专家共识；专家共识、共识意见、position statement 可作为实践背景或低一级支持，但不能写成与指南同等权威，也不能在与权威指南冲突时覆盖指南，除非有更新且直接的高质量原始证据解释这种差异。
 
 ### 四、循证分析
 
@@ -215,9 +245,20 @@ PMID只是文献身份标识，不是证据本身。正文应使用“研究/试
 
 本节不是检索失败日志，也不是把所有未读取全文的来源逐条备案。每个限制都要说明“它会使哪一项判断变得不确定，以及需要什么信息来缩小不确定性”。优先合并为 2—4 个最重要的限制，用短自然段表达；来源状态只有在确实影响结论强度时才写入。不要把“尚未检索到”写成“没有证据”，也不要重复综合判断和管理方案中的内容。
 
-### 参考文献
+### 参考文献 / 证据映射
 
-参考文献必须与正文引用对应。关键引用应紧跟被支持的医学判断，并包含对应 `ev_...` evidence ID；不要在段尾堆积无法对应的编号。
+参考文献必须与正文引用对应。正文关键引用应紧跟被支持的医学判断，使用 `[1]` 这样的编号；不要在段尾堆积无法对应的编号。
+
+报告末尾应保留真实“参考文献”或“参考资料”小节，只写人类可读来源，不写 `ev_...`。例如：
+
+```md
+## 参考文献
+
+[1] 中国急性缺血性卒中诊治指南 2023，静脉溶栓适应证与血压阈值章节。
+[2] Powers WJ, et al. AHA/ASA Guidelines for the Early Management of Acute Ischemic Stroke. Stroke. 2019.
+```
+
+调用 `report_write` 时，同时在 `references` 参数中传入编号、真实 citation text 和对应 `evidence_id`，让工具在 metadata 中完成隐藏验证映射。正文和参考文献都不要出现 `ev_...`。
 
 ## 写作要求
 
@@ -226,13 +267,15 @@ PMID只是文献身份标识，不是证据本身。正文应使用“研究/试
 - 统计量必须说明结局、时间点、比较对象、方向和临床含义。
 - NNT、NNH、OR、RR、HR和CI不能脱离人群和结局单独出现。
 - 不把统计学显著性直接等同于临床重要性。
-- 不把“P>0.05”写成“等效”“相当”或“不劣”；必须查看研究设计和非劣效界值。
-- 不把单项研究结果直接写成对当前患者的确定性推荐。
-- 正文每个关键循证问题通常保留1—2处最有裁决力的原文短摘录或中文准确转述，整篇报告不追求固定数量；每处必须来自已读取且已登记的 evidence。完整原文可以支持其明确表达的研究或指南结论；PubMed结构化摘要只能支持摘要中明确出现的事实，并须标明摘要级状态和外推边界；普通网页搜索片段和相似文章提示不可引用。引用必须嵌入论证，不得为了达到数量破坏段落连贯性。
+- 不把“P>0.05”写成“等效”“相当”或“不劣”；必须查看研究设计和非劣效界值。只有相邻 evidence 原文明确出现非劣效/等效设计或结论时，报告才能使用相应术语。
+- 不把单项研究结果直接写成对当前患者的确定性推荐。病例只给出部分资格信息时，不得写“符合溶栓条件”“可安全治疗”等全条件结论；应写“该时间/影像/血压指标本身不构成障碍，仍需核对其余资格条件”。
+- 正文每个关键循证问题通常保留1—2处最有裁决力的原文短摘录或中文准确转述，整篇报告不追求固定数量；每处必须来自已读取且已登记的 evidence。完整原文可以支持其明确表达的研究或指南结论；PubMed结构化摘要只能支持摘要中明确出现的事实，并须标明摘要级状态和外推边界；普通网页搜索片段和相似文章提示不可引用。引用必须嵌入论证，不得为了达到数量破坏段落连贯性。正文引用标记使用 `[1]` 编号，不能使用 `[ev_...]`。
 - 不使用来源没有明确报告的“所有主流指南”“GRADE High”或“净获益明确”等泛化表达。
 - 不要把群体研究结果直接改写为当前患者的确定医嘱。先写研究人群中的结果，再说明本病例是否满足外推条件；缺少关键资格信息时，使用“如果其他条件满足”“该指标本身不构成障碍”等条件句。
 - 统计量必须按其定义解释：OR不是概率增加，未达到统计学显著不是等效，研究人群中的NNT/NNH不是个体预测。不要把功能获益、出血和死亡率未经正式分析就相互“抵消”为净获益。
-- 指南阈值、给药剂量、监测频率等操作性内容必须逐条对应来源。若只有搜索摘要，限定为摘要明确显示的内容；没有来源支持的本地流程不要写成指南要求。
+- 指南阈值、给药剂量、监测频率等操作性内容必须在同一自然段或列表项紧邻对应 evidence ID。若只有搜索摘要，限定为摘要明确显示的内容；没有来源支持的本地流程应省略，不能凭常识补成完整医嘱。
+- 写作前先做“比较对象核对”：逐项写出用户要求的干预和对照。若核心证据比较的是另一个对照（例如HDAC vs SDAC，而用户问HDAC单药 vs标准剂量多药联合），必须标为间接证据；没有直接证据时，主结论只能是“直接比较证据不足”，不能从间接证据推出优劣。
+- OR只能解释为优势比/比值比，不能改写为风险、概率或发生率的倍数；若来源另行报告绝对概率或“more likely”，应分别陈述，不能声称由OR换算得到。
 - 如果证据不足，明确写出“不足以裁决”，并说明需要什么信息或研究。
 - 不为每篇文献单独创建标题；文献应服务于循证问题，而不是成为文章的目录。
 
@@ -240,7 +283,7 @@ PMID只是文献身份标识，不是证据本身。正文应使用“研究/试
 
 写作前确认：病例事实、总决策和循证问题是否清楚。
 
-正式写作前，使用 `evidence_list` 和必要的 `evidence_read` 回看实际登记的证据，确认哪些问题可以裁决、哪些仍取决于缺失信息，并区分全文证据、摘要级证据和不可引用的发现线索。不要把检索计划、未核实片段或临时推断复制进报告。
+正式写作前，使用 `evidence_list` 回看实际登记的证据，确认哪些问题可以裁决、哪些仍取决于缺失信息，并区分全文证据、摘要级证据和不可引用的发现线索。证据的 `confidence` 是对“该原文片段支持当前claim的解释置信度”的标记，不等同于GRADE；低置信度证据可以用于说明不确定性，但不能被写成强结论。只有当 `evidence_list` 中的信息不足以写作或存在冲突时，才定向调用 `evidence_read`，不要在每次 `evidence_add` 后批量回读。建立一张内部的“关键主张→直接/间接→evidence ID”检查表；没有相邻 evidence 的剂量、阈值、监测频率、禁忌证和分层推荐不得进入报告。不要把检索计划、未核实片段或临时推断复制进报告。
 
 写作后逐个循证问题检查：
 

@@ -25,7 +25,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - Pi native `deepseek/deepseek-v4-flash` is the default; Xinqiong is an OpenAI-compatible endpoint using `OPENAI_API_KEY`.
 - Real direct calls verified DeepSeek thinking off/on, DeepSeek tool calls, and Xinqiong thinking/tool calls.
 - `npm run ebm` loads `.env`, launches native Pi TUI, and stores Pi sessions locally.
-- `web_read` (Jina → Firecrawl fallback) and `web_search` (Tavily) normalize/archive before model exposure and return explicit provider attempts on failure.
+- `web_read` (Jina → Firecrawl fallback) normalizes/archive before model exposure; `web_search` (Tavily) archives the discovery snapshot but exposes only Top-K candidate titles, URLs, provider summaries, and search-provider scores. Both return explicit provider attempts on failure.
 - Real proxy-environment checks passed for Jina reading NCBI and Tavily search.
 - `pubmed_search` still retrieves abstracts in one batch, but now persists query/result history under `sources/search/` and each complete abstract as its own semantic `sources/read/<article>/full.md`; a compact leading index exposes every citation-capable path before long bodies. Similar ELink/ESummary hints remain discovery-only but include PMID, title, available journal/date, and an explicit `pubmed_read` next action.
 - `pubmed_read` resolves identifiers and acquires PMC JATS full text when available.
@@ -42,7 +42,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - Pi `session_compact` summaries are atomically mirrored as project-local JSON artifacts without replacing Pi compaction behavior.
 - A project-local Pi trajectory recorder writes developer-only `trajectory.md` and `trajectory.jsonl` files with finalized thinking, responses, tool lifecycle/timing, provider request status, model configuration, usage, compaction, and session events. It never enters model context.
 - `npm run trace:analyze` summarizes end-to-end, turn, first-delta, model, provider, tool, and first-evidence timing in seconds, plus duplicate actions, failures, full-text outcomes, thinking volume, and token/cache usage.
-- Source and report artifacts use Unicode-preserving semantic names with numeric collision suffixes; read sources use semantic directories containing `full.md`/`toc.md`, and SHA-256 remains metadata rather than a path component.
+- New EBM workspaces use `data/sessions/<shortPiId>_<semantic-name>/`: an explicit Pi session name wins, otherwise the first prompt supplies a bounded Unicode-preserving name. The full Pi UUID and mapping remain hidden metadata; established directories never move, and legacy UUID-only workspaces remain in place. Source and report artifacts likewise use Unicode-preserving semantic names with numeric collision suffixes; read sources contain `full.md`/`toc.md`, and SHA-256 remains metadata rather than a path component.
 - No dedicated user-upload workflow is planned; MinerU remains the direct document capability.
 - Acute-stroke real E2E baseline completed in 164.51 wall-clock seconds (163.001 traced seconds): 33 turns, 52 tool calls, and first evidence at 85.72 seconds.
 - After returning a separate workspace-readable archive path, the fixed-case rerun completed in 111.47 wall-clock seconds (109.905 traced seconds): 17 turns, 30 tool calls, first evidence at 40.099 seconds, 4 PubMed searches instead of 13, and 1 shell call instead of 13. Both runs produced verified reports.
@@ -52,8 +52,8 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - External source normalization decodes numeric/common HTML entities, removes zero-width/control characters, normalizes Unicode spacing, and preserves PubMed mixed inline XML text order. Guideline MCP JSON envelopes are reduced to their semantic title and Markdown content before archive.
 - PubMed search explicitly uses relevance ordering and marks zero-result archives as `Status: no_results`; `pubmed_read` accepts model-natural `PMID:`, `PMCID:`, and `DOI:` prefixes.
 - A dedicated abstract-only real E2E initially completed in 45.45 wall-clock seconds but used an avoidable shell call to count source lines. After adding evidence-ready abstract paths and exact read windows to `pubmed_search`, the identical workflow reran in 23.96 wall-clock / 22.54 traced seconds: 6 turns, 5 tool calls, 0 errors, no duplicates, one search, one targeted read, no `pubmed_read` or shell, first evidence at 11.305 seconds, one `primary_abstract` record, and a verified report.
-- `evidence_add` accepts either the returned session-relative evidence path or the current session's Pi-readable `data/sessions/<id>/...` path and canonicalizes it; other-session paths remain rejected.
-- `npm run check`: 18 test files / 58 tests passing.
+- `evidence_add` accepts either the returned session-relative evidence path or the current session's Pi-readable `data/sessions/<workspace>/...` path and canonicalizes it; the legacy current-session UUID prefix is also accepted, while other-session paths remain rejected.
+- `npm run check`: 18 test files / 75 tests passing.
 
 ## Non-negotiable decisions
 

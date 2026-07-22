@@ -19,10 +19,12 @@ describe("Markdown evidence ledger", () => {
     });
 
     expect(node.quote).toBe("important quote");
+    expect(node.confidence).toBe("moderate");
     expect(await verifyEvidence(dir, node)).toEqual({ ok: true, errors: [] });
     const persisted = await readFile(path.join(dir, "evidence", `${node.id}.md`), "utf8");
     expect(persisted).toContain(`evidence_id: ${node.id}`);
     expect(persisted).toContain(`content_hash: ${node.contentHash}`);
+    expect(persisted).toContain("confidence: moderate");
     expect(persisted).toContain("## Exact Quote\n\n```text\nimportant quote\n```");
     expect(persisted).not.toContain(JSON.stringify(node));
     const index = await readFile(path.join(dir, "evidence", "EVIDENCE.md"), "utf8");
@@ -52,6 +54,25 @@ describe("Markdown evidence ledger", () => {
     expect(read.verification).toEqual({ ok: true, errors: [] });
   });
 
+  it("stores confidence labels and reads legacy Chinese labels", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
+    await writeFile(path.join(dir, "source.md"), "tentative quote", "utf8");
+    const node = await addEvidence({
+      sessionDir: dir,
+      question: "Is this direct?",
+      claim: "The evidence is tentative.",
+      relation: "partially_supports",
+      confidence: "low",
+      sourcePath: "source.md",
+      offset: 1,
+      limit: 1,
+    });
+    expect(node.confidence).toBe("low");
+    expect((await listEvidence(dir))[0]).toMatchObject({ confidence: "low" });
+    await writeFile(path.join(dir, "evidence", `${node.id}.md`), (await readFile(path.join(dir, "evidence", `${node.id}.md`), "utf8")).replace("confidence: low", "confidence: 低"), "utf8");
+    expect((await readEvidence(dir, node.id)).node.confidence).toBe("low");
+  });
+
   it("marks discovery snippets and unverified guideline mirrors as citation-ineligible", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
     await writeFile(path.join(dir, "source.md"), "A search result claims a recommendation.", "utf8");
@@ -67,6 +88,24 @@ describe("Markdown evidence ledger", () => {
     });
     expect(node).toMatchObject({ provenance: "guideline_mirror_unverified", citationEligible: false });
     expect((await readEvidence(dir, node.id)).node.provenance).toBe("guideline_mirror_unverified");
+  });
+
+  it("records expert consensus separately from guidelines", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
+    await writeFile(path.join(dir, "consensus.md"), "Expert consensus recommends local practice.", "utf8");
+    const node = await addEvidence({
+      sessionDir: dir,
+      question: "What does the source support?",
+      claim: "The source is consensus-level support, not authoritative guideline evidence.",
+      relation: "supports",
+      provenance: "expert_consensus",
+      confidence: "moderate",
+      sourcePath: "consensus.md",
+      offset: 1,
+      limit: 1,
+    });
+    expect(node).toMatchObject({ provenance: "expert_consensus", citationEligible: true });
+    expect((await listEvidence(dir))[0]).toMatchObject({ provenance: "expert_consensus" });
   });
 
   it("rejects discovery search snapshots even when provenance is omitted", async () => {

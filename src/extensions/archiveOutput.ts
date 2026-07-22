@@ -44,7 +44,6 @@ export function archiveToolText(
     : resourcePath) ?? [];
   return {
     text: [
-      `${options.citationEligible === false ? "Discovery archive path" : "Evidence source_path"}: ${record.path}`,
       `Readable archive path: ${readablePath}`,
       ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
       ...(readableResources.length ? [`Archived referenced resources: ${readableResources.join(", ")}`] : []),
@@ -53,7 +52,7 @@ export function archiveToolText(
       `Read any archive window with read(path=${JSON.stringify(readablePath)}, offset=N, limit=M).`,
       ...(options.citationEligible === false
         ? ["This search snapshot is discovery history and cannot be passed to evidence_add; use an individually archived sources/read document."]
-        : ["For evidence, use the same source_path and 1-based offset/limit with evidence_add."]),
+        : ["For evidence_add, use this readable archive path with the exact 1-based offset/limit."]),
       ...(excerpt.truncated ? [`Continue without gaps (the last preview line is intentionally repeated): read(path=${JSON.stringify(readablePath)}, offset=${Math.max(record.bodyLineStart, visibleEnd)}, limit=200).`] : []),
       ...(readableTocPath ? [`Read the complete section index with read(path=${JSON.stringify(readableTocPath)}).`] : []),
       ...(map.items.length ? ["", `Source map${map.total > map.items.length ? ` (first ${map.items.length} of ${map.total}; complete index is in toc.md)` : ""}:`, ...map.items] : []),

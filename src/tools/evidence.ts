@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 
 export type EvidenceRelation = "supports" | "partially_supports" | "refutes";
+export type EvidenceConfidence = "low" | "moderate" | "high";
 export type EvidenceProvenance =
   | "primary_full_text"
   | "primary_abstract"
@@ -12,6 +13,7 @@ export type EvidenceProvenance =
   | "secondary_direct_quote"
   | "secondary_paraphrase"
   | "independent_guideline"
+  | "expert_consensus"
   | "discovery_only"
   | "other";
 
@@ -21,6 +23,7 @@ export type EvidenceNode = {
   claim: string;
   relation: EvidenceRelation;
   provenance: EvidenceProvenance;
+  confidence: EvidenceConfidence;
   sourcePath: string;
   quote: string;
   lineStart: number;
@@ -36,6 +39,7 @@ export type EvidenceAddInput = {
   claim: string;
   relation: EvidenceRelation;
   provenance?: EvidenceProvenance;
+  confidence?: EvidenceConfidence;
   sourcePath: string;
   offset: number;
   limit: number;
@@ -82,6 +86,7 @@ export function renderEvidenceMarkdown(node: EvidenceNode): string {
     `claim: ${yamlString(node.claim)}`,
     `relation: ${node.relation}`,
     `provenance: ${node.provenance}`,
+    `confidence: ${node.confidence}`,
     `source_path: ${yamlString(node.sourcePath)}`,
     `source_line_start: ${node.lineStart}`,
     `source_line_end: ${node.lineEnd}`,
@@ -143,6 +148,7 @@ export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode
     claim: input.claim.trim(),
     relation: input.relation,
     provenance: input.provenance ?? "other",
+    confidence: input.confidence ?? "moderate",
     sourcePath: input.sourcePath,
     quote,
     lineStart: input.offset,
@@ -211,15 +217,19 @@ function parseEvidenceMarkdown(markdown: string): EvidenceNode {
   const allowedProvenance: EvidenceProvenance[] = [
     "primary_full_text", "primary_abstract", "guideline_official", "guideline_mirror_verified",
     "guideline_mirror_unverified", "secondary_direct_quote", "secondary_paraphrase",
-    "independent_guideline", "discovery_only", "other",
+    "independent_guideline", "expert_consensus", "discovery_only", "other",
   ];
   if (!allowedProvenance.includes(provenance as EvidenceProvenance)) throw new Error(`invalid evidence provenance: ${provenance}`);
+  const rawConfidence = (metadata.get("confidence") ?? "moderate") as string;
+  const confidence = ({ "低": "low", "中": "moderate", "高": "high" } as Record<string, string>)[rawConfidence] ?? rawConfidence;
+  if (!(["low", "moderate", "high"] as string[]).includes(confidence)) throw new Error(`invalid evidence confidence: ${confidence}`);
   return {
     id: requiredString("evidence_id"),
     question: requiredString("question"),
     claim: requiredString("claim"),
     relation: relation as EvidenceRelation,
     provenance: provenance as EvidenceProvenance,
+    confidence: confidence as EvidenceConfidence,
     sourcePath: requiredString("source_path"),
     quote: fenced.slice(firstBreak + 1, quoteEnd),
     lineStart: requiredNumber("source_line_start"),
@@ -230,7 +240,7 @@ function parseEvidenceMarkdown(markdown: string): EvidenceNode {
   };
 }
 
-export type EvidenceSummary = Pick<EvidenceNode, "id" | "question" | "claim" | "relation" | "provenance" | "citationEligible"> & {
+export type EvidenceSummary = Pick<EvidenceNode, "id" | "question" | "claim" | "relation" | "provenance" | "confidence" | "citationEligible"> & {
   path: string;
 };
 
@@ -267,6 +277,7 @@ export async function listEvidence(sessionDir: string): Promise<EvidenceSummary[
       claim: node.claim,
       relation: node.relation,
       provenance: node.provenance,
+      confidence: node.confidence,
       citationEligible: node.citationEligible,
       path: path.posix.join("evidence", name),
     });

@@ -84,6 +84,16 @@ describe("MinerU Premium document parsing", () => {
     expect(mock.calls).toHaveLength(2);
   });
 
+  it("rejects unsafe service-returned URLs", async () => {
+    const mock = mockFetch([
+      Response.json({ data: { task_id: "task-unsafe" } }),
+      Response.json({ data: { state: "done", full_zip_url: "http://127.0.0.1/result.zip" } }),
+    ]);
+    await expect(parseDocumentUrl({ url: "https://example.org/a.pdf", apiToken: "token", fetcher: mock.fetcher, pollIntervalMs: 0 }))
+      .rejects.toThrow(/unsafe MinerU result ZIP URL/);
+    expect(mock.calls).toHaveLength(2);
+  });
+
   it("fails explicitly for task failure, malformed ZIP, and timeout", async () => {
     const failed = mockFetch([
       Response.json({ data: { task_id: "task-2" } }),

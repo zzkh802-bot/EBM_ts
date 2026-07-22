@@ -23,6 +23,10 @@ export type PubMedSearchResult =
   | { ok: true; pmids: string[]; relatedPmids: string[]; abstractCount: number; abstractArchives: SourceArchiveRecord[]; warnings: string[]; archive: SourceArchiveRecord }
   | { ok: false; error: PubMedError };
 
+export type PubMedSimilarResult =
+  | { ok: true; seedPmid: string; relatedPmids: string[]; abstractArchives: SourceArchiveRecord[]; archive: SourceArchiveRecord; warnings: string[] }
+  | { ok: false; error: PubMedError };
+
 export type PubMedReadResult =
   | {
       ok: true;
@@ -268,6 +272,51 @@ function renderSearch(
   return lines.join("\n");
 }
 
+export async function similarPubMed(input: {
+  sessionDir: string;
+  pmid: string;
+  maxResults?: number;
+} & FetchOptions): Promise<PubMedSimilarResult> {
+  const seedPmid = input.pmid.trim().replace(/^PMID\s*:\s*/i, "");
+  if (!/^\d+$/.test(seedPmid)) return { ok: false, error: { code: "invalid_input", message: "A numeric PMID is required" } };
+  const fetcher = input.fetcher ?? defaultNcbiFetch;
+  const timeoutMs = input.timeoutMs ?? 30_000;
+  const retries = input.retries ?? 2;
+  const totalSignal = AbortSignal.timeout(input.totalTimeoutMs ?? 90_000);
+  const operationSignal = input.signal ? AbortSignal.any([input.signal, totalSignal]) : totalSignal;
+  const options = { ...input, signal: operationSignal };
+  try {
+    const related = await fetchRelated([seedPmid], fetcher, timeoutMs, retries, options, Math.min(Math.max(input.maxResults ?? 5, 1), 10));
+    const topPmids = related.pmids.slice(0, Math.min(Math.max(input.maxResults ?? 5, 1), 10));
+    const articles = await fetchPubmedArticles(topPmids, fetcher, timeoutMs, retries, options);
+    const abstractArchives = await Promise.all(articles.filter((article) => article.abstractParts.length > 0).map((article) => archiveSource({
+      sessionDir: input.sessionDir,
+      kind: "read",
+      sourceUrl: `https://pubmed.ncbi.nlm.nih.gov/${article.pmid}/`,
+      title: article.title,
+      content: renderAbstractOnly(article),
+    })));
+    const abstractSources = new Map(articles.filter((article) => article.abstractParts.length > 0).map((article, index) => [article.pmid, abstractArchives[index]!.path]));
+    const content = renderSearch(`similar to PMID ${seedPmid}`, topPmids, articles, { pmids: [], summaries: {} }, [], abstractSources);
+    return {
+      ok: true,
+      seedPmid,
+      relatedPmids: topPmids,
+      abstractArchives,
+      warnings: [],
+      archive: await archiveSource({
+        sessionDir: input.sessionDir,
+        kind: "search",
+        sourceUrl: `https://pubmed.ncbi.nlm.nih.gov/${seedPmid}/`,
+        title: `similar to PMID ${seedPmid}`,
+        content,
+      }),
+    };
+  } catch (error) {
+    return { ok: false, error: unknownError(error) };
+  }
+}
+
 export async function searchPubMed(input: {
   sessionDir: string;
   query: string;
@@ -301,7 +350,7 @@ export async function searchPubMed(input: {
     const articles = await fetchPubmedArticles(pmids, fetcher, timeoutMs, retries, options);
     const warnings: string[] = [];
     let related: { pmids: string[]; summaries: Record<string, any> } = { pmids: [], summaries: {} };
-    if (input.includeSimilar !== false) {
+    if (input.includeSimilar === true) {
       try {
         related = await fetchRelated(pmids, fetcher, timeoutMs, retries, options, Math.min(Math.max(input.maxSimilar ?? 5, 0), 10));
       } catch (error) {

@@ -9,7 +9,7 @@ export function registerEbmProviders(pi: Pick<ExtensionAPI, "registerProvider">)
   // DeepSeek provider with current V4 model metadata and protocol handling.
   pi.registerProvider(XINQIONG_PROVIDER_ID, {
     name: "Xinqiong / Infini-AI OpenAI-Compatible",
-    baseUrl: "https://cloud.infini-ai.com/maas/deepseek-v4-flash/nvidia",
+    baseUrl: process.env.XINQIONG_BASE_URL || "https://cloud.infini-ai.com/maas/deepseek-v4-flash/nvidia",
     apiKey: "$OPENAI_API_KEY",
     api: "openai-completions",
     models: [

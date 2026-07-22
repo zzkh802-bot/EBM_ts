@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { adaptEbmSystemPrompt } from "../src/extensions/ebmIdentity.js";
+import { adaptEbmSystemPrompt, withSessionCreatedDate } from "../src/extensions/ebmIdentity.js";
 
 const original = `You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.
 
@@ -21,5 +21,12 @@ describe("EBM system identity", () => {
 
   it("leaves unknown custom prompts unchanged", () => {
     expect(adaptEbmSystemPrompt("Custom prompt")).toBe("Custom prompt");
+  });
+
+  it("can append a stable day-precision session date", () => {
+    const prompted = withSessionCreatedDate("System", "2026-07-22");
+    expect(prompted).toContain("EBM session date: 2026-07-22");
+    expect(prompted).toContain("fixed for the current session");
+    expect(withSessionCreatedDate("System")).toBe("System");
   });
 });

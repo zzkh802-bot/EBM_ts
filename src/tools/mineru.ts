@@ -90,8 +90,15 @@ async function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+function validateServiceReturnedUrl(rawUrl: string, label: string): string {
+  const safe = validateOutboundUrl(rawUrl);
+  if (!safe.ok) throw new Error(`unsafe MinerU ${label} URL: ${safe.reason}`);
+  if (safe.url.protocol !== "https:") throw new Error(`unsafe MinerU ${label} URL: HTTPS is required`);
+  return safe.url.toString();
+}
+
 async function extractMarkdownZip(fetcher: typeof fetch, zipUrl: string, requestTimeoutMs: number, signal?: AbortSignal): Promise<{ content: string; resources: MineruResource[] }> {
-  const zipResponse = await request(fetcher, zipUrl, { method: "GET" }, Math.max(requestTimeoutMs, 60_000), signal);
+  const zipResponse = await request(fetcher, validateServiceReturnedUrl(zipUrl, "result ZIP"), { method: "GET" }, Math.max(requestTimeoutMs, 60_000), signal);
   const maxZipBytes = 100 * 1024 * 1024;
   const declaredLength = Number(zipResponse.headers.get("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > maxZipBytes) throw new Error(`MinerU result ZIP exceeds ${maxZipBytes} byte limit`);
@@ -207,7 +214,7 @@ export async function parseDocumentBytes(input: {
   if (typeof taskId !== "string" || !taskId) throw new Error("MinerU upload response has no batch_id");
   if (typeof uploadUrl !== "string" || !uploadUrl) throw new Error("MinerU upload response has no signed file URL");
   const uploadBody = new Uint8Array(input.bytes).buffer;
-  await request(fetcher, uploadUrl, { method: "PUT", body: uploadBody }, Math.max(requestTimeoutMs, 60_000), input.signal);
+  await request(fetcher, validateServiceReturnedUrl(uploadUrl, "upload"), { method: "PUT", body: uploadBody }, Math.max(requestTimeoutMs, 60_000), input.signal);
 
   const deadline = Date.now() + (input.pollTimeoutMs ?? 180_000);
   let zipUrl: string | undefined;

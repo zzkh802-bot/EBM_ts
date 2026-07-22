@@ -10,5 +10,7 @@ coverage/
 .pi/auth.json
 data/sessions/
 data/pi-sessions/
+data/pi-agent/
 data/tmp/
+tmp/
 *.log

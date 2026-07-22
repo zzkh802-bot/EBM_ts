@@ -14,19 +14,22 @@ import { registerEbmIdentity } from "./ebmIdentity.js";
 import { registerGuidelineTools } from "./guidelineTools.js";
 import { registerPubMedTools } from "./pubmedTools.js";
 import { registerReportTools } from "./reportTools.js";
-import { piSessionDirectory } from "./sessionPath.js";
+import { registerResearchFrameTools } from "./researchFrameTools.js";
+import { piReadableSessionPath, piSessionDirectory, registerSessionWorkspace } from "./sessionPath.js";
 import { registerTrajectoryRecorder } from "./trajectoryRecorder.js";
 import { registerWebTools } from "./webTools.js";
 
-function evidenceSourcePath(value: string, sessionId: string): string {
+function evidenceSourcePath(value: string, sessionId: string, sessionDir: string): string {
   const normalized = value.replace(/^@/, "").replaceAll("\\", "/").replace(/^\.\//, "");
-  const workspacePrefix = `data/sessions/${sessionId}/`;
-  if (normalized.startsWith(workspacePrefix)) return normalized.slice(workspacePrefix.length);
+  const workspacePrefixes = [`data/sessions/${path.basename(sessionDir)}/`, `data/sessions/${sessionId}/`];
+  const workspacePrefix = workspacePrefixes.find((prefix) => normalized.startsWith(prefix));
+  if (workspacePrefix) return normalized.slice(workspacePrefix.length);
   if (normalized.startsWith("data/sessions/")) throw new Error("source_path points to a different session workspace");
   return normalized;
 }
 
 export function registerEbmTools(pi: ExtensionAPI): void {
+  registerSessionWorkspace(pi);
   registerEbmIdentity(pi);
 
   pi.registerTool({
@@ -35,9 +38,10 @@ export function registerEbmTools(pi: ExtensionAPI): void {
     description: "Archive an exact line slice from a session source as a traceable Markdown evidence record.",
     promptSnippet: "Archive exact source lines as claim-linked EBM evidence",
     promptGuidelines: [
-      "Use evidence_add only after reading the exact archived source window; reuse the same source_path, offset, and limit.",
-      "Classify provenance honestly. Search snippets and unverified mirrors are discovery-only and cannot support a final report.",
+      "Use evidence_add only after reading the exact archived source window; pass the returned readable archive path as source_path with the exact offset and limit.",
+      "Classify provenance honestly. Search snippets and unverified mirrors are discovery-only and cannot support a final report. Use expert_consensus for consensus/position documents rather than calling them guidelines.",
       "For secondary sources, attribute claims to that source; never rewrite a paraphrase as the target guideline's direct recommendation.",
+      "Evidence can be preliminary: use confidence=low or moderate for early candidate evidence instead of delaying all evidence_add calls until the end.",
     ],
     parameters: Type.Object({
       question: Type.String({ description: "Complete internal evidence question" }),
@@ -52,10 +56,12 @@ export function registerEbmTools(pi: ExtensionAPI): void {
         "secondary_direct_quote",
         "secondary_paraphrase",
         "independent_guideline",
+        "expert_consensus",
         "discovery_only",
         "other",
       ] as const)),
-      source_path: Type.String({ description: "Use the returned Evidence source_path; the current session's data/sessions/<id>/ readable path is also accepted and normalized" }),
+      confidence: Type.Optional(StringEnum(["low", "moderate", "high"] as const)),
+      source_path: Type.String({ description: "Use the returned readable archive path, or a session-relative sources/read/... path" }),
       offset: Type.Integer({ minimum: 1, description: "One-based source line number, matching Pi read" }),
       limit: Type.Integer({ minimum: 1, maximum: 200, description: "Number of consecutive exact source lines" }),
     }),
@@ -69,7 +75,8 @@ export function registerEbmTools(pi: ExtensionAPI): void {
         claim: params.claim,
         relation: params.relation,
         ...(params.provenance ? { provenance: params.provenance } : {}),
-        sourcePath: evidenceSourcePath(params.source_path, sessionId),
+        ...(params.confidence ? { confidence: params.confidence } : {}),
+        sourcePath: evidenceSourcePath(params.source_path, sessionId, sessionDir),
         offset: params.offset,
         limit: params.limit,
       }));
@@ -78,7 +85,7 @@ export function registerEbmTools(pi: ExtensionAPI): void {
       return {
         content: [{
           type: "text",
-          text: `Evidence archived: ${evidencePath}\nExact source: ${node.sourcePath}:${node.lineStart}-${node.lineEnd}`,
+          text: `Evidence archived: ${node.id}\nRecord: ${evidencePath}\nConfidence: ${node.confidence}`,
         }],
         details: { path: evidencePath, evidenceId: node.id, node },
       };
@@ -109,20 +116,32 @@ export function registerEbmTools(pi: ExtensionAPI): void {
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const sessionId = ctx.sessionManager.getSessionId();
-      const record = await readEvidence(piSessionDirectory(ctx.cwd, sessionId), params.evidence_id);
-      const truncated = truncateHead(record.markdown, { maxBytes: DEFAULT_MAX_BYTES, maxLines: DEFAULT_MAX_LINES });
-      const evidencePath = `data/sessions/${sessionId}/evidence/${params.evidence_id}.md`;
-      const visibleLines = truncated.content.split("\n").length;
-      const suffix = truncated.truncated
-        ? `\n\n[Evidence output truncated. Continue without gaps with read(path=${JSON.stringify(evidencePath)}, offset=${Math.max(1, visibleLines)}, limit=200); the last visible line is intentionally repeated. Full record: ${evidencePath}]`
-        : "";
+      const sessionDir = piSessionDirectory(ctx.cwd, sessionId);
+      const record = await readEvidence(sessionDir, params.evidence_id);
+      const node = record.node;
+      const sourceReadablePath = piReadableSessionPath(ctx.cwd, sessionId, node.sourcePath);
+      const text = [
+        `Evidence: ${node.id}`,
+        `Claim: ${node.claim}`,
+        `Relation: ${node.relation}`,
+        `Provenance: ${node.provenance}`,
+        `Confidence: ${node.confidence}`,
+        `Citation eligible: ${node.citationEligible}`,
+        `Verification: ${record.verification.ok ? "ok" : record.verification.errors.join("; ")}`,
+        `Source lines: ${sourceReadablePath}:${node.lineStart}-${node.lineEnd}`,
+        "",
+        "Quote:",
+        node.quote,
+      ].join("\n");
+      const truncated = truncateHead(text, { maxBytes: DEFAULT_MAX_BYTES, maxLines: DEFAULT_MAX_LINES });
       return {
-        content: [{ type: "text", text: `${truncated.content}${suffix}` }],
-        details: { node: record.node, verification: record.verification, truncated: truncated.truncated },
+        content: [{ type: "text", text: truncated.content }],
+        details: { node, verification: record.verification, truncated: truncated.truncated },
       };
     },
   });
 
+  registerResearchFrameTools(pi);
   registerWebTools(pi);
   registerPubMedTools(pi);
   registerReportTools(pi);

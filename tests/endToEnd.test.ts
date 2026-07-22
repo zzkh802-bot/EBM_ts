@@ -58,6 +58,8 @@ describe("basic EBM vertical flow", () => {
     });
 
     expect(report.evidenceIds).toEqual([evidence.id]);
-    expect(await readFile(path.join(sessionDir, report.path), "utf8")).toContain("evidence_status: verified");
+    expect(await readFile(path.join(sessionDir, report.path), "utf8")).toContain("# Finding");
+    const metadata = JSON.parse(await readFile(path.join(sessionDir, `${report.path}.metadata.json`), "utf8")) as { evidence_status: string };
+    expect(metadata.evidence_status).toBe("verified");
   });
 });

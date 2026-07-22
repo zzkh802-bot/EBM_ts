@@ -32,8 +32,70 @@ describe("verified Markdown reports", () => {
 
     expect(report.evidenceIds).toEqual([evidence.id]);
     const saved = await readFile(path.join(sessionDir, report.path), "utf8");
-    expect(saved).toContain(`evidence_ids: ["${evidence.id}"]`);
+    expect(saved).not.toMatch(/^---/);
     expect(saved).toContain(`Evidence ${evidence.id}`);
+    const metadata = JSON.parse(await readFile(path.join(sessionDir, `${report.path}.metadata.json`), "utf8")) as { evidence_ids: string[] };
+    expect(metadata.evidence_ids).toEqual([evidence.id]);
+  });
+
+  it("verifies hidden evidence mappings while keeping Markdown references human-readable", async () => {
+    const { sessionDir, evidence } = await fixture();
+    const report = await writeReport({
+      sessionDir,
+      title: "Human citation report",
+      content: "# Conclusion\n\nTreatment reduced mortality [1].\n\n## 参考文献\n\n[1] Randomized trial of the intervention.",
+      references: [{ number: 1, citation: "Randomized trial of the intervention.", evidenceId: evidence.id }],
+    });
+
+    const saved = await readFile(path.join(sessionDir, report.path), "utf8");
+    expect(saved).toContain("Treatment reduced mortality [1]");
+    expect(saved).not.toContain(evidence.id);
+    const metadata = JSON.parse(await readFile(path.join(sessionDir, `${report.path}.metadata.json`), "utf8")) as { references: Array<{ number: number; evidence_id: string }> };
+    expect(metadata.references).toEqual([{ number: 1, citation: "Randomized trial of the intervention.", evidence_id: evidence.id }]);
+  });
+
+  it("auto-appends a reference section for hidden evidence mappings", async () => {
+    const { sessionDir, evidence } = await fixture();
+    const report = await writeReport({
+      sessionDir,
+      title: "Auto refs report",
+      content: "# Conclusion\n\nTreatment reduced mortality [1].",
+      references: [{ number: 1, citation: "Randomized trial of the intervention.", evidenceId: evidence.id }],
+    });
+
+    const saved = await readFile(path.join(sessionDir, report.path), "utf8");
+    expect(saved).toContain("## 参考文献");
+    expect(saved).toContain("[1] Randomized trial of the intervention.");
+    expect(saved).not.toContain(evidence.id);
+  });
+
+  it("recognizes common reference-heading variants without duplicate auto-append", async () => {
+    for (const heading of ["# 参考文献", "##    参考文献   ", "# 参考", "# 文献", "# 资料", "### References", "## Sources"]) {
+      const { sessionDir, evidence } = await fixture();
+      const report = await writeReport({
+        sessionDir,
+        title: `Refs ${heading}`,
+        content: `# Conclusion\n\nTreatment reduced mortality [1].\n\n${heading}\n\n[1] Existing reference.`,
+        references: [{ number: 1, citation: "Randomized trial of the intervention.", evidenceId: evidence.id }],
+      });
+      const saved = await readFile(path.join(sessionDir, report.path), "utf8");
+      expect(saved.match(/\[1\]/g)?.length).toBe(2);
+      expect(saved).not.toContain("Randomized trial of the intervention.");
+    }
+  });
+
+  it("does not treat non-reference source-context headings as reference sections", async () => {
+    const { sessionDir, evidence } = await fixture();
+    const report = await writeReport({
+      sessionDir,
+      title: "Guideline heading report",
+      content: "# Conclusion\n\nTreatment reduced mortality [1].\n\n# 指南\n\nDiscussed guideline context.",
+      references: [{ number: 1, citation: "Randomized trial of the intervention.", evidenceId: evidence.id }],
+    });
+    const saved = await readFile(path.join(sessionDir, report.path), "utf8");
+    expect(saved).toContain("# 指南");
+    expect(saved).toContain("## 参考文献");
+    expect(saved).toContain("[1] Randomized trial of the intervention.");
   });
 
   it("uses semantic report filenames without hash suffixes", async () => {

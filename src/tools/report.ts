@@ -4,10 +4,17 @@ import path from "node:path";
 import { readEvidence } from "./evidence.js";
 import { normalizeMarkdown } from "./markdown.js";
 
+export type ReportReference = {
+  number: number;
+  citation: string;
+  evidenceId: string;
+};
+
 export type ReportWriteInput = {
   sessionDir: string;
   title: string;
   content: string;
+  references?: ReportReference[];
   allowNoEvidence?: boolean;
 };
 
@@ -18,6 +25,45 @@ export type ReportRecord = {
   sha256: string;
   createdAt: string;
 };
+
+function renderReferenceSection(references: ReportReference[]): string {
+  if (!references.length) return "";
+  return [
+    "## 参考文献",
+    "",
+    ...[...references]
+      .sort((a, b) => a.number - b.number)
+      .map((reference) => `[${reference.number}] ${reference.citation.trim()}`),
+  ].join("\n");
+}
+
+function hasReferenceSection(content: string): boolean {
+  return content.split(/\r?\n/).some((line) => {
+    const match = /^#{1,6}\s*(.*?)\s*$/.exec(line);
+    if (!match) return false;
+    const heading = match[1]!.trim().toLowerCase();
+    return [
+      "参考文献",
+      "参考资料",
+      "参考来源",
+      "资料来源",
+      "引用文献",
+      "引用资料",
+      "参考",
+      "文献",
+      "资料",
+      "references",
+      "bibliography",
+      "sources",
+    ].includes(heading);
+  });
+}
+
+function ensureReferenceSection(content: string, references: ReportReference[]): string {
+  if (!references.length) return content;
+  if (hasReferenceSection(content)) return content;
+  return normalizeMarkdown(`${content}\n\n${renderReferenceSection(references)}`);
+}
 
 function slug(value: string): string {
   const result = value.normalize("NFKC").toLowerCase()
@@ -31,11 +77,28 @@ function slug(value: string): string {
 export async function writeReport(input: ReportWriteInput): Promise<ReportRecord> {
   const title = input.title.trim();
   if (!title) throw new Error("report title is required");
-  const content = normalizeMarkdown(input.content);
+  const references = input.references ?? [];
+  const content = ensureReferenceSection(normalizeMarkdown(input.content), references);
   if (!content.trim()) throw new Error("report content is required");
-  const evidenceIds = [...new Set(content.match(/ev_[a-f0-9]{16}/g) ?? [])].sort();
+  const evidenceIds = references.length
+    ? [...new Set(references.map((reference) => reference.evidenceId))].sort()
+    : [...new Set(content.match(/ev_[a-f0-9]{16}/g) ?? [])].sort();
   if (!evidenceIds.length && !input.allowNoEvidence) {
     throw new Error("report has no evidence references; set allowNoEvidence only for an explicit evidence-gap report");
+  }
+  if (references.length) {
+    const numbers = new Set<number>();
+    for (const reference of references) {
+      if (!Number.isInteger(reference.number) || reference.number < 1) throw new Error("reference number must be a positive integer");
+      if (numbers.has(reference.number)) throw new Error(`duplicate reference number: ${reference.number}`);
+      numbers.add(reference.number);
+      if (!reference.citation.trim()) throw new Error(`reference ${reference.number} citation is required`);
+      if (!/^ev_[a-f0-9]{16}$/.test(reference.evidenceId)) throw new Error(`reference ${reference.number} has invalid evidence id`);
+    }
+    const citedNumbers = new Set(Array.from(content.matchAll(/\[(\d+(?:\s*,\s*\d+)*)\]/g)).flatMap((match) => match[1]!.split(/\s*,\s*/).map(Number)));
+    for (const cited of citedNumbers) {
+      if (!numbers.has(cited)) throw new Error(`body citation [${cited}] has no matching reference entry`);
+    }
   }
   for (const evidenceId of evidenceIds) {
     const record = await readEvidence(input.sessionDir, evidenceId);
@@ -48,37 +111,36 @@ export async function writeReport(input: ReportWriteInput): Promise<ReportRecord
   const createdAt = new Date().toISOString();
   const outDir = path.join(input.sessionDir, "reports");
   const baseName = slug(title);
-  const frontmatter = [
-    "---",
-    `title: ${JSON.stringify(title)}`,
-    `created_at: ${JSON.stringify(createdAt)}`,
-    `sha256: ${sha256}`,
-    `evidence_status: ${evidenceIds.length ? "verified" : "gap"}`,
-    `evidence_ids: ${JSON.stringify(evidenceIds)}`,
-    "---",
-    "",
-  ].join("\n");
+  const metadata = {
+    title,
+    created_at: createdAt,
+    sha256,
+    evidence_status: evidenceIds.length ? "verified" : "gap",
+    evidence_ids: evidenceIds,
+    references: references.map((reference) => ({ number: reference.number, citation: reference.citation, evidence_id: reference.evidenceId })),
+  };
   await mkdir(outDir, { recursive: true });
-  const archived = `${frontmatter}${content}\n`;
+  const archived = `${content}\n`;
   for (let suffix = 1; ; suffix += 1) {
     const name = `${baseName}${suffix === 1 ? "" : `-${suffix}`}.md`;
     const rel = path.posix.join("reports", name);
     const abs = path.join(outDir, name);
     try {
       await writeFile(abs, archived, { encoding: "utf8", flag: "wx" });
+      await writeFile(path.join(outDir, `${name}.metadata.json`), `${JSON.stringify(metadata, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
       return { path: rel, title, evidenceIds, sha256, createdAt };
     } catch (error) {
       if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
       const existing = await readFile(abs, "utf8");
-      if (existing.includes(`\nsha256: ${sha256}\n`)) {
-        const existingCreatedAt = existing.match(/\ncreated_at: ("(?:[^"\\]|\\.)*")\n/)?.[1];
-        return {
-          path: rel,
-          title,
-          evidenceIds,
-          sha256,
-          createdAt: existingCreatedAt ? JSON.parse(existingCreatedAt) as string : createdAt,
-        };
+      const metadataPath = path.join(outDir, `${name}.metadata.json`);
+      let existingMetadata: { sha256?: string; created_at?: string } | undefined;
+      try {
+        existingMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as { sha256?: string; created_at?: string };
+      } catch {
+        existingMetadata = undefined;
+      }
+      if (existing === archived || existingMetadata?.sha256 === sha256) {
+        return { path: rel, title, evidenceIds, sha256, createdAt: existingMetadata?.created_at ?? createdAt };
       }
     }
   }

@@ -12,6 +12,7 @@ export type SourceArchiveResource = {
 export type SourceArchiveInput = {
   sessionDir: string;
   kind: "search" | "read" | "upload";
+  layout?: "directory" | "file";
   sourceUrl?: string;
   title?: string;
   content: string;
@@ -38,7 +39,11 @@ function semanticSlug(value: string): string {
     .replace(/[^\p{L}\p{N}-]+/gu, "")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
-  return Array.from(normalized).slice(0, 96).join("").replace(/-$/g, "");
+  const chars = Array.from(normalized);
+  if (chars.length <= 76) return normalized;
+  const clipped = chars.slice(0, 76).join("").replace(/-$/g, "");
+  const boundary = clipped.lastIndexOf("-");
+  return boundary >= 50 ? clipped.slice(0, boundary) : clipped;
 }
 
 function urlSemanticName(sourceUrl?: string): string {
@@ -133,24 +138,52 @@ function safeResourcePath(value: string): string {
   return normalized;
 }
 
+function resourceManifest(resources: SourceArchiveResource[]): Array<{ path: string; media_type?: string; bytes: number; sha256: string }> {
+  return resources.map((resource) => ({
+    path: safeResourcePath(resource.path),
+    ...(resource.mediaType ? { media_type: resource.mediaType } : {}),
+    bytes: resource.bytes.byteLength,
+    sha256: createHash("sha256").update(resource.bytes).digest("hex"),
+  })).sort((a, b) => a.path.localeCompare(b.path));
+}
+
+async function archivedResourcesMatch(absDir: string, resources: SourceArchiveResource[]): Promise<boolean> {
+  const expected = resourceManifest(resources);
+  if (!expected.length) return true;
+  const parsed = JSON.parse(await readFile(path.join(absDir, ".metadata", "resources.json"), "utf8")) as { resources?: unknown };
+  if (!Array.isArray(parsed.resources)) return false;
+  return JSON.stringify(parsed.resources) === JSON.stringify(expected);
+}
+
 async function writeArchiveResources(absDir: string, resources: SourceArchiveResource[]): Promise<string[]> {
-  if (!resources.length) return [];
-  const manifest: Array<{ path: string; media_type?: string; bytes: number; sha256: string }> = [];
+  const manifest = resourceManifest(resources);
+  if (!manifest.length) return [];
   for (const resource of resources) {
     const rel = safeResourcePath(resource.path);
     const abs = path.join(absDir, ...rel.split("/"));
     await mkdir(path.dirname(abs), { recursive: true });
     await writeFile(abs, resource.bytes, { flag: "wx" });
-    manifest.push({
-      path: rel,
-      ...(resource.mediaType ? { media_type: resource.mediaType } : {}),
-      bytes: resource.bytes.byteLength,
-      sha256: createHash("sha256").update(resource.bytes).digest("hex"),
-    });
   }
   await mkdir(path.join(absDir, ".metadata"), { recursive: true });
   await writeFile(path.join(absDir, ".metadata", "resources.json"), `${JSON.stringify({ version: 1, resources: manifest }, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
   return manifest.map((item) => item.path);
+}
+
+async function archiveReadFile(input: SourceArchiveInput, archived: string, baseName: string): Promise<{ path: string }> {
+  if (input.resources?.length) throw new Error("flat read archives cannot contain resources");
+  const outDir = path.join(input.sessionDir, "sources", input.kind);
+  await mkdir(outDir, { recursive: true });
+  for (let suffix = 1; ; suffix += 1) {
+    const name = `${baseName}${suffix === 1 ? "" : `-${suffix}`}.md`;
+    const abs = path.join(outDir, name);
+    try {
+      await writeFile(abs, archived, { encoding: "utf8", flag: "wx" });
+      return { path: path.posix.join("sources", input.kind, name) };
+    } catch (error) {
+      if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
+      if (await readFile(abs, "utf8") === archived) return { path: path.posix.join("sources", input.kind, name) };
+    }
+  }
 }
 
 async function archiveReadDirectory(input: SourceArchiveInput, archived: string, baseName: string, bodyLineStart: number): Promise<{ path: string; archiveDir: string; tocPath: string; resourcePaths?: string[] }> {
@@ -171,8 +204,8 @@ async function archiveReadDirectory(input: SourceArchiveInput, archived: string,
     } catch (error) {
       if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
       try {
-        if (await readFile(path.join(absDir, "full.md"), "utf8") === archived) {
-          const resourcePaths = (input.resources ?? []).map((resource) => safeResourcePath(resource.path));
+        if (await readFile(path.join(absDir, "full.md"), "utf8") === archived && await archivedResourcesMatch(absDir, input.resources ?? [])) {
+          const resourcePaths = resourceManifest(input.resources ?? []).map((resource) => resource.path);
           return { path: sourcePath, archiveDir, tocPath, ...(resourcePaths.length ? { resourcePaths } : {}) };
         }
       } catch {
@@ -192,7 +225,9 @@ export async function archiveSource(input: SourceArchiveInput): Promise<SourceAr
   const bodyLineStart = (metadata.match(/\n/g) ?? []).length + 1;
   const location = input.kind === "search"
     ? { path: await archiveSearchFile(normalizedInput, archived, baseName) }
-    : await archiveReadDirectory(normalizedInput, archived, baseName, bodyLineStart);
+    : input.layout === "file"
+      ? await archiveReadFile(normalizedInput, archived, baseName)
+      : await archiveReadDirectory(normalizedInput, archived, baseName, bodyLineStart);
   return {
     ...location,
     sha256,

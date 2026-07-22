@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
-import { readPubMed, searchPubMed } from "../src/tools/pubmed.js";
+import { readPubMed, searchPubMed, similarPubMed } from "../src/tools/pubmed.js";
 
 function mockFetch(responses: Response[]) {
   const urls: string[] = [];
@@ -33,6 +33,7 @@ describe("PubMed archive adapters", () => {
       sessionDir,
       query: "aspirin prevention",
       fetcher: mock.fetcher,
+      includeSimilar: true,
       email: "test@example.com",
       apiKey: "test-secret",
     });
@@ -53,6 +54,24 @@ describe("PubMed archive adapters", () => {
     expect(await readFile(path.join(sessionDir, result.archive.path), "utf8")).toContain("Source status: PubMed abstract");
     expect(mock.urls.some((url) => url.includes("api_key=test-secret"))).toBe(true);
     expect(result.archive.sourceUrl).not.toContain("api_key");
+  });
+
+  it("expands similar PubMed articles with abstract archives", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-pubmed-"));
+    const relatedXml = articleXml.replaceAll("123", "456").replace("Aspirin trial", "Related aspirin trial");
+    const mock = mockFetch([
+      Response.json({ linksets: [{ ids: ["123"], linksetdbs: [{ linkname: "pubmed_pubmed", links: ["456"] }] }] }),
+      Response.json({ result: { uids: ["456"], "456": { uid: "456", title: "Related aspirin trial" } } }),
+      new Response(relatedXml, { headers: { "content-type": "application/xml" } }),
+    ]);
+
+    const result = await similarPubMed({ sessionDir, pmid: "PMID: 123", fetcher: mock.fetcher, maxResults: 5 });
+
+    expect(result).toMatchObject({ ok: true, seedPmid: "123", relatedPmids: ["456"] });
+    if (!result.ok) return;
+    expect(result.abstractArchives).toHaveLength(1);
+    expect(result.abstractArchives[0]!.content).toContain("Related aspirin trial");
+    expect(result.archive.content).toContain("PMID: 456");
   });
 
   it("uses pubmed_read to fetch and archive PMC full text", async () => {
@@ -81,7 +100,7 @@ describe("PubMed archive adapters", () => {
       new Response(articleXml),
       new Response("related service unavailable", { status: 503 }),
     ]);
-    const result = await searchPubMed({ sessionDir, query: "aspirin", fetcher: mock.fetcher, retries: 0 });
+    const result = await searchPubMed({ sessionDir, query: "aspirin", fetcher: mock.fetcher, retries: 0, includeSimilar: true });
     expect(result).toMatchObject({ ok: true, pmids: ["123"], relatedPmids: [] });
     if (result.ok) expect(result.warnings[0]).toContain("similar-article lookup failed");
   });

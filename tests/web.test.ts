@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
-import { readWeb, searchWeb } from "../src/tools/web.js";
+import { readWeb, renderSearchCandidatesText, searchWeb } from "../src/tools/web.js";
 
 function mockFetch(responses: Response[]) {
   const calls: Array<{ input: string; init?: RequestInit }> = [];
@@ -136,7 +136,7 @@ describe("archived web tools", () => {
     });
   });
 
-  it("searches Tavily and archives the complete model-visible result set without quota data", async () => {
+  it("searches Tavily and archives candidate summaries without quota data", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
     const mock = mockFetch([Response.json({
       query: "aspirin prevention",
@@ -149,9 +149,25 @@ describe("archived web tools", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.archive.content).toContain("Trial abstract");
+    expect(result.candidates).toEqual([{ title: "Trial", url: "https://example.org/trial", summary: "Trial abstract", score: 0.91 }]);
+    expect(result.archive.content).toContain("Summary: Trial abstract");
     expect(result.archive.content).not.toContain("credits");
     expect(result.archive.content).not.toContain("response_time");
     expect(await readFile(path.join(sessionDir, result.archive.path), "utf8")).toContain(result.archive.content);
+  });
+
+  it("renders web search tool output as candidates only, not archive TOC or preview", () => {
+    const longSummary = "important summary ".repeat(200);
+    const text = renderSearchCandidatesText({
+      query: "thyroid diagnosis",
+      archivePath: "sources/search/thyroid.md",
+      readablePath: "data/sessions/s1/sources/search/thyroid.md",
+      candidates: [{ title: "Guideline", url: "https://example.org/guideline", score: 0.8, summary: longSummary }],
+    });
+    expect(text).toContain("Discovery archive path: sources/search/thyroid.md");
+    expect(text).toContain(`Summary: ${longSummary}`);
+    expect(text).not.toContain("Source map");
+    expect(text).not.toContain("Preview:");
+    expect(text).not.toContain("Read any archive window");
   });
 });

@@ -9,6 +9,18 @@ export type ToolAnalysis = {
   average_duration_seconds: number;
 };
 
+export type PhaseAnalysis = {
+  turns: number;
+  elapsed_seconds: number;
+  model_seconds: number;
+  tool_wall_seconds: number;
+  tool_sum_seconds: number;
+  tool_calls: number;
+  tool_errors: number;
+  tool_result_chars: number;
+  max_context_tokens: number;
+};
+
 export type TrajectoryAnalysis = {
   session_id: string;
   runs: number;
@@ -40,6 +52,7 @@ export type TrajectoryAnalysis = {
     cost: number;
   };
   tools: Record<string, ToolAnalysis>;
+  phases: Record<string, PhaseAnalysis>;
   run_summaries: Array<{
     run_id: string;
     duration_ms?: number;
@@ -107,6 +120,24 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
   let fullTextReads = 0;
   let abstractOnlyReads = 0;
   const tokens = { input: 0, output: 0, cache_read: 0, cache_write: 0, total: 0, cost: 0 };
+  type TurnState = {
+    runId: string;
+    index: number;
+    elapsedMs: number;
+    modelMs: number;
+    contextTokens: number;
+    toolResultChars: number;
+    tools: Array<{ id: string; name: string; startMs: number; endMs?: number; durationMs: number; error: boolean }>;
+  };
+  const turnStates = new Map<string, TurnState>();
+  const turnState = (runId: string, index: number): TurnState => {
+    const key = `${runId}:${index}`;
+    const existing = turnStates.get(key);
+    if (existing) return existing;
+    const created: TurnState = { runId, index, elapsedMs: 0, modelMs: 0, contextTokens: 0, toolResultChars: 0, tools: [] };
+    turnStates.set(key, created);
+    return created;
+  };
 
   for (const record of records) {
     const run = record.run_id;
@@ -117,6 +148,10 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
       runTurns.set(run, set);
     }
     const data = record.data as any;
+    const state = run && record.turn_index !== undefined ? turnState(run, record.turn_index) : undefined;
+    if (state && record.event === "context_snapshot") state.contextTokens = numeric(data?.context_usage?.tokens);
+    if (state && record.event === "turn_end") state.elapsedMs = numeric(data?.duration_ms);
+    if (state && record.event === "assistant_message") state.modelMs = numeric(data?.request_timing?.duration_ms);
     if (record.event === "run_start" && run) runStarts.set(run, record.timestamp);
     if (record.event === "run_settled" && run) runEnds.set(run, record.timestamp);
     if (record.event === "assistant_message") {
@@ -138,6 +173,7 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
       const name = String(data?.tool_name ?? "unknown");
       const callId = String(data?.tool_call_id ?? `missing-${record.sequence}`);
       toolStarts.set(callId, { name, args: data?.args, ...(run ? { runId: run } : {}) });
+      state?.tools.push({ id: callId, name, startMs: Date.parse(record.timestamp), durationMs: 0, error: false });
       runToolCalls.set(run ?? "unknown", (runToolCalls.get(run ?? "unknown") ?? 0) + 1);
       const actionKey = `${name}:${JSON.stringify(stable(data?.args))}`;
       actionCounts.set(actionKey, (actionCounts.get(actionKey) ?? 0) + 1);
@@ -159,6 +195,15 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
       };
       const duration = Number(data?.duration_ms ?? 0);
       if (Number.isFinite(duration)) tools[name].total_duration_ms += duration;
+      if (state) {
+        const call = state.tools.find((candidate) => candidate.id === String(data?.tool_call_id));
+        if (call) {
+          call.endMs = Date.parse(record.timestamp);
+          call.durationMs = Number.isFinite(duration) ? duration : 0;
+          call.error = data?.is_error === true;
+        }
+        state.toolResultChars += JSON.stringify(data?.result ?? "").length;
+      }
       if (data?.is_error === true) {
         toolErrors += 1;
         tools[name].errors += 1;
@@ -196,6 +241,56 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
   const averageModelCompletion = average(modelCompletionSeconds);
   const averageProviderHeaders = average(providerHeadersSeconds);
 
+  const phases: Record<string, PhaseAnalysis> = {};
+  const runOrderedTurns = new Map<string, TurnState[]>();
+  for (const state of turnStates.values()) {
+    const ordered = runOrderedTurns.get(state.runId) ?? [];
+    ordered.push(state);
+    runOrderedTurns.set(state.runId, ordered);
+  }
+  for (const ordered of runOrderedTurns.values()) {
+    ordered.sort((a, b) => a.index - b.index);
+    const firstRetrieval = ordered.findIndex((state) => state.tools.some((tool) => /^(?:pubmed|web|guideline_mcp)_/.test(tool.name)));
+    const firstEvidence = ordered.findIndex((state) => state.tools.some((tool) => tool.name.startsWith("evidence_")));
+    const firstReport = ordered.findIndex((state) => state.tools.some((tool) => tool.name === "report_write"));
+    for (let position = 0; position < ordered.length; position += 1) {
+      const state = ordered[position]!;
+      const names = state.tools.map((tool) => tool.name);
+      let phase: string;
+      if (names.includes("report_write")) phase = "report_drafting";
+      else if (names.some((name) => name.startsWith("evidence_"))) phase = "evidence";
+      else if (names.some((name) => /^(?:pubmed|web|guideline_mcp)_/.test(name))) phase = "retrieval";
+      else if (firstReport >= 0 && position > firstReport && !names.length) phase = "final_response";
+      else if (firstEvidence >= 0 && position >= firstEvidence && (firstReport < 0 || position < firstReport)) phase = "evidence";
+      else if (firstRetrieval >= 0 && position > firstRetrieval && (firstEvidence < 0 || position < firstEvidence)) phase = "source_review";
+      else if (firstRetrieval < 0 || position < firstRetrieval) phase = "setup";
+      else phase = "other";
+      phases[phase] ??= {
+        turns: 0, elapsed_seconds: 0, model_seconds: 0, tool_wall_seconds: 0,
+        tool_sum_seconds: 0, tool_calls: 0, tool_errors: 0, tool_result_chars: 0, max_context_tokens: 0,
+      };
+      const summary = phases[phase]!;
+      const starts = state.tools.map((tool) => tool.startMs).filter(Number.isFinite);
+      const ends = state.tools.map((tool) => tool.endMs).filter((value): value is number => value !== undefined && Number.isFinite(value));
+      const toolWallMs = starts.length && ends.length ? Math.max(...ends) - Math.min(...starts) : 0;
+      summary.turns += 1;
+      summary.elapsed_seconds += state.elapsedMs / 1000;
+      summary.model_seconds += state.modelMs / 1000;
+      summary.tool_wall_seconds += Math.max(0, toolWallMs) / 1000;
+      summary.tool_sum_seconds += state.tools.reduce((sum, tool) => sum + tool.durationMs, 0) / 1000;
+      summary.tool_calls += state.tools.length;
+      summary.tool_errors += state.tools.filter((tool) => tool.error).length;
+      summary.tool_result_chars += state.toolResultChars;
+      summary.max_context_tokens = Math.max(summary.max_context_tokens, state.contextTokens);
+    }
+  }
+  for (const summary of Object.values(phases)) {
+    summary.elapsed_seconds = Math.round(summary.elapsed_seconds * 1000) / 1000;
+    summary.model_seconds = Math.round(summary.model_seconds * 1000) / 1000;
+    summary.tool_wall_seconds = Math.round(summary.tool_wall_seconds * 1000) / 1000;
+    summary.tool_sum_seconds = Math.round(summary.tool_sum_seconds * 1000) / 1000;
+  }
+
   return {
     session_id: sessionId,
     runs: runIds.length,
@@ -222,6 +317,7 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
     abstract_only_reads: abstractOnlyReads,
     tokens,
     tools,
+    phases,
     run_summaries: runIds.map((runId) => {
       const duration = milliseconds(runStarts.get(runId), runEnds.get(runId));
       return {

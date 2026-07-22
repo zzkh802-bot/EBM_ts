@@ -27,6 +27,9 @@ function markdown(analysis: ReturnType<typeof analyzeTrajectory>, tracePath: str
     .sort(([, a], [, b]) => b.calls - a.calls)
     .map(([name, value]) => `| ${name} | ${value.calls} | ${value.errors} | ${value.average_duration_seconds} |`)
     .join("\n");
+  const phaseRows = Object.entries(analysis.phases)
+    .map(([name, value]) => `| ${name} | ${value.turns} | ${value.elapsed_seconds} | ${value.model_seconds} | ${value.tool_wall_seconds} | ${value.tool_calls} | ${value.tool_errors} | ${value.tool_result_chars} | ${value.max_context_tokens} |`)
+    .join("\n");
   return [
     "# Trajectory Analysis",
     "",
@@ -44,6 +47,14 @@ function markdown(analysis: ReturnType<typeof analyzeTrajectory>, tracePath: str
     `- Model completion: ${analysis.average_model_completion_seconds ?? "not observed"} s average`,
     `- Provider headers: ${analysis.average_provider_headers_seconds ?? "not observed"} s average`,
     `- First evidence_add: ${analysis.first_evidence_add_turn ? `turn ${analysis.first_evidence_add_turn}, ${analysis.first_evidence_add_delay_seconds} s` : "not observed"}`,
+    "",
+    "## Phases",
+    "",
+    "Tool wall time measures concurrent batches once; tool sum counts every call.",
+    "",
+    "| Phase | Turns | Elapsed s | Model s | Tool wall s | Calls | Errors | Result chars | Max context tokens |",
+    "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+    phaseRows || "| — | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |",
     "",
     "## Tokens",
     "",

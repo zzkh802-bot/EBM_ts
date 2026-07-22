@@ -19,8 +19,10 @@ export type WebReadResult =
   | { ok: true; provider: "mineru" | "jina" | "firecrawl"; archive: SourceArchiveRecord }
   | { ok: false; error: WebToolError };
 
+export type WebSearchCandidate = { title: string; url?: string; summary?: string; score?: number };
+
 export type WebSearchResult =
-  | { ok: true; provider: "tavily"; archive: SourceArchiveRecord; resultCount: number }
+  | { ok: true; provider: "tavily"; archive: SourceArchiveRecord; resultCount: number; candidates: WebSearchCandidate[] }
   | { ok: false; error: WebToolError };
 
 type FetchOptions = {
@@ -239,17 +241,45 @@ export async function readWeb(input: {
 
 type TavilyResult = { title?: unknown; url?: unknown; content?: unknown; score?: unknown };
 
-function renderSearchResults(query: string, results: TavilyResult[]): string {
-  const sections = [`# Web search: ${query}`, ""];
-  results.forEach((result, index) => {
-    const title = typeof result.title === "string" && result.title ? result.title : `Result ${index + 1}`;
-    sections.push(`## ${index + 1}. ${title}`);
-    if (typeof result.url === "string") sections.push("", `URL: ${result.url}`);
-    if (typeof result.score === "number") sections.push(`Relevance: ${result.score}`);
-    if (typeof result.content === "string" && result.content.trim()) sections.push("", result.content.trim());
+function cleanSearchText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function searchCandidates(results: TavilyResult[]): WebSearchCandidate[] {
+  return results.map((result, index) => ({
+    title: typeof result.title === "string" && result.title.trim() ? cleanSearchText(result.title) : `Result ${index + 1}`,
+    ...(typeof result.url === "string" && result.url.trim() ? { url: result.url.trim() } : {}),
+    ...(typeof result.content === "string" && result.content.trim() ? { summary: cleanSearchText(result.content) } : {}),
+    ...(typeof result.score === "number" ? { score: result.score } : {}),
+  }));
+}
+
+function renderSearchResults(query: string, candidates: WebSearchCandidate[]): string {
+  const sections = [`# Web search candidates: ${query}`, ""];
+  candidates.forEach((result, index) => {
+    sections.push(`## ${index + 1}. ${result.title}`);
+    if (result.url) sections.push("", `URL: ${result.url}`);
+    if (result.score !== undefined) sections.push(`Search score: ${result.score}`);
+    if (result.summary) sections.push("", `Summary: ${result.summary}`);
     sections.push("");
   });
   return sections.join("\n");
+}
+
+export function renderSearchCandidatesText(input: { query: string; archivePath: string; readablePath: string; candidates: WebSearchCandidate[] }): string {
+  return [
+    `Discovery archive path: ${input.archivePath}`,
+    `Readable archive path: ${input.readablePath}`,
+    "Use web_read on a candidate URL before creating evidence; this search snapshot is discovery-only. Search score is only a search-provider ranking signal, not evidence quality.",
+    "",
+    ...input.candidates.flatMap((candidate, index) => [
+      `${index + 1}. ${candidate.title}`,
+      ...(candidate.url ? [`   URL: ${candidate.url}`] : []),
+      ...(candidate.score !== undefined ? [`   Search score: ${candidate.score}`] : []),
+      ...(candidate.summary ? [`   Summary: ${candidate.summary}`] : []),
+      "",
+    ]),
+  ].join("\n");
 }
 
 export async function searchWeb(input: {
@@ -287,11 +317,13 @@ export async function searchWeb(input: {
     }
     const payload = await response.json() as { results?: unknown };
     if (!Array.isArray(payload.results)) throw new Error("Tavily response has no results array");
-    const content = renderSearchResults(input.query, payload.results as TavilyResult[]);
+    const candidates = searchCandidates(payload.results as TavilyResult[]);
+    const content = renderSearchResults(input.query, candidates);
     return {
       ok: true,
       provider: "tavily",
-      resultCount: payload.results.length,
+      resultCount: candidates.length,
+      candidates,
       archive: await archiveSource({ sessionDir: input.sessionDir, kind: "search", title: input.query, content }),
     };
   } catch (error) {

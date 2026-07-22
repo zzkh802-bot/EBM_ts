@@ -160,7 +160,7 @@ The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening ra
 
 - Reviewed Pi extension, SDK, JSON event stream, RPC, session-format, and compaction interfaces. Pi already exposes finalized assistant thinking blocks, message/turn lifecycle, tool start/end, provider request/response, model/thinking changes, compaction, and session shutdown.
 - Added a project-local trajectory recorder through Pi extension hooks; no Pi vendor modification or AgentLoop replacement was needed.
-- Developer-only logs are written incrementally to `data/sessions/{sessionId}/trace/trajectory.md` and `trajectory.jsonl`; neither file is appended to the Pi session or model context.
+- Developer-only logs are written incrementally to `data/sessions/{workspace}/trace/trajectory.md` and `trajectory.jsonl`; the full Pi UUID is retained in trajectory metadata, and neither file is appended to the Pi session or model context.
 - Markdown provides a readable run/turn/thinking/tool chronology. JSONL uses a versioned normalized event record for downstream model analysis and eval.
 - Large tool strings are bounded while finalized thinking is preserved; obvious secret-bearing fields are redacted and files use owner-only permissions.
 - Added `npm run trace:analyze` to calculate turns, tool failures and latency, repeated tool actions, time/turn to first `evidence_add`, full-text versus abstract-only reads, provider errors, compactions, thinking/response volume, and token/cache usage.
@@ -174,7 +174,7 @@ The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening ra
 - Ran the acute ischemic stroke/alteplase example with DeepSeek V4 Flash and high thinking. It completed successfully, registered eight evidence records, and wrote a verified Chinese report.
 - Independent wall time was 164.51 seconds; trajectory time was 163.001 seconds. The run used 33 turns and 52 tool calls, reached first evidence at turn 17 / 85.72 seconds, and had no provider HTTP errors.
 - The trajectory exposed a concrete locality defect rather than a belief-state defect: archive output told the model to use Pi `read` with a session-relative `sources/...` path, but built-in `read` resolves from the workspace root. The model spent repeated `bash/find/grep` calls locating files and initially supplied two invalid evidence ranges.
-- Changed archive output to distinguish the session-relative `Evidence source_path` consumed by `evidence_add` from the workspace-relative `Readable archive path` consumed by Pi `read`.
+- Archive output now emphasizes the workspace-readable path consumed by Pi `read`; `evidence_add` also accepts that readable path and canonicalizes it internally.
 - Repeated the exact acute-stroke prompt. Wall time fell from 164.51 to 111.47 seconds; traced time from 163.001 to 109.905 seconds; turns from 33 to 17; tool calls from 52 to 30; first evidence from 85.72 to 40.099 seconds; PubMed searches from 13 to 4; shell calls from 13 to 1.
 - The rerun exposed two smaller mechanical errors. Archive output now states its total valid offset range, and `pubmed_read` strips common `PMID:`, `PMCID:`, and `DOI:` labels before identifier resolution.
 
@@ -202,7 +202,7 @@ The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening ra
 
 ### Real E2E verification: direct PubMed abstract evidence
 
-- A broad stroke case completed successfully in 108.98 wall-clock seconds, but trajectory analysis found 12 fast `evidence_add` failures because the model passed Pi-readable `data/sessions/<id>/...` paths where the tool expected session-relative paths. `evidence_add` now canonicalizes either current-session form and rejects paths naming another session.
+- A broad stroke case completed successfully in 108.98 wall-clock seconds, but trajectory analysis found 12 fast `evidence_add` failures because the model passed Pi-readable session paths where the tool expected session-relative paths. `evidence_add` now canonicalizes the current semantic workspace form and legacy UUID form, while rejecting paths naming another session.
 - Ran a constrained abstract-only case asking whether alteplase benefit declines with treatment delay. It made exactly one `pubmed_search`, no `pubmed_read`, selected the separately archived Cochrane abstract (PMID 12917889), created `primary_abstract` evidence from exact lines, and wrote a verified Chinese report.
 - Wall time was 45.45 seconds; traced time 43.861 seconds; 7 turns; 6 tool calls; 0 errors; no duplicate actions; first evidence at turn 5 / 33.882 seconds. This verifies that citation-capable PubMed abstracts do not require another network retrieval.
 - The trajectory still showed one shell call used to count lines after generic Pi `read`. PubMed tool output now proactively returns each abstract's session-relative evidence path, Pi-readable path, exact complete abstract line range, and copyable bounded `read` command, with continuation for an exceptional abstract over 200 lines.

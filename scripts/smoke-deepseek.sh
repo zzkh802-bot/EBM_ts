@@ -3,12 +3,17 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-set -a
-# shellcheck disable=SC1091
-source .env
-set +a
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
 
 [[ -n "${DEEPSEEK_API_KEY:-}" ]] || { echo "✗ DEEPSEEK_API_KEY is missing" >&2; exit 1; }
+export PI_SKIP_VERSION_CHECK="${PI_SKIP_VERSION_CHECK:-1}"
+export PI_CODING_AGENT_DIR="${EBM_PI_AGENT_DIR:-$ROOT/data/pi-agent}"
+mkdir -p "$PI_CODING_AGENT_DIR" data/pi-sessions data/sessions
 echo "proxy: HTTP_PROXY=$([[ -n "${HTTP_PROXY:-}" ]] && echo configured || echo unset), HTTPS_PROXY=$([[ -n "${HTTPS_PROXY:-}" ]] && echo configured || echo unset)"
 
 http_code="$(curl --silent --show-error --connect-timeout 10 --max-time 20 \
@@ -22,8 +27,8 @@ echo "endpoint: reachable (HTTP $http_code; authentication is tested next)"
 stderr_file="$(mktemp)"
 trap 'rm -f "$stderr_file"' EXIT
 set +e
-response="$(PI_SKIP_VERSION_CHECK=1 timeout --signal=TERM 90 ./node_modules/.bin/pi \
-  --approve --no-session \
+response="$(timeout --signal=TERM 90 ./node_modules/.bin/pi \
+  --approve --no-session --no-extensions --no-skills \
   --provider deepseek --model deepseek-v4-flash --thinking off \
   -p 'Reply with exactly: DEEPSEEK_OFF_OK' 2>"$stderr_file")"
 status=$?

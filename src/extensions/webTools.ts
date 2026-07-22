@@ -1,8 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { readWeb, searchWeb, type WebToolError } from "../tools/web.js";
-import { archiveDetails, archiveToolText, readableArchivePath } from "./archiveOutput.js";
-import { piSessionDirectory } from "./sessionPath.js";
+import { readWeb, renderSearchCandidatesText, searchWeb, type WebToolError } from "../tools/web.js";
+import { archiveDetails, archiveToolText } from "./archiveOutput.js";
+import { piReadableSessionPath, piSessionDirectory } from "./sessionPath.js";
 
 function toolError(error: WebToolError): Error {
   return new Error(JSON.stringify(error));
@@ -29,7 +29,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
         ...(signal ? { signal } : {}),
       });
       if (!result.ok) throw toolError(result.error);
-      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path), { compactRead: true });
+      const output = archiveToolText(result.archive, piReadableSessionPath(ctx.cwd, sessionId, result.archive.path), { compactRead: true });
       pi.events.emit("ebm:source_archived", { sessionId, provider: result.provider, path: result.archive.path, kind: "read" });
       return {
         content: [{ type: "text", text: output.text }],
@@ -41,9 +41,9 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
   pi.registerTool({
     name: "web_search",
     label: "Search Web",
-    description: "Search the public web with Tavily and archive the complete normalized result set before model exposure.",
+    description: "Search the public web with Tavily, return Top-K candidate URLs with provider summaries, and archive the discovery snapshot for traceability.",
     promptSnippet: "Search and archive general web discovery results",
-    promptGuidelines: ["Prefer PubMed tools for biomedical literature once available; use web_search for general discovery."],
+    promptGuidelines: ["Prefer PubMed tools for biomedical literature once available; use web_search for general discovery. Call web_read on a candidate URL before using it as evidence."],
     parameters: Type.Object({
       query: Type.String({ minLength: 2 }),
       max_results: Type.Optional(Type.Integer({ minimum: 1, maximum: 10 })),
@@ -59,7 +59,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
         ...(signal ? { signal } : {}),
       });
       if (!result.ok) throw toolError(result.error);
-      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path), { citationEligible: false });
+      const readablePath = piReadableSessionPath(ctx.cwd, sessionId, result.archive.path);
       pi.events.emit("ebm:source_archived", {
         sessionId,
         provider: result.provider,
@@ -68,12 +68,13 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
         resultCount: result.resultCount,
       });
       return {
-        content: [{ type: "text", text: output.text }],
+        content: [{ type: "text", text: renderSearchCandidatesText({ query: params.query, archivePath: result.archive.path, readablePath, candidates: result.candidates }) }],
         details: {
           provider: result.provider,
           resultCount: result.resultCount,
+          candidates: result.candidates,
           archive: archiveDetails(result.archive),
-          truncated: output.truncated,
+          truncated: false,
         },
       };
     },

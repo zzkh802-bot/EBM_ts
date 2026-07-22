@@ -48,4 +48,41 @@ describe("trajectory analysis", () => {
     });
     expect(analysis.run_summaries[0]).toMatchObject({ duration_seconds: 8 });
   });
+
+  it("separates model time, concurrent tool wall time, context growth, and workflow phases", () => {
+    const records: TrajectoryRecord[] = [
+      record(1, "2026-01-01T00:00:00.000Z", "run_start", {}),
+      record(2, "2026-01-01T00:00:00.100Z", "context_snapshot", { context_usage: { tokens: 100 } }, "run-1", 0),
+      record(3, "2026-01-01T00:00:01.000Z", "assistant_message", { content: [], request_timing: { duration_ms: 900 } }, "run-1", 0),
+      record(4, "2026-01-01T00:00:01.000Z", "tool_start", { tool_call_id: "a", tool_name: "pubmed_search", args: {} }, "run-1", 0),
+      record(5, "2026-01-01T00:00:01.010Z", "tool_start", { tool_call_id: "b", tool_name: "web_search", args: {} }, "run-1", 0),
+      record(6, "2026-01-01T00:00:03.000Z", "tool_end", { tool_call_id: "a", tool_name: "pubmed_search", duration_ms: 2000, result: { text: "a" } }, "run-1", 0),
+      record(7, "2026-01-01T00:00:04.000Z", "tool_end", { tool_call_id: "b", tool_name: "web_search", duration_ms: 2990, result: { text: "bb" } }, "run-1", 0),
+      record(8, "2026-01-01T00:00:04.100Z", "turn_end", { duration_ms: 4000 }, "run-1", 0),
+      record(9, "2026-01-01T00:00:04.200Z", "context_snapshot", { context_usage: { tokens: 500 } }, "run-1", 1),
+      record(10, "2026-01-01T00:00:05.200Z", "assistant_message", { content: [], request_timing: { duration_ms: 1000 } }, "run-1", 1),
+      record(11, "2026-01-01T00:00:05.210Z", "tool_start", { tool_call_id: "c", tool_name: "evidence_add", args: {} }, "run-1", 1),
+      record(12, "2026-01-01T00:00:05.220Z", "tool_end", { tool_call_id: "c", tool_name: "evidence_add", duration_ms: 10, result: {} }, "run-1", 1),
+      record(13, "2026-01-01T00:00:05.230Z", "turn_end", { duration_ms: 1030 }, "run-1", 1),
+      record(14, "2026-01-01T00:00:05.300Z", "run_settled", {}),
+    ];
+    const analysis = analyzeTrajectory(records);
+    expect(analysis.phases.retrieval).toMatchObject({
+      turns: 1,
+      elapsed_seconds: 4,
+      model_seconds: 0.9,
+      tool_wall_seconds: 3,
+      tool_sum_seconds: 4.99,
+      tool_calls: 2,
+      tool_result_chars: 25,
+      max_context_tokens: 100,
+    });
+    expect(analysis.phases.evidence).toMatchObject({
+      turns: 1,
+      elapsed_seconds: 1.03,
+      model_seconds: 1,
+      tool_calls: 1,
+      max_context_tokens: 500,
+    });
+  });
 });

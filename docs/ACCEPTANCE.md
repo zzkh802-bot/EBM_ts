@@ -22,7 +22,7 @@ Expected:
 | --- | --- | --- |
 | URL/Jina | `tests/urlSafety.test.ts` | metadata/private URLs rejected; Jina target preserves HTTPS |
 | Archive | `tests/archive.test.ts` | normalized read sources persist under semantic `full.md`/`toc.md` directories; selected resources retain relative paths and hash manifests; output exposes bounded navigation |
-| Web | `tests/web.test.ts` | suffix/Content-Type PDF detection routes Premium VLM URL → guarded download + Premium upload → Jina/Firecrawl; provider results normalize before exposure |
+| Web | `tests/web.test.ts` | suffix/Content-Type PDF detection routes Premium VLM URL → guarded download + Premium upload → Jina/Firecrawl; web search exposes only Top-K candidates and compact summaries while preserving discovery archives |
 | MinerU | `tests/mineru.test.ts` | Premium VLM URL/upload polling, cancellation, ZIP Markdown extraction, and selective referenced-image retention work; failures are explicit |
 | PubMed | `tests/pubmed.test.ts` | one batched retrieval produces search history plus per-abstract read archives; relevance, zero results, ELink partial failures, PMC/OpenAlex/MinerU, and abstract-only outcomes remain explicit |
 | OA resolution | `tests/openAlex.test.ts` | exact PMID resolution, direct-PDF selection, bounded download, and redirect/private-address rejection |
@@ -36,7 +36,6 @@ Expected:
 | Compaction | `tests/compactionArtifact.test.ts` | Pi summaries are mirrored atomically without replacing native compaction |
 | Evidence | `tests/evidence.test.ts` | Markdown evidence stores and verifies exact source slices; traversal/symlink escape rejected |
 | Reports | `tests/report.test.ts` | unknown/stale evidence blocks report writes; evidence-gap reports require explicit opt-in |
-| Session | `tests/sessionStore.test.ts` | JSON session store persists messages and compaction summaries |
 | Pi extension | `tests/ebmToolsExtension.test.ts` | project extension loads and evidence tools emit a domain event |
 | Providers | `tests/providerCatalog.test.ts` | Pi owns native DeepSeek; Xinqiong registers only its OpenAI-compatible endpoint |
 | Bloat boundary | `scripts/check-boundaries.ts` | no SQLite/ORM/LangChain/LlamaIndex dependency in foundation |

@@ -2,13 +2,32 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { GuidelineMcpClient, readGuideline, searchGuidelines } from "../src/tools/guidelineMcp.js";
+import { GuidelineMcpClient, readGuideline, retrieveGuidelines, searchGuidelines } from "../src/tools/guidelineMcp.js";
 
 function rpcResponse(payload: unknown, sessionId?: string): Response {
   return Response.json(payload, { headers: sessionId ? { "mcp-session-id": sessionId } : {} });
 }
 
 describe("guideline MCP", () => {
+  it("passes caller cancellation signals through guideline tool calls", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-guideline-"));
+    const controller = new AbortController();
+    let received: AbortSignal | undefined;
+    const result = await searchGuidelines({
+      sessionDir,
+      query: "thyroid",
+      signal: controller.signal,
+      client: {
+        async callTool(_name, _args, signal) {
+          received = signal;
+          return { text: "[]", raw: {} };
+        },
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(received).toBe(controller.signal);
+  });
+
   it("initializes Streamable HTTP and calls tools with the negotiated session", async () => {
     const requests: Array<{ body: any; session?: string }> = [];
     const responses = [
@@ -46,6 +65,65 @@ describe("guideline MCP", () => {
     await expect(timeout.callTool("search", {})).rejects.toThrow(/timed out/);
   });
 
+  it("removes embedded transport frontmatter and derives a semantic title for generic guideline envelopes", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-guideline-"));
+    const client = {
+      callTool: async () => ({
+        text: JSON.stringify({
+          title: "Guideline",
+          content: "---\nid: internal_hash\nsource_file: D:\\\\private\\\\raw.pdf\n---\n\n# Guideline\n\n## 2025 update to European Stroke Organisation\n\n## guideline on blood pressure management\n\nRecommendation text.",
+        }),
+        raw: {},
+      }),
+    };
+    const result = await readGuideline({ sessionDir, docId: "internal_hash", client });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.archive.path).toBe("sources/read/2025-update-to-european-stroke-organisation-guideline-on-blood-pressure/full.md");
+    expect(result.archive.content).not.toContain("source_file:");
+    expect(result.archive.content).not.toContain("internal_hash");
+    const toc = await readFile(path.join(sessionDir, result.archive.tocPath!), "utf8");
+    expect(toc).toContain("# Guideline Source Index");
+    expect(toc).toContain("Note: noisy PDF headings");
+  });
+
+  it("repairs concatenated guideline search objects with literal newlines into a semantic index", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-guideline-"));
+    const client = {
+      callTool: async () => ({
+        text: '{\n"doc_id":"g1","title":"Open access","abstract":"First line\nsecond line","source_institution":"PMC"\n}\n{\n"doc_id":"g2","title":"Named Guideline","abstract":"Other result"\n}',
+        raw: {},
+      }),
+    };
+    const result = await searchGuidelines({ sessionDir, query: "stroke", client });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.archive.content).toContain("Results: 2");
+    expect(result.archive.content).toContain("- 1. PMC result 1 — document ID: g1");
+    expect(result.archive.content).toContain("- 2. Named Guideline — document ID: g2");
+    expect(result.items[0]).toMatchObject({ docId: "g1", institution: "PMC", excerpt: "First line second line" });
+    expect(result.archive.content).toContain("First line second line");
+    expect(result.archive.content).not.toContain('"doc_id"');
+  });
+
+  it("prefers informative document views over noisy MCP search abstracts", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-guideline-"));
+    const client = {
+      callTool: async () => ({
+        text: JSON.stringify([{ doc_id: "g1", title: "Guideline", abstract: "journal metadata and boilerplate", view_type: "recommendation_summary", document_views: { recommendation_summary: "Use alteplase according to acute stroke guideline criteria." } }]),
+        raw: {},
+      }),
+    };
+
+    const result = await searchGuidelines({ sessionDir, query: "stroke alteplase", client });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.items[0]!.excerpt).toBe("Use alteplase according to acute stroke guideline criteria.");
+    expect(result.archive.content).toContain("Use alteplase according to acute stroke guideline criteria.");
+    expect(result.archive.content).not.toContain("journal metadata and boilerplate");
+  });
+
   it("archives search and read output before returning it", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-guideline-"));
     const calls: string[] = [];
@@ -70,11 +148,35 @@ describe("guideline MCP", () => {
       expect(search.archive.content).toContain("- Document ID: g1");
       expect(search.archive.content).not.toContain('[{"doc_id"');
     }
+    if (search.ok) expect(search.items[0]).toMatchObject({ docId: "g1", title: "Guideline result 1" });
     expect(read.ok && read.archive.path).toBe("sources/read/heart-failure-guideline-2025/full.md");
     if (read.ok) {
       const archived = await readFile(path.join(sessionDir, read.archive.path), "utf8");
       expect(archived).toContain("Recommendation text");
       expect(archived).not.toContain("doc_id");
     }
+  });
+
+  it("retrieves compact RAG chunk candidates", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-guideline-"));
+    const client = {
+      callTool: async () => ({
+        text: JSON.stringify([{ doc_id: "g1", chunk_id: "g1#1", title: "Stroke guideline", section_path: ["Stroke", "BP"], content: "BP recommendation text", score: 0.2 }]),
+        raw: {},
+      }),
+    };
+
+    const result = await retrieveGuidelines({ sessionDir, query: "stroke blood pressure", client });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.items[0]).toMatchObject({ docId: "g1", chunkId: "g1#1", title: "Stroke guideline", section: "Stroke > BP", excerpt: "BP recommendation text" });
+    expect(result.items[0]!.sourcePath).toMatch(/^sources\/read\//);
+    expect(result.items[0]!.sourcePath).toMatch(/\.md$/);
+    expect(result.items[0]!.sourcePath).not.toMatch(/\/full\.md$/);
+    expect(result.items[0]!.lineStart).toBeTypeOf("number");
+    expect(result.items[0]!.lineEnd).toBeTypeOf("number");
+    expect(result.archive.content).toContain("# Guideline retrieve: stroke blood pressure");
+    expect(result.archive.content).not.toContain('"chunk_id"');
   });
 });
