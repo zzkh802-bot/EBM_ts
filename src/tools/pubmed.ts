@@ -18,7 +18,7 @@ export type PubMedError = {
 };
 
 export type PubMedSearchResult =
-  | { ok: true; pmids: string[]; relatedPmids: string[]; abstractCount: number; archive: SourceArchiveRecord }
+  | { ok: true; pmids: string[]; relatedPmids: string[]; abstractCount: number; warnings: string[]; archive: SourceArchiveRecord }
   | { ok: false; error: PubMedError };
 
 export type PubMedReadResult =
@@ -201,7 +201,13 @@ async function fetchRelated(
   return { pmids: related, summaries: summaryPayload.result ?? {} };
 }
 
-function renderSearch(query: string, pmids: string[], articles: ParsedArticle[], related: { pmids: string[]; summaries: Record<string, any> }): string {
+function renderSearch(
+  query: string,
+  pmids: string[],
+  articles: ParsedArticle[],
+  related: { pmids: string[]; summaries: Record<string, any> },
+  warnings: string[],
+): string {
   const byPmid = new Map(articles.map((article) => [article.pmid, article]));
   const lines = [`# PubMed search: ${query}`, "", `Results: ${pmids.length}`, ""];
   pmids.forEach((pmid, index) => {
@@ -212,6 +218,9 @@ function renderSearch(query: string, pmids: string[], articles: ParsedArticle[],
     if (article?.journal) lines.push(`Journal: ${article.journal}`);
     lines.push("", "### Abstract", "", ...(article?.abstractParts.length ? article.abstractParts : ["No abstract available from PubMed."]), "");
   });
+  if (warnings.length) {
+    lines.push("## Retrieval notes", "", ...warnings.map((warning) => `- ${warning}`), "");
+  }
   if (related.pmids.length) {
     lines.push("## Similar article hints", "", "Discovery hints only; these related records have not been read as evidence.", "");
     related.pmids.forEach((pmid) => {
@@ -250,15 +259,22 @@ export async function searchPubMed(input: {
     }
     const pmids = searchPayload.esearchresult.idlist.filter((id): id is string => typeof id === "string" && /^\d+$/.test(id));
     const articles = await fetchPubmedArticles(pmids, fetcher, timeoutMs, retries, input);
-    const related = input.includeSimilar === false
-      ? { pmids: [], summaries: {} }
-      : await fetchRelated(pmids, fetcher, timeoutMs, retries, input, Math.min(Math.max(input.maxSimilar ?? 5, 0), 10));
-    const content = renderSearch(input.query, pmids, articles, related);
+    const warnings: string[] = [];
+    let related: { pmids: string[]; summaries: Record<string, any> } = { pmids: [], summaries: {} };
+    if (input.includeSimilar !== false) {
+      try {
+        related = await fetchRelated(pmids, fetcher, timeoutMs, retries, input, Math.min(Math.max(input.maxSimilar ?? 5, 0), 10));
+      } catch (error) {
+        warnings.push(`Optional similar-article lookup failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    const content = renderSearch(input.query, pmids, articles, related, warnings);
     return {
       ok: true,
       pmids,
       relatedPmids: related.pmids,
       abstractCount: articles.filter((article) => article.abstractParts.length > 0).length,
+      warnings,
       archive: await archiveSource({
         sessionDir: input.sessionDir,
         kind: "search",

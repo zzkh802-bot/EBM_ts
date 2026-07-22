@@ -53,6 +53,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
           pmids: result.pmids,
           relatedPmids: result.relatedPmids,
           abstractCount: result.abstractCount,
+          warnings: result.warnings,
           archive: archiveDetails(result.archive),
           truncated: output.truncated,
         },

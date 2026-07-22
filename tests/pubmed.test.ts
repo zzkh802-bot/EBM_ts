@@ -68,6 +68,18 @@ describe("PubMed archive adapters", () => {
     expect(result.archive.content).toContain("DOI: 10.1/example");
   });
 
+  it("keeps abstract search results when optional similar-article lookup fails", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-pubmed-"));
+    const mock = mockFetch([
+      Response.json({ esearchresult: { idlist: ["123"] } }),
+      new Response(articleXml),
+      new Response("related service unavailable", { status: 503 }),
+    ]);
+    const result = await searchPubMed({ sessionDir, query: "aspirin", fetcher: mock.fetcher, retries: 0 });
+    expect(result).toMatchObject({ ok: true, pmids: ["123"], relatedPmids: [] });
+    if (result.ok) expect(result.warnings[0]).toContain("similar-article lookup failed");
+  });
+
   it("returns an explicit abstract-only result when no PMCID is available", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-pubmed-"));
     const abstractOnlyXml = articleXml.replace('<ArticleId IdType="pmc">PMC999</ArticleId>', "");
