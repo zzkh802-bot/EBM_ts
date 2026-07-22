@@ -1,4 +1,6 @@
 export { createEbmSession } from "./app/createEbmSession.js";
+export { saveCompactionArtifact } from "./tools/compactionArtifact.js";
+export type { CompactionArtifactInput } from "./tools/compactionArtifact.js";
 export { registerEbmTools } from "./extensions/ebmTools.js";
 export { registerEbmProviders, XINQIONG_PROVIDER_ID } from "./providers/providerCatalog.js";
 export { archiveSource, stableArchiveName } from "./tools/archive.js";

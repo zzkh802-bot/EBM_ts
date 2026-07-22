@@ -121,4 +121,11 @@ Continue through archived web read/search, PubMed, guideline MCP, and verified M
 
 ### Basic-refactor milestone complete
 
-The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening rather than foundation completion: DNS/redirect SSRF protection, MinerU local upload fallback, PMC full text, compaction artifacts, and broader end-to-end evaluation.
+The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening rather than foundation completion: DNS/redirect SSRF protection, MinerU local upload fallback, PMC full text, and broader end-to-end evaluation.
+
+### Completed hardening: Pi compaction artifacts
+
+- Added a passive `session_compact` event consumer; Pi still creates and applies its native summary.
+- The completed summary and lineage metadata are atomically mirrored to `data/sessions/{id}/compactions/{entryId}.json`.
+- The artifact includes reason, retry state, first kept entry, token count, source (Pi/extension), and summary.
+- Verification: `npm run check` — 14 files, 32 tests passed.

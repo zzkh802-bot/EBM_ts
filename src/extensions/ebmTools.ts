@@ -9,13 +9,14 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { addEvidence, listEvidence, readEvidence } from "../tools/evidence.js";
+import { registerCompactionArtifacts } from "./compactionArtifacts.js";
 import { registerGuidelineTools } from "./guidelineTools.js";
 import { registerPubMedTools } from "./pubmedTools.js";
 import { registerReportTools } from "./reportTools.js";
 import { piSessionDirectory } from "./sessionPath.js";
 import { registerWebTools } from "./webTools.js";
 
-export function registerEbmTools(pi: Pick<ExtensionAPI, "registerTool" | "events">): void {
+export function registerEbmTools(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "evidence_add",
     label: "Add Evidence",
@@ -97,4 +98,5 @@ export function registerEbmTools(pi: Pick<ExtensionAPI, "registerTool" | "events
   registerPubMedTools(pi);
   registerReportTools(pi);
   registerGuidelineTools(pi);
+  registerCompactionArtifacts(pi);
 }

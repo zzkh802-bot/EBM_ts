@@ -34,7 +34,8 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - `web_read` now routes PDF/Office/e-book URLs through MinerU Premium first; real demo PDF parsing returned 51,291 Markdown characters.
 - Migrated the Python clinical report-writing skill and adapted obsolete tool references to Pi/evidence IDs.
 - Vertical acceptance covers discovery archive → exact evidence → verified report.
-- `npm run check`: 13 test files / 31 tests passing.
+- Pi `session_compact` summaries are atomically mirrored as project-local JSON artifacts without replacing Pi compaction behavior.
+- `npm run check`: 14 test files / 32 tests passing.
 
 ## Non-negotiable decisions
 
@@ -48,7 +49,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 
 ## Active task
 
-Basic refactor is complete. Next hardening priorities are DNS/redirect SSRF checks, MinerU local download/upload fallback, PMC full text, and Pi compaction-summary artifact integration.
+Basic refactor is complete. Next hardening priorities are DNS/redirect SSRF checks, MinerU local download/upload fallback, and PMC full text.
 
 ## Next commands
 

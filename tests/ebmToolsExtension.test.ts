@@ -29,11 +29,14 @@ describe("EBM Pi extension tools", () => {
 
   it("registers evidence tools and emits a domain event after evidence is archived", async () => {
     const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
+    const handlers = new Map<string, (...args: any[]) => unknown>();
     const events: Array<[string, unknown]> = [];
     registerEbmTools({
       registerTool: (tool: { name: string; execute: (...args: any[]) => Promise<any> }) => tools.set(tool.name, tool),
+      on: (name: string, handler: (...args: any[]) => unknown) => handlers.set(name, handler),
       events: { emit: (name: string, payload: unknown) => events.push([name, payload]) },
     } as never);
+    expect(handlers.has("session_compact")).toBe(true);
     expect([...tools.keys()].sort()).toEqual([
       "evidence_add",
       "evidence_list",
