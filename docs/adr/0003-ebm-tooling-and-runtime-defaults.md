@@ -120,6 +120,17 @@ Do not migrate old Python sessions/data. The old repo remains reference material
 
 Migrate writing/style skills that constrain final report/manuscript style. Do not bulk-migrate unrelated workflow/runtime skills.
 
+### Developer observability
+
+Use Pi's native extension lifecycle events and persisted session JSONL instead of adding hooks to the AgentLoop. A project-local extension may write derived developer traces under the ignored session workspace.
+
+Trajectory logs must not participate in model context: do not use `sendMessage`, custom messages, or state injection. Keep two derived views:
+
+- Markdown for human inspection of finalized thinking, responses, tool calls/results, timing, and errors.
+- JSONL for trajectory analysis, model comparison, and eval.
+
+Pi session JSONL remains the authoritative complete conversation/tree record. Derived trajectory logs add event timing and normalized metrics, and may truncate large tool bodies while retaining archive paths. Thinking can only be recorded when the provider exposes a thinking block.
+
 ### Network tests
 
 Real network integration tests are allowed. Keep fast unit tests, but add explicit integration test commands for Jina/MinerU/PubMed/MCP where useful.

@@ -27,6 +27,8 @@ Expected:
 | PubMed | `tests/pubmed.test.ts` | search batches abstracts/related hints; read uses PMC then bounded OpenAlex/MinerU fallback or marks abstract-only partial results; secrets stay out of archives |
 | OA resolution | `tests/openAlex.test.ts` | exact PMID resolution, direct-PDF selection, bounded download, and redirect/private-address rejection |
 | Evidence provenance | `tests/evidence.test.ts` | provenance persists; discovery-only and unverified mirrors are citation-ineligible |
+| Developer trajectory | `tests/trajectory.test.ts` | Pi events produce private Markdown/JSONL traces with full finalized thinking, redacted secrets, tool timing, and no model-context injection |
+| Trajectory analysis | `tests/trajectoryAnalysis.test.ts` | derives turns, repeated actions, evidence timing, tool latency/errors, thinking volume, and token/cache usage |
 | Guideline MCP | `tests/guidelineMcp.test.ts` | Streamable HTTP session/SSE works; malformed JSON and timeouts are explicit; output is archived |
 | Vertical flow | `tests/endToEnd.test.ts` | discovery archive becomes exact evidence and then a source-reverified report |
 | Pi resources | `tests/ebmToolsExtension.test.ts` | extension and both project skills load without diagnostics |

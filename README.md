@@ -83,6 +83,24 @@ xinqiong/deepseek-v4-flash
 | `evidence_read` | read and reverify evidence against its source |
 | `report_write` | write a report only after verifying all referenced evidence |
 
+## Developer trajectory logs
+
+The project extension records Pi lifecycle events outside model context:
+
+```text
+data/sessions/{sessionId}/trace/trajectory.md     # human-readable thinking/tool trajectory
+data/sessions/{sessionId}/trace/trajectory.jsonl  # machine-readable eval stream
+```
+
+The recorder uses Pi's native message, turn, tool, provider, model, compaction, and session hooks. It stores finalized thinking blocks when the provider exposes them, tool arguments/results and durations, provider status/latency, token/cache usage, and runtime configuration hashes. It never calls `sendMessage()` or `appendEntry()`, so trace data is not sent to the model. Trace files are local, ignored by git, and created with owner-only permissions.
+
+Analyze the newest trace or an explicit file:
+
+```bash
+npm run trace:analyze
+npm run trace:analyze -- data/sessions/<id>/trace/trajectory.jsonl
+```
+
 ## Checks
 
 ```bash

@@ -39,9 +39,11 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - Migrated the Python clinical report-writing skill and adapted obsolete tool references to Pi/evidence IDs.
 - Vertical acceptance covers discovery archive → exact evidence → verified report.
 - Pi `session_compact` summaries are atomically mirrored as project-local JSON artifacts without replacing Pi compaction behavior.
+- A project-local Pi trajectory recorder writes developer-only `trajectory.md` and `trajectory.jsonl` files with finalized thinking, responses, tool lifecycle/timing, provider request status, model configuration, usage, compaction, and session events. It never enters model context.
+- `npm run trace:analyze` summarizes turns, duplicate actions, tool failures/latency, evidence timing, full-text outcomes, thinking volume, provider errors, and token/cache usage for eval.
 - Source and report artifacts now use Unicode-preserving semantic filenames with numeric collision suffixes; SHA-256 remains metadata rather than filename content.
 - No dedicated user-upload workflow is planned; MinerU remains the direct document capability.
-- `npm run check`: 15 test files / 44 tests passing.
+- `npm run check`: 17 test files / 46 tests passing.
 
 ## Non-negotiable decisions
 
@@ -55,7 +57,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 
 ## Active task
 
-Basic refactor is complete. Next priority is measuring whether the improved acquisition ladder reduces model rounds and report errors before experimenting with lazy POMDP belief state.
+Basic refactor is complete. The new trajectory logs now provide the measurement seam needed to compare representative EBM runs before experimenting with lazy POMDP belief state.
 
 ## Next commands
 

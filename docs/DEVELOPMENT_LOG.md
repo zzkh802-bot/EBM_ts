@@ -155,3 +155,12 @@ The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening ra
 - SHA-256 remains in frontmatter and verification metadata, not in model-facing filenames.
 - Kept evidence IDs unchanged as stable report references; `EVIDENCE.md` provides their claim semantics.
 - Confirmed the lean policy: no separate user-upload workflow, no further document-chain abstraction, and PubMed abstracts remain valid evidence within their explicit scope.
+
+### Completed observability: Pi-native developer trajectories
+
+- Reviewed Pi extension, SDK, JSON event stream, RPC, session-format, and compaction interfaces. Pi already exposes finalized assistant thinking blocks, message/turn lifecycle, tool start/end, provider request/response, model/thinking changes, compaction, and session shutdown.
+- Added a project-local trajectory recorder through Pi extension hooks; no Pi vendor modification or AgentLoop replacement was needed.
+- Developer-only logs are written incrementally to `data/sessions/{sessionId}/trace/trajectory.md` and `trajectory.jsonl`; neither file is appended to the Pi session or model context.
+- Markdown provides a readable run/turn/thinking/tool chronology. JSONL uses a versioned normalized event record for downstream model analysis and eval.
+- Large tool strings are bounded while finalized thinking is preserved; obvious secret-bearing fields are redacted and files use owner-only permissions.
+- Added `npm run trace:analyze` to calculate turns, tool failures and latency, repeated tool actions, time/turn to first `evidence_add`, full-text versus abstract-only reads, provider errors, compactions, thinking/response volume, and token/cache usage.

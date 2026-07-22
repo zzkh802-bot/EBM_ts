@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:network": "bash scripts/smoke-deepseek.sh",
+    "trace:analyze": "tsx scripts/analyze-trace.ts --markdown",
     "test:watch": "vitest",
     "ebm": "bash scripts/ebm.sh",
     "lint:boundaries": "tsx scripts/check-boundaries.ts",

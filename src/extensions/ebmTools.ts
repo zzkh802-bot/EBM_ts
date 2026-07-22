@@ -14,6 +14,7 @@ import { registerGuidelineTools } from "./guidelineTools.js";
 import { registerPubMedTools } from "./pubmedTools.js";
 import { registerReportTools } from "./reportTools.js";
 import { piSessionDirectory } from "./sessionPath.js";
+import { registerTrajectoryRecorder } from "./trajectoryRecorder.js";
 import { registerWebTools } from "./webTools.js";
 
 export function registerEbmTools(pi: ExtensionAPI): void {
@@ -114,4 +115,5 @@ export function registerEbmTools(pi: ExtensionAPI): void {
   registerReportTools(pi);
   registerGuidelineTools(pi);
   registerCompactionArtifacts(pi);
+  registerTrajectoryRecorder(pi);
 }
