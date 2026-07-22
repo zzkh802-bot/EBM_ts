@@ -52,6 +52,26 @@ describe("verified Markdown reports", () => {
     })).rejects.toThrow(/verification failed/);
   });
 
+  it("rejects citation-ineligible discovery or unverified-mirror evidence", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-report-"));
+    await writeFile(path.join(sessionDir, "mirror.md"), "Unverified guideline recommendation.", "utf8");
+    const evidence = await addEvidence({
+      sessionDir,
+      question: "What does the guideline recommend?",
+      claim: "The guideline recommends treatment.",
+      relation: "supports",
+      provenance: "guideline_mirror_unverified",
+      sourcePath: "mirror.md",
+      offset: 0,
+      limit: 1,
+    });
+    await expect(writeReport({
+      sessionDir,
+      title: "Unverified recommendation",
+      content: `Claim [Evidence ${evidence.id}](../evidence/${evidence.id}.md).`,
+    })).rejects.toThrow(/not citation eligible/);
+  });
+
   it("requires explicit opt-in for an evidence-gap report", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-report-"));
     await expect(writeReport({ sessionDir, title: "Gap", content: "No eligible studies found." })).rejects.toThrow(/no evidence references/);

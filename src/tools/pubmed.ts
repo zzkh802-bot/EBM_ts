@@ -1,6 +1,8 @@
 import { XMLParser } from "fast-xml-parser";
 import { Agent, fetch as undiciFetch } from "undici";
 import { archiveSource, type SourceArchiveRecord } from "./archive.js";
+import { parseDocumentBytes } from "./mineru.js";
+import { downloadOpenAccessPdf, resolveOpenAlexPdf } from "./openAlex.js";
 
 const ncbiDispatcher = new Agent({ connect: { family: 4 } });
 const defaultNcbiFetch = ((input: Parameters<typeof fetch>[0], init?: RequestInit) =>
@@ -22,7 +24,15 @@ export type PubMedSearchResult =
   | { ok: false; error: PubMedError };
 
 export type PubMedReadResult =
-  | { ok: true; pmid: string; pmcid?: string; fullText: boolean; archive: SourceArchiveRecord; warnings: string[] }
+  | {
+      ok: true;
+      pmid: string;
+      pmcid?: string;
+      fullText: boolean;
+      fullTextSource: "pmc" | "openalex_mineru" | "abstract_only";
+      archive: SourceArchiveRecord;
+      warnings: string[];
+    }
   | { ok: false; error: PubMedError };
 
 type FetchOptions = {
@@ -341,6 +351,22 @@ function renderFullText(article: ParsedArticle, pmcXml: string): string {
   ].join("\n");
 }
 
+function renderOpenAlexFullText(article: ParsedArticle, markdown: string, sourceName?: string): string {
+  return [
+    `# ${article.title}`,
+    "",
+    `PMID: ${article.pmid}`,
+    ...(article.doi ? [`DOI: ${article.doi}`] : []),
+    ...(article.journal ? [`Journal: ${article.journal}`] : []),
+    "Source status: OA full text discovered through OpenAlex and parsed by MinerU",
+    ...(sourceName ? [`OA location: ${sourceName}`] : []),
+    "",
+    "## Full Text",
+    "",
+    markdown,
+  ].join("\n");
+}
+
 function renderAbstractOnly(article: ParsedArticle): string {
   return [
     `# ${article.title}`,
@@ -358,7 +384,15 @@ function renderAbstractOnly(article: ParsedArticle): string {
   ].join("\n");
 }
 
-export async function readPubMed(input: { sessionDir: string; identifier: string } & FetchOptions): Promise<PubMedReadResult> {
+export async function readPubMed(input: {
+  sessionDir: string;
+  identifier: string;
+  mineruApiToken?: string;
+  mineruBaseUrl?: string;
+  openAlexTimeoutMs?: number;
+  oaDownloadTimeoutMs?: number;
+  resolveHost?: (host: string) => Promise<string[]>;
+} & FetchOptions): Promise<PubMedReadResult> {
   const identifier = input.identifier.trim();
   if (!identifier) return { ok: false, error: { code: "invalid_input", message: "PMID, PMCID, or DOI is required" } };
   const fetcher = input.fetcher ?? defaultNcbiFetch;
@@ -373,6 +407,8 @@ export async function readPubMed(input: { sessionDir: string; identifier: string
 
     let content = renderAbstractOnly(article);
     let fullText = false;
+    let fullTextSource: "pmc" | "openalex_mineru" | "abstract_only" = "abstract_only";
+    let sourceUrl = `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`;
     const warnings: string[] = [];
     if (article.pmcid) {
       const pmcUrl = new URL(`${EUTILS}/efetch.fcgi`);
@@ -386,10 +422,47 @@ export async function readPubMed(input: { sessionDir: string; identifier: string
         if (pmcFailure) throw new Error(pmcFailure.message);
         content = renderFullText(article, await pmcResponse.text());
         fullText = true;
+        fullTextSource = "pmc";
+        sourceUrl = `https://pmc.ncbi.nlm.nih.gov/articles/${article.pmcid}/`;
       } catch (error) {
         warnings.push(`PMC full text retrieval failed: ${error instanceof Error ? error.message : String(error)}`);
       }
-    } else {
+    }
+
+    if (!fullText && input.mineruApiToken) {
+      try {
+        const oa = await resolveOpenAlexPdf({
+          pmid,
+          fetcher,
+          ...(input.openAlexTimeoutMs === undefined ? {} : { timeoutMs: input.openAlexTimeoutMs }),
+        });
+        if (oa) {
+          const downloaded = await downloadOpenAccessPdf({
+            url: oa.pdfUrl,
+            fetcher,
+            ...(input.resolveHost ? { resolveHost: input.resolveHost } : {}),
+            ...(input.oaDownloadTimeoutMs === undefined ? {} : { timeoutMs: input.oaDownloadTimeoutMs }),
+          });
+          const parsed = await parseDocumentBytes({
+            bytes: downloaded.bytes,
+            fileName: `pubmed-${pmid}.pdf`,
+            apiToken: input.mineruApiToken,
+            fetcher,
+            ...(input.mineruBaseUrl ? { baseUrl: input.mineruBaseUrl } : {}),
+            requestTimeoutMs: 25_000,
+          });
+          content = renderOpenAlexFullText(article, parsed.content, oa.sourceName);
+          fullText = true;
+          fullTextSource = "openalex_mineru";
+          sourceUrl = downloaded.finalUrl;
+        } else {
+          warnings.push("OpenAlex did not provide a direct OA PDF for this PMID.");
+        }
+      } catch (error) {
+        warnings.push(`Bounded OpenAlex/MinerU fallback failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (!fullText && !article.pmcid) {
       warnings.push("No PMCID is linked to this PubMed record; only the abstract is archived.");
     }
     return {
@@ -397,13 +470,12 @@ export async function readPubMed(input: { sessionDir: string; identifier: string
       pmid,
       ...(article.pmcid ? { pmcid: article.pmcid } : {}),
       fullText,
+      fullTextSource,
       warnings,
       archive: await archiveSource({
         sessionDir: input.sessionDir,
         kind: "read",
-        sourceUrl: fullText && article.pmcid
-          ? `https://pmc.ncbi.nlm.nih.gov/articles/${article.pmcid}/`
-          : `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
+        sourceUrl,
         title: article.title,
         content,
       }),

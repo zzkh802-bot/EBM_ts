@@ -3,12 +3,24 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 
 export type EvidenceRelation = "supports" | "partially_supports" | "refutes";
+export type EvidenceProvenance =
+  | "primary_full_text"
+  | "primary_abstract"
+  | "guideline_official"
+  | "guideline_mirror_verified"
+  | "guideline_mirror_unverified"
+  | "secondary_direct_quote"
+  | "secondary_paraphrase"
+  | "independent_guideline"
+  | "discovery_only"
+  | "other";
 
 export type EvidenceNode = {
   id: string;
   question: string;
   claim: string;
   relation: EvidenceRelation;
+  provenance: EvidenceProvenance;
   sourcePath: string;
   quote: string;
   lineStart: number;
@@ -23,6 +35,7 @@ export type EvidenceAddInput = {
   question: string;
   claim: string;
   relation: EvidenceRelation;
+  provenance?: EvidenceProvenance;
   sourcePath: string;
   offset: number;
   limit: number;
@@ -68,6 +81,7 @@ export function renderEvidenceMarkdown(node: EvidenceNode): string {
     `question: ${yamlString(node.question)}`,
     `claim: ${yamlString(node.claim)}`,
     `relation: ${node.relation}`,
+    `provenance: ${node.provenance}`,
     `source_path: ${yamlString(node.sourcePath)}`,
     `source_line_start: ${node.lineStart}`,
     `source_line_end: ${node.lineEnd}`,
@@ -124,6 +138,7 @@ export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode
     question: input.question.trim(),
     claim: input.claim.trim(),
     relation: input.relation,
+    provenance: input.provenance ?? "other",
     sourcePath: input.sourcePath,
     quote,
     lineStart: input.offset,
@@ -134,7 +149,7 @@ export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode
     id: evidenceId(base),
     ...base,
     createdAt: new Date().toISOString(),
-    citationEligible: true,
+    citationEligible: !["guideline_mirror_unverified", "discovery_only"].includes(base.provenance),
   };
   const outDir = path.join(input.sessionDir, "evidence");
   await mkdir(outDir, { recursive: true });
@@ -188,11 +203,19 @@ function parseEvidenceMarkdown(markdown: string): EvidenceNode {
   if (!(["supports", "partially_supports", "refutes"] as string[]).includes(relation)) {
     throw new Error(`invalid evidence relation: ${relation}`);
   }
+  const provenance = (metadata.get("provenance") ?? "other") as string;
+  const allowedProvenance: EvidenceProvenance[] = [
+    "primary_full_text", "primary_abstract", "guideline_official", "guideline_mirror_verified",
+    "guideline_mirror_unverified", "secondary_direct_quote", "secondary_paraphrase",
+    "independent_guideline", "discovery_only", "other",
+  ];
+  if (!allowedProvenance.includes(provenance as EvidenceProvenance)) throw new Error(`invalid evidence provenance: ${provenance}`);
   return {
     id: requiredString("evidence_id"),
     question: requiredString("question"),
     claim: requiredString("claim"),
     relation: relation as EvidenceRelation,
+    provenance: provenance as EvidenceProvenance,
     sourcePath: requiredString("source_path"),
     quote: fenced.slice(firstBreak + 1, quoteEnd),
     lineStart: requiredNumber("source_line_start"),
@@ -203,7 +226,7 @@ function parseEvidenceMarkdown(markdown: string): EvidenceNode {
   };
 }
 
-export type EvidenceSummary = Pick<EvidenceNode, "id" | "question" | "claim" | "relation" | "citationEligible"> & {
+export type EvidenceSummary = Pick<EvidenceNode, "id" | "question" | "claim" | "relation" | "provenance" | "citationEligible"> & {
   path: string;
 };
 
@@ -239,6 +262,7 @@ export async function listEvidence(sessionDir: string): Promise<EvidenceSummary[
       question: node.question,
       claim: node.claim,
       relation: node.relation,
+      provenance: node.provenance,
       citationEligible: node.citationEligible,
       path: path.posix.join("evidence", name),
     });

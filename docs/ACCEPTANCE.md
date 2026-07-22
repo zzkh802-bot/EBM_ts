@@ -24,7 +24,9 @@ Expected:
 | Archive | `tests/archive.test.ts` | archive filenames are deterministic; body offsets map model excerpts to stored files |
 | Web | `tests/web.test.ts` | MinerU/Jina/Firecrawl routing is ordered; Tavily/Jina/MinerU results are normalized and archived before exposure |
 | MinerU | `tests/mineru.test.ts` | Premium task polling and ZIP Markdown extraction succeed; task/ZIP failures are explicit |
-| PubMed | `tests/pubmed.test.ts` | search batches abstracts/related hints; read acquires PMC JATS full text or marks abstract-only partial results; secrets stay out of archives |
+| PubMed | `tests/pubmed.test.ts` | search batches abstracts/related hints; read uses PMC then bounded OpenAlex/MinerU fallback or marks abstract-only partial results; secrets stay out of archives |
+| OA resolution | `tests/openAlex.test.ts` | exact PMID resolution, direct-PDF selection, bounded download, and redirect/private-address rejection |
+| Evidence provenance | `tests/evidence.test.ts` | provenance persists; discovery-only and unverified mirrors are citation-ineligible |
 | Guideline MCP | `tests/guidelineMcp.test.ts` | Streamable HTTP session/SSE works; malformed JSON and timeouts are explicit; output is archived |
 | Vertical flow | `tests/endToEnd.test.ts` | discovery archive becomes exact evidence and then a source-reverified report |
 | Pi resources | `tests/ebmToolsExtension.test.ts` | extension and both project skills load without diagnostics |

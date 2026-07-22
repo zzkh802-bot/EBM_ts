@@ -73,6 +73,8 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
       const result = await readPubMed({
         sessionDir: piSessionDirectory(ctx.cwd, sessionId),
         identifier: params.identifier,
+        ...(process.env.MINERU_API_TOKEN ? { mineruApiToken: process.env.MINERU_API_TOKEN } : {}),
+        ...(process.env.MINERU_BASE_URL ? { mineruBaseUrl: process.env.MINERU_BASE_URL } : {}),
         ...ncbiOptions(),
       });
       if (!result.ok) throw toolError(result.error);
@@ -85,6 +87,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
           pmid: result.pmid,
           ...(result.pmcid ? { pmcid: result.pmcid } : {}),
           fullText: result.fullText,
+          fullTextSource: result.fullTextSource,
           warnings: result.warnings,
           archive: archiveDetails(result.archive),
           truncated: output.truncated,

@@ -1,6 +1,6 @@
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
-import { parseDocumentUrl } from "../src/tools/mineru.js";
+import { parseDocumentBytes, parseDocumentUrl } from "../src/tools/mineru.js";
 
 function mockFetch(responses: Response[]) {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
@@ -33,6 +33,26 @@ describe("MinerU Premium document parsing", () => {
     expect(result).toMatchObject({ parser: "mineru-premium-url", taskId: "task-1", content: "# Parsed PDF\n\nClinical result." });
     expect(mock.calls[0]).toMatchObject({ url: "https://mineru.net/api/v4/extract/task", init: { method: "POST" } });
     expect(new Headers(mock.calls[0]!.init?.headers).get("authorization")).toBe("Bearer token");
+  });
+
+  it("uploads locally downloaded bytes through a signed Premium batch URL", async () => {
+    const archive = zipSync({ "result/full.md": strToU8("# Uploaded PDF\n\nRecovered OA content.") });
+    const mock = mockFetch([
+      Response.json({ data: { batch_id: "batch-1", file_urls: ["https://upload.example/signed"] } }),
+      new Response(null, { status: 200 }),
+      Response.json({ data: { extract_result: [{ state: "done", full_zip_url: "https://cdn.example/uploaded.zip" }] } }),
+      new Response(archive),
+    ]);
+    const result = await parseDocumentBytes({
+      bytes: strToU8("%PDF-1.7 fake"),
+      fileName: "article.pdf",
+      apiToken: "token",
+      fetcher: mock.fetcher,
+      pollIntervalMs: 0,
+    });
+    expect(result).toMatchObject({ parser: "mineru-premium-upload", taskId: "batch-1", content: "# Uploaded PDF\n\nRecovered OA content." });
+    expect(mock.calls[1]).toMatchObject({ url: "https://upload.example/signed", init: { method: "PUT" } });
+    expect(new Headers(mock.calls[1]!.init?.headers).has("content-type")).toBe(false);
   });
 
   it("fails explicitly for task failure, malformed ZIP, and timeout", async () => {

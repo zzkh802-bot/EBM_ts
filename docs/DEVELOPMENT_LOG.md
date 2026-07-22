@@ -137,3 +137,13 @@ The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening ra
 - `pubmed_read` now means full-text acquisition: it resolves PMID/PMCID/DOI, detects PMCID, fetches PMC JATS XML, and archives readable full text.
 - Records without usable PMC full text return an explicit `fullText: false` abstract-only result and warning rather than pretending full-text success.
 - Real checks passed: 3 search results with 3 abstracts and 3 related hints; PMC full text for PMID 33884067 archived successfully.
+
+### Completed hardening: bounded OA recovery and indirect guideline evidence
+
+- Added a five-second OpenAlex resolver for direct OA PDF locations when PMC text is unavailable.
+- OA PDFs are locally downloaded with a 25-second default timeout, 50 MB cap, manual redirect handling, and public-DNS validation at every hop.
+- Added MinerU Premium signed-upload support so foreign OA files can be downloaded locally and uploaded instead of relying on MinerU to fetch blocked foreign URLs.
+- Real end-to-end fallback succeeded for PMID 36780904: OpenAlex discovery → repository PDF → local download → MinerU upload → 53,742-character archive. Total wall time was about 96 seconds, but it remained one model tool round.
+- A Wiley OA endpoint returned HTTP 403 in about 3.5 seconds and correctly degraded to an explicit abstract-only result rather than retrying additional locations.
+- Added evidence provenance classes. `discovery_only` and `guideline_mirror_unverified` records are not citation eligible.
+- Added a bounded guideline acquisition ladder: official source → verified mirror → attributed secondary source → independent guideline addressing the same clinical question.

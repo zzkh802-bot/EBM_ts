@@ -1,6 +1,7 @@
 import { mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { readPubMed, searchPubMed } from "../src/tools/pubmed.js";
 
@@ -78,6 +79,37 @@ describe("PubMed archive adapters", () => {
     const result = await searchPubMed({ sessionDir, query: "aspirin", fetcher: mock.fetcher, retries: 0 });
     expect(result).toMatchObject({ ok: true, pmids: ["123"], relatedPmids: [] });
     if (result.ok) expect(result.warnings[0]).toContain("similar-article lookup failed");
+  });
+
+  it("uses an OpenAlex OA PDF and MinerU when PMC full text is unavailable", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-pubmed-"));
+    const abstractOnlyXml = articleXml.replace('<ArticleId IdType="pmc">PMC999</ArticleId>', "");
+    const zip = zipSync({ "article/full.md": strToU8("# OA full text\n\nComplete treatment recommendations.") });
+    const mock = mockFetch([
+      new Response(abstractOnlyXml),
+      Response.json({
+        id: "https://openalex.org/W1",
+        locations: [{ is_oa: true, pdf_url: "https://repository.example/article.pdf", source: { display_name: "Repository", type: "repository" } }],
+      }),
+      new Response(new TextEncoder().encode("%PDF-1.7 downloaded OA document"), { headers: { "content-type": "application/pdf" } }),
+      Response.json({ data: { batch_id: "oa-task", file_urls: ["https://upload.example/signed"] } }),
+      new Response(null, { status: 200 }),
+      Response.json({ data: { extract_result: [{ state: "done", full_zip_url: "https://mineru.example/result.zip" }] } }),
+      new Response(zip),
+    ]);
+    const result = await readPubMed({
+      sessionDir,
+      identifier: "123",
+      fetcher: mock.fetcher,
+      mineruApiToken: "token",
+      mineruBaseUrl: "https://mineru.example/api/v4",
+      resolveHost: async () => ["93.184.216.34"],
+    });
+    expect(result).toMatchObject({ ok: true, fullText: true, fullTextSource: "openalex_mineru" });
+    if (result.ok) {
+      expect(result.archive.sourceUrl).toBe("https://repository.example/article.pdf");
+      expect(result.archive.content).toContain("Complete treatment recommendations.");
+    }
   });
 
   it("returns an explicit abstract-only result when no PMCID is available", async () => {

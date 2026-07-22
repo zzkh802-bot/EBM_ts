@@ -19,5 +19,5 @@ export type { ReportRecord, ReportWriteInput } from "./tools/report.js";
 export { GuidelineMcpClient, readGuideline, searchGuidelines } from "./tools/guidelineMcp.js";
 export type { GuidelineClient, GuidelineResult, GuidelineToolResult } from "./tools/guidelineMcp.js";
 export { JsonSessionStore } from "./session/jsonSessionStore.js";
-export type { EvidenceNode, EvidenceRelation } from "./tools/evidence.js";
+export type { EvidenceNode, EvidenceProvenance, EvidenceRelation } from "./tools/evidence.js";
 export type { JsonSession, SessionMessage } from "./session/jsonSessionStore.js";

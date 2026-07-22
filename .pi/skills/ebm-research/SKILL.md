@@ -13,6 +13,27 @@ description: Evidence-Based Medicine research workflow. Use when answering clini
 4. Add evidence only from exact source quotes with stable line offsets using `evidence_add`.
 5. Report uncertainty and evidence gaps explicitly.
 6. Do not invent citations or guideline recommendations.
+7. Optimize for the clinical information need, not possession of one specific document.
+8. Treat ordinary web-search snippets and unverified mirrors as discovery only.
+
+## Guideline acquisition ladder
+
+Use bounded escalation rather than repeatedly pursuing one unavailable guideline:
+
+1. Try the issuing body, journal, guideline MCP, or other official full text.
+2. Search the exact title, organization, year, and file type for a mirror.
+3. Treat a mirror as verified only when title, issuer, version/year, pagination, and recommendation structure match authoritative metadata or an independent copy.
+4. If direct text remains unavailable, use credible reviews, HTA/implementation documents, or later guidelines that quote or characterize the target.
+5. For a clinical decision question, pivot to independent guidelines and primary studies addressing the same question.
+6. Stop pursuing the target after bounded direct attempts unless its exact wording or recommendation grade could change the answer.
+
+Preserve attribution boundaries:
+
+- Official or verified mirrored text may support a direct statement about the guideline.
+- A secondary direct quote supports “Source X quotes Guideline Y as stating …”.
+- A secondary paraphrase supports only “Source X characterizes Guideline Y as …”.
+- An independent guideline supports the clinical conclusion independently; it does not recover the unavailable target guideline.
+- If the user asks for an exact recommendation or grade, indirect evidence is insufficient and the missing primary text must be disclosed.
 
 ## Minimal workflow
 

@@ -75,10 +75,10 @@ xinqiong/deepseek-v4-flash
 | `web_search` | Tavily discovery; archives normalized result sets |
 | `web_read` | MinerU for document URLs, otherwise Jina then Firecrawl |
 | `pubmed_search` | PubMed discovery with batched abstracts and similar-article hints |
-| `pubmed_read` | PMID/PMCID/DOI resolution and PMC full-text acquisition, with explicit abstract-only fallback |
+| `pubmed_read` | PMC full text first, then bounded OpenAlex OA PDF download + MinerU upload, with explicit abstract-only fallback |
 | `guideline_mcp_search` | sequential internal guideline document search |
 | `guideline_mcp_read` | read and archive one selected guideline |
-| `evidence_add` | archive an exact source line window as Markdown evidence |
+| `evidence_add` | archive an exact source line window with explicit evidence provenance |
 | `evidence_list` | list concise evidence metadata |
 | `evidence_read` | read and reverify evidence against its source |
 | `report_write` | write a report only after verifying all referenced evidence |

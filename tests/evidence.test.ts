@@ -52,6 +52,23 @@ describe("Markdown evidence ledger", () => {
     expect(read.verification).toEqual({ ok: true, errors: [] });
   });
 
+  it("marks discovery snippets and unverified guideline mirrors as citation-ineligible", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
+    await writeFile(path.join(dir, "source.md"), "A search result claims a recommendation.", "utf8");
+    const node = await addEvidence({
+      sessionDir: dir,
+      question: "What does the guideline recommend?",
+      claim: "Unverified recommendation lead.",
+      relation: "partially_supports",
+      provenance: "guideline_mirror_unverified",
+      sourcePath: "source.md",
+      offset: 0,
+      limit: 1,
+    });
+    expect(node).toMatchObject({ provenance: "guideline_mirror_unverified", citationEligible: false });
+    expect((await readEvidence(dir, node.id)).node.provenance).toBe("guideline_mirror_unverified");
+  });
+
   it("rejects source symlinks that escape the session directory", async () => {
     const parent = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
     const sessionDir = path.join(parent, "session");
