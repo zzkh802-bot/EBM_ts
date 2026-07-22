@@ -85,6 +85,16 @@ describe("verified Markdown reports", () => {
     }
   });
 
+  it("canonicalizes long AML-style model-authored one-line references", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-report-"));
+    const content = `# Report\n\nBody.\n\n参考文献\n[1] Mayer RJ, Davis RB, Schiffer CA, et al. Intensive postremission chemotherapy in adults with acute myeloid leukemia. N Engl J Med. 1994;331:896-903. [2] Büchner T, Berdel WE, Schoch C, et al. High-dose cytarabine consolidation with or without additional amsacrine and mitoxantrone in acute myeloid leukemia: results of the prospective randomized AML2003 trial. J Clin Oncol. 2013;31(16):1968-76. PMID: 23630210. [3] Burnett AK, Russell NH, Hills RK, et al. Optimization of chemotherapy for younger patients with acute myeloid leukemia: results of the medical research council AML15 trial. J Clin Oncol. 2013;31(27):3360-8. PMID: 23940227. [4] Bradstock KF, Matthews JP, Lowenthal RM, et al. A randomized trial of high-versus conventional-dose cytarabine in consolidation chemotherapy for adult de novo acute myeloid leukemia in first remission after induction therapy containing high-dose cytarabine. Blood. 2005;105(2):481-8. PMID: 15213095.`;
+    const report = await writeReport({ sessionDir, title: "AML refs", content, allowNoEvidence: true });
+    const saved = await readFile(path.join(sessionDir, report.path), "utf8");
+    expect(saved).toMatch(/## 参考文献\n\n\[1\] Mayer[\s\S]*\n\[2\] Büchner/);
+    expect(saved).toMatch(/PMID: 23630210\.\n\[3\] Burnett/);
+    expect(saved).toMatch(/PMID: 23940227\.\n\[4\] Bradstock/);
+  });
+
   it("canonicalizes model-authored one-line references even without structured references", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-report-"));
     const report = await writeReport({
