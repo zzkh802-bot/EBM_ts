@@ -8,6 +8,8 @@ export { addEvidence, listEvidence, readEvidence, renderEvidenceMarkdown, verify
 export { isPrivateAddress, jinaReaderUrl, validateOutboundUrl } from "./tools/urlSafety.js";
 export { readWeb, searchWeb } from "./tools/web.js";
 export type { WebReadResult, WebSearchResult, WebToolError } from "./tools/web.js";
+export { parseDocumentUrl } from "./tools/mineru.js";
+export type { MineruParseResult } from "./tools/mineru.js";
 export { readPubMed, searchPubMed } from "./tools/pubmed.js";
 export type { PubMedReadResult, PubMedSearchResult, PubMedError } from "./tools/pubmed.js";
 export { writeReport } from "./tools/report.js";

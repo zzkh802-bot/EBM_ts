@@ -12,7 +12,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
   pi.registerTool({
     name: "web_read",
     label: "Read Web Source",
-    description: "Read a public URL through Jina with Firecrawl fallback, normalize it, and archive it before model exposure.",
+    description: "Read documents through MinerU Premium or web pages through Jina with Firecrawl fallback, then normalize and archive before exposure.",
     promptSnippet: "Read and archive a public web source with stable citation offsets",
     promptGuidelines: ["Use the returned archive path and absolute offsets when creating evidence."],
     parameters: Type.Object({ url: Type.String({ description: "Public HTTP(S) URL" }) }),
@@ -24,6 +24,8 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
         url: params.url,
         ...(process.env.JINA_API_KEY ? { jinaApiKey: process.env.JINA_API_KEY } : {}),
         ...(process.env.FIRECRAWL_API_KEY ? { firecrawlApiKey: process.env.FIRECRAWL_API_KEY } : {}),
+        ...(process.env.MINERU_API_TOKEN ? { mineruApiToken: process.env.MINERU_API_TOKEN } : {}),
+        ...(process.env.MINERU_V4_BASE_URL ? { mineruBaseUrl: process.env.MINERU_V4_BASE_URL } : {}),
       });
       if (!result.ok) throw toolError(result.error);
       const output = archiveToolText(result.archive);

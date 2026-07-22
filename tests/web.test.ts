@@ -1,6 +1,7 @@
 import { mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { readWeb, searchWeb } from "../src/tools/web.js";
 
@@ -29,6 +30,24 @@ describe("archived web tools", () => {
     const saved = await readFile(path.join(sessionDir, result.archive.path), "utf8");
     expect(saved.split("\n").slice(result.archive.bodyLineOffset).join("\n")).toBe(result.archive.content);
     expect(mock.calls[0]!.input).toBe("https://r.jinaai.cn/https://example.com/study");
+  });
+
+  it("uses MinerU before web readers for document URLs", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
+    const archive = zipSync({ "result/full.md": strToU8("# PDF result\n\nParsed evidence.") });
+    const mock = mockFetch([
+      Response.json({ data: { task_id: "pdf-1" } }),
+      Response.json({ data: { state: "done", full_zip_url: "https://cdn.example/result.zip" } }),
+      new Response(archive),
+    ]);
+    const result = await readWeb({
+      sessionDir,
+      url: "https://example.org/study.pdf",
+      fetcher: mock.fetcher,
+      mineruApiToken: "token",
+    });
+    expect(result).toMatchObject({ ok: true, provider: "mineru" });
+    expect(mock.calls).toHaveLength(3);
   });
 
   it("falls back to Firecrawl and reports all failures explicitly", async () => {

@@ -1,8 +1,9 @@
 import { archiveSource, type SourceArchiveRecord } from "./archive.js";
+import { parseDocumentUrl } from "./mineru.js";
 import { jinaReaderUrl, validateOutboundUrl } from "./urlSafety.js";
 
 export type NetworkAttempt = {
-  provider: "jina" | "firecrawl" | "tavily";
+  provider: "mineru" | "jina" | "firecrawl" | "tavily";
   message: string;
   status?: number;
 };
@@ -14,7 +15,7 @@ export type WebToolError = {
 };
 
 export type WebReadResult =
-  | { ok: true; provider: "jina" | "firecrawl"; archive: SourceArchiveRecord }
+  | { ok: true; provider: "mineru" | "jina" | "firecrawl"; archive: SourceArchiveRecord }
   | { ok: false; error: WebToolError };
 
 export type WebSearchResult =
@@ -54,6 +55,8 @@ export async function readWeb(input: {
   url: string;
   jinaApiKey?: string;
   firecrawlApiKey?: string;
+  mineruApiToken?: string;
+  mineruBaseUrl?: string;
 } & FetchOptions): Promise<WebReadResult> {
   const safe = validateOutboundUrl(input.url);
   if (!safe.ok) {
@@ -62,6 +65,31 @@ export async function readWeb(input: {
   const fetcher = input.fetcher ?? fetch;
   const timeoutMs = input.timeoutMs ?? 30_000;
   const attempts: NetworkAttempt[] = [];
+  const isDocument = /\.(?:pdf|docx?|pptx?|xlsx?|epub|mobi)(?:$|[?#])/i.test(safe.url.toString());
+
+  if (isDocument && input.mineruApiToken) {
+    try {
+      const parsed = await parseDocumentUrl({
+        url: safe.url.toString(),
+        apiToken: input.mineruApiToken,
+        fetcher,
+        ...(input.mineruBaseUrl ? { baseUrl: input.mineruBaseUrl } : {}),
+        requestTimeoutMs: timeoutMs,
+      });
+      return {
+        ok: true,
+        provider: "mineru",
+        archive: await archiveSource({
+          sessionDir: input.sessionDir,
+          kind: "read",
+          sourceUrl: safe.url.toString(),
+          content: parsed.content,
+        }),
+      };
+    } catch (error) {
+      attempts.push(attempt("mineru", error));
+    }
+  }
 
   try {
     const response = await request(fetcher, jinaReaderUrl(safe.url.toString()), {

@@ -31,7 +31,8 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - Real PubMed search/read checks passed with configured email and API key.
 - `report_write` verifies every Markdown evidence reference against its archived source; evidence-gap reports require explicit opt-in.
 - `guideline_mcp_search` and `guideline_mcp_read` use a sequential Streamable HTTP client and archive all output; real internal search/read checks passed.
-- `npm run check`: 11 test files / 27 tests passing.
+- `web_read` now routes PDF/Office/e-book URLs through MinerU Premium first; real demo PDF parsing returned 51,291 Markdown characters.
+- `npm run check`: 12 test files / 30 tests passing.
 
 ## Non-negotiable decisions
 
@@ -45,7 +46,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 
 ## Active task
 
-Add PDF/document detection and MinerU-first parsing to `web_read`, then run the basic-refactor end-to-end smoke path.
+Finish writing-skill migration and run the basic-refactor end-to-end smoke path.
 
 ## Next commands
 

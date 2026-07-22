@@ -103,6 +103,14 @@ Continue through archived web read/search, PubMed, guideline MCP, and verified M
 - Real internal-server checks passed for search and read (`max_chars=3000`).
 - Verification: `npm run check` — 11 files, 27 tests passed.
 
+### Completed slice: MinerU document reading
+
+- `web_read` detects PDF/Office/e-book URL suffixes and tries MinerU Premium before web readers.
+- Premium URL tasks are created, polled with hard timeouts, downloaded as ZIP, and reduced to normalized Markdown.
+- Task failure, HTTP failure, missing result URL, malformed ZIP, empty Markdown, and polling timeout are explicit; Jina/Firecrawl remain fallbacks.
+- Real MinerU Premium demo PDF check passed (51,291 Markdown characters).
+- Verification: `npm run check` — 12 files, 30 tests passed.
+
 ### Active slice
 
-- Add PDF/document detection and MinerU-first parsing to `web_read`, then complete basic-refactor documentation and end-to-end smoke validation.
+- Finish writing-skill migration and run a basic-refactor end-to-end acceptance smoke.

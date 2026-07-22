@@ -22,7 +22,8 @@ Expected:
 | --- | --- | --- |
 | URL/Jina | `tests/urlSafety.test.ts` | metadata/private URLs rejected; Jina target preserves HTTPS |
 | Archive | `tests/archive.test.ts` | archive filenames are deterministic; body offsets map model excerpts to stored files |
-| Web | `tests/web.test.ts` | Jina/Firecrawl failures are explicit; Tavily/Jina results are normalized and archived before exposure |
+| Web | `tests/web.test.ts` | MinerU/Jina/Firecrawl routing is ordered; Tavily/Jina/MinerU results are normalized and archived before exposure |
+| MinerU | `tests/mineru.test.ts` | Premium task polling and ZIP Markdown extraction succeed; task/ZIP failures are explicit |
 | PubMed | `tests/pubmed.test.ts` | ESearch/ESummary/EFetch outputs are archived; transient failures retry; API keys never enter archives |
 | Guideline MCP | `tests/guidelineMcp.test.ts` | Streamable HTTP session/SSE works; malformed JSON and timeouts are explicit; output is archived |
 | Evidence | `tests/evidence.test.ts` | Markdown evidence stores and verifies exact source slices; traversal/symlink escape rejected |
@@ -36,7 +37,7 @@ Expected:
 
 Add tests before implementation for:
 
-1. `web_read` adds MinerU/document detection and verifies redirect/DNS targets remain public.
+1. `web_read` verifies redirect/DNS targets remain public and adds local download/upload when MinerU cannot fetch a remote PDF.
 2. `web_search` adds Serper fallback when Tavily fails.
 3. `evidence_add` archives only exact source windows and `evidence_read` reports later source/hash mismatches.
 4. report generation audits citation placement/claim coverage beyond verifying referenced evidence IDs.
