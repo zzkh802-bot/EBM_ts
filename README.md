@@ -1,93 +1,96 @@
 # EBM Agent TS
 
-TypeScript rewrite foundation for the EBM research agent, built on a project-vendored copy of Pi Coding Agent.
+A lean TypeScript EBM research agent built on Pi's native async runtime, extension system, providers, events, compaction, and TUI.
 
-This repository is intentionally a new implementation, not a line-by-line Python port. The design keeps Pi's minimal runtime advantages and adds only the EBM capabilities needed for traceable evidence-based medicine research.
+This is a new implementation rather than a line-by-line Python port. Pi owns the generic agent runtime; this project adds only traceable evidence-based medicine capabilities.
 
 ## Current status
 
-Foundation only. This repo currently contains:
+The basic local refactor milestone is complete:
 
-- vendored Pi runtime under `vendor/pi-coding-agent/` so project-specific changes cannot affect the globally installed `pi` command
-- copied local `.env` for development use, ignored by Git
-- project-local Pi extension registering DeepSeek Official and Xinqiong providers
-- TypeScript skeleton modules for JSON sessions, source archives, URL safety, and exact-quote evidence JSON
-- executable tests for the foundation invariants
-- architecture/spec documents for the rewrite
+- Pi-native TUI and DeepSeek V4 Flash default
+- Xinqiong OpenAI-compatible provider option
+- Tavily web search with archived result sets
+- Jina web reading with Firecrawl fallback
+- MinerU Premium document parsing
+- PubMed ESearch/ESummary/EFetch integration
+- sequential internal guideline MCP search/read
+- normalized Markdown source archives with stable absolute line offsets
+- exact-quote Markdown evidence add/read/list and verification
+- verified Markdown report writing
+- migrated EBM research and clinical report-writing skills
 
-## Non-goals for the first TS version
+Known follow-up work is tracked in `docs/ACCEPTANCE.md` and `docs/CURRENT_STATE.md`.
 
-The Python implementation accumulated several generic runtime systems that are not needed for the first cloud product. The TS version deliberately omits them unless tests prove they are needed:
+## Intentional non-goals
 
-- no SQLite; session state and evidence indexes are JSON plus Markdown/source files
-- no subagents in v1
-- no reminders/scheduler
-- no AGENTS.md/SOUL.md/MEMORY indirection
-- no duplicated read/write/code tool families; use Pi native tools and a small number of EBM-specific tools
-- no defensive `try { } catch {}` that hides failures
+- no SQLite; files, Markdown, and JSON are authoritative
+- no subagents or scheduler/reminders
+- no historical Python session migration
+- no duplicated generic file/code tools; use Pi native tools
+- no custom AgentLoop, provider streaming state machine, or TUI
+- no silent fallback that hides network or evidence failures
 
 ## Repository layout
 
 ```text
-src/
-  app/                  Pi SDK session factory for EBM runtime
-  providers/            DeepSeek official + Xinqiong provider registration
-  session/              JSON session store
-  tools/                EBM-specific source archive, evidence, URL safety helpers
-.pi/
-  extensions/           Project-local Pi extensions
-  skills/               Project-local EBM skill(s)
-docs/
-  SPEC.md               Product and engineering spec
-  ACCEPTANCE.md         Test-backed acceptance criteria
-vendor/pi-coding-agent/ Vendored Pi package without its node_modules
-tests/                  Vitest regression/acceptance tests
+src/extensions/         Pi tool registration and event integration
+src/providers/          Xinqiong endpoint registration; official DeepSeek stays Pi-native
+src/session/            JSON session metadata prototype
+src/tools/              archive, web, MinerU, PubMed, MCP, evidence, and report logic
+.pi/extensions/         project-local Pi extension entry points
+.pi/skills/             EBM research and report-writing skills
+docs/                   specs, ADRs, acceptance criteria, and persistent development state
+vendor/pi-coding-agent/ project-pinned Pi package without node_modules
+tests/                  Vitest unit, integration-boundary, and vertical-flow tests
 ```
 
-## Setup
+## Setup and launch
 
 ```bash
 cd ~/dev/EBM_ts
 npm install
 npm run check
-```
-
-The local `.env` has been copied from the Python repo and is ignored by Git. Keep real credentials out of commits.
-
-## Pi usage
-
-Interactive local run after install:
-
-```bash
-cd ~/dev/EBM_ts
 npm run ebm
 ```
 
-The launcher loads `.env`, uses the project-local Pi binary/runtime, stores Pi conversations under `data/pi-sessions/`, and keeps EBM source/evidence data isolated under `data/sessions/{piSessionId}/`.
+`npm run ebm` loads the ignored local `.env`, launches the project-local Pi runtime, stores Pi conversations under `data/pi-sessions/`, and isolates EBM artifacts under `data/sessions/{piSessionId}/`.
 
-Project settings default to Pi's native `deepseek/deepseek-v4-flash`. Pi already handles the official DeepSeek V4 protocol, thinking controls, streaming, and tool calls. The project extension adds only the Xinqiong OpenAI-compatible endpoint:
+Project settings default to:
 
-- `xinqiong/deepseek-v4-flash`
+```text
+deepseek/deepseek-v4-flash
+```
 
-Pi's other native providers, including OpenAI/Codex, remain available.
+The extension also registers:
 
-## Development checks
+```text
+xinqiong/deepseek-v4-flash
+```
+
+## EBM tools
+
+| Tool | Purpose |
+| --- | --- |
+| `web_search` | Tavily discovery; archives normalized result sets |
+| `web_read` | MinerU for document URLs, otherwise Jina then Firecrawl |
+| `pubmed_search` | PubMed discovery through ESearch and ESummary |
+| `pubmed_read` | PMID/PMCID/DOI resolution and PubMed abstract reading |
+| `guideline_mcp_search` | sequential internal guideline document search |
+| `guideline_mcp_read` | read and archive one selected guideline |
+| `evidence_add` | archive an exact source line window as Markdown evidence |
+| `evidence_list` | list concise evidence metadata |
+| `evidence_read` | read and reverify evidence against its source |
+| `report_write` | write a report only after verifying all referenced evidence |
+
+## Checks
 
 ```bash
 npm run typecheck
 npm run test
-npm run test:network           # one fast real DeepSeek smoke call; loads local .env
-npm run test:network:deepseek  # thinking-off plus thinking/tool-call checks
-npm run test:network:full      # DeepSeek and Xinqiong; intentionally slower
 npm run lint:boundaries
 npm run check
+npm run test:network  # optional single real DeepSeek smoke request with diagnostics
 ```
 
-Tests are code assertions, not natural-language checklists. They currently verify:
-
-- source archive determinism and metadata persistence
-- exact quote evidence JSON and verification
-- JSON session compaction summary behavior
-- outbound URL safety and Jina Reader scheme preservation
-- provider catalog registration
-- boundary rule: no SQL/framework bloat in foundation
+The normal check suite is deterministic and does not require network access. Real integration checks are deliberately separate.

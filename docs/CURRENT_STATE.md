@@ -2,9 +2,9 @@
 
 Read this first after context compaction.
 
-## Basic-refactor target
+## Basic-refactor milestone — COMPLETE
 
-Continue without pausing for optional polish until this local Pi-first MVP works end to end:
+The local Pi-first MVP now works end to end:
 
 1. launch native Pi TUI with DeepSeek V4 Flash;
 2. search/read web and PubMed sources with explicit errors;
@@ -32,7 +32,9 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - `report_write` verifies every Markdown evidence reference against its archived source; evidence-gap reports require explicit opt-in.
 - `guideline_mcp_search` and `guideline_mcp_read` use a sequential Streamable HTTP client and archive all output; real internal search/read checks passed.
 - `web_read` now routes PDF/Office/e-book URLs through MinerU Premium first; real demo PDF parsing returned 51,291 Markdown characters.
-- `npm run check`: 12 test files / 30 tests passing.
+- Migrated the Python clinical report-writing skill and adapted obsolete tool references to Pi/evidence IDs.
+- Vertical acceptance covers discovery archive → exact evidence → verified report.
+- `npm run check`: 13 test files / 31 tests passing.
 
 ## Non-negotiable decisions
 
@@ -46,7 +48,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 
 ## Active task
 
-Finish writing-skill migration and run the basic-refactor end-to-end smoke path.
+Basic refactor is complete. Next hardening priorities are DNS/redirect SSRF checks, MinerU local download/upload fallback, PMC full text, and Pi compaction-summary artifact integration.
 
 ## Next commands
 

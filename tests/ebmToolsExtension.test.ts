@@ -20,6 +20,11 @@ describe("EBM Pi extension tools", () => {
     expect(loader.getExtensions().extensions.map((extension) => extension.path)).toContain(
       path.join(cwd, ".pi", "extensions", "ebm-tools.ts"),
     );
+    expect(loader.getSkills().diagnostics).toEqual([]);
+    expect(loader.getSkills().skills.map((skill) => skill.name)).toEqual(expect.arrayContaining([
+      "clinical-report-writing",
+      "ebm-research",
+    ]));
   });
 
   it("registers evidence tools and emits a domain event after evidence is archived", async () => {

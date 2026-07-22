@@ -111,6 +111,14 @@ Continue through archived web read/search, PubMed, guideline MCP, and verified M
 - Real MinerU Premium demo PDF check passed (51,291 Markdown characters).
 - Verification: `npm run check` — 12 files, 30 tests passed.
 
-### Active slice
+### Completed slice: writing skill and basic vertical acceptance
 
-- Finish writing-skill migration and run a basic-refactor end-to-end acceptance smoke.
+- Migrated `clinical_report_writing` to the project-local Pi skill format as `clinical-report-writing`.
+- Adapted obsolete Python tool references to Pi `read`, immutable replacement evidence, and explicit `ev_...` report references.
+- Pi's resource loader verifies both project skills without diagnostics.
+- Added a vertical acceptance test: archived discovery → exact absolute-offset evidence → source revalidation → verified Markdown report.
+- Verification: `npm run check` — 13 files, 31 tests passed.
+
+### Basic-refactor milestone complete
+
+The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening rather than foundation completion: DNS/redirect SSRF protection, MinerU local upload fallback, PMC full text, compaction artifacts, and broader end-to-end evaluation.

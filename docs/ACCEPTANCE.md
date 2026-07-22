@@ -26,6 +26,8 @@ Expected:
 | MinerU | `tests/mineru.test.ts` | Premium task polling and ZIP Markdown extraction succeed; task/ZIP failures are explicit |
 | PubMed | `tests/pubmed.test.ts` | ESearch/ESummary/EFetch outputs are archived; transient failures retry; API keys never enter archives |
 | Guideline MCP | `tests/guidelineMcp.test.ts` | Streamable HTTP session/SSE works; malformed JSON and timeouts are explicit; output is archived |
+| Vertical flow | `tests/endToEnd.test.ts` | discovery archive becomes exact evidence and then a source-reverified report |
+| Pi resources | `tests/ebmToolsExtension.test.ts` | extension and both project skills load without diagnostics |
 | Evidence | `tests/evidence.test.ts` | Markdown evidence stores and verifies exact source slices; traversal/symlink escape rejected |
 | Reports | `tests/report.test.ts` | unknown/stale evidence blocks report writes; evidence-gap reports require explicit opt-in |
 | Session | `tests/sessionStore.test.ts` | JSON session store persists messages and compaction summaries |
