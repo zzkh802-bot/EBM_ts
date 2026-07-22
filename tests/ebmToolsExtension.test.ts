@@ -4,8 +4,22 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { registerEbmTools } from "../src/extensions/ebmTools.js";
+import { renderAbstractNavigation } from "../src/extensions/pubmedTools.js";
 
 describe("EBM Pi extension tools", () => {
+  it("returns evidence-ready PubMed abstract paths with exact readable windows", () => {
+    const output = renderAbstractNavigation("session-1", [{
+      path: "sources/read/trial/full.md",
+      title: "Trial",
+      bodyLineStart: 8,
+      content: "# Trial\n\n## Abstract\n\nResult line one.\nResult line two.\n",
+    }]);
+    expect(output).toContain("Evidence source_path: sources/read/trial/full.md");
+    expect(output).toContain("Complete abstract lines: 12-13");
+    expect(output).toContain('read(path="data/sessions/session-1/sources/read/trial/full.md", offset=12, limit=2)');
+    expect(output).toContain("Evidence provenance: primary_abstract");
+  });
+
   it("loads the project extension through Pi's resource loader", async () => {
     const cwd = process.cwd();
     const loader = new DefaultResourceLoader({
@@ -61,13 +75,14 @@ describe("EBM Pi extension tools", () => {
       question: "Does it work?",
       claim: "It works.",
       relation: "supports",
-      source_path: "sources/read/study.md",
+      source_path: "data/sessions/session-1/sources/read/study.md",
       offset: 2,
       limit: 1,
     }, undefined, undefined, ctx);
 
     expect(result.content[0].text).toContain("Evidence archived");
     expect(result.details.path).toMatch(/^evidence\/ev_[a-f0-9]{16}\.md$/);
+    expect(result.details.node.sourcePath).toBe("sources/read/study.md");
     expect(events).toEqual([["ebm:evidence_added", expect.objectContaining({ sessionId, path: result.details.path })]]);
   });
 });

@@ -1,6 +1,6 @@
 import { archiveSource, type SourceArchiveRecord } from "./archive.js";
 import { parseDocumentBytes, parseDocumentUrl } from "./mineru.js";
-import { downloadPdf } from "./openAlex.js";
+import { downloadPdf, probePdfContentType } from "./openAlex.js";
 import { jinaReaderUrl, validateOutboundUrl } from "./urlSafety.js";
 
 export type NetworkAttempt = {
@@ -26,6 +26,8 @@ export type WebSearchResult =
 type FetchOptions = {
   fetcher?: typeof fetch;
   timeoutMs?: number;
+  totalTimeoutMs?: number;
+  signal?: AbortSignal;
 };
 
 function firstMarkdownTitle(markdown: string): string | undefined {
@@ -42,11 +44,11 @@ function pdfFileName(url: string): string {
   }
 }
 
-async function request(fetcher: typeof fetch, input: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+async function request(fetcher: typeof fetch, input: string, init: RequestInit, timeoutMs: number, signal?: AbortSignal): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new Error(`request timed out after ${timeoutMs}ms`)), timeoutMs);
   try {
-    return await fetcher(input, { ...init, signal: controller.signal });
+    return await fetcher(input, { ...init, signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal });
   } finally {
     clearTimeout(timer);
   }
@@ -81,9 +83,25 @@ export async function readWeb(input: {
   }
   const fetcher = input.fetcher ?? fetch;
   const timeoutMs = input.timeoutMs ?? 30_000;
+  const totalSignal = AbortSignal.timeout(input.totalTimeoutMs ?? 240_000);
+  const signal = input.signal ? AbortSignal.any([input.signal, totalSignal]) : totalSignal;
   const attempts: NetworkAttempt[] = [];
-  const isDocument = /\.(?:pdf|docx?|pptx?|xlsx?|epub|mobi)(?:$|[?#&])/i.test(safe.url.toString());
-  const isPdf = /\.pdf(?:$|[?#&])/i.test(safe.url.toString());
+  let isDocument = /\.(?:pdf|docx?|pptx?|xlsx?|epub|mobi)(?:$|[?#&])/i.test(safe.url.toString());
+  let isPdf = /\.pdf(?:$|[?#&])/i.test(safe.url.toString());
+  if (!isDocument && input.mineruApiToken) {
+    try {
+      isPdf = await probePdfContentType({
+        url: safe.url.toString(),
+        fetcher,
+        ...(input.resolveHost ? { resolveHost: input.resolveHost } : {}),
+        timeoutMs: Math.min(timeoutMs, 5_000),
+        signal,
+      });
+      isDocument = isPdf;
+    } catch {
+      // Type probing is optional; ordinary web readers remain available.
+    }
+  }
 
   if (isDocument && input.mineruApiToken) {
     try {
@@ -93,6 +111,7 @@ export async function readWeb(input: {
         fetcher,
         ...(input.mineruBaseUrl ? { baseUrl: input.mineruBaseUrl } : {}),
         requestTimeoutMs: timeoutMs,
+        signal,
       });
       const title = firstMarkdownTitle(parsed.content);
       return {
@@ -104,6 +123,7 @@ export async function readWeb(input: {
           sourceUrl: safe.url.toString(),
           ...(title ? { title } : {}),
           content: parsed.content,
+          resources: parsed.resources,
         }),
       };
     } catch (error) {
@@ -117,6 +137,7 @@ export async function readWeb(input: {
           fetcher,
           ...(input.resolveHost ? { resolveHost: input.resolveHost } : {}),
           timeoutMs: input.pdfDownloadTimeoutMs ?? 25_000,
+          signal,
         });
         const parsed = await parseDocumentBytes({
           bytes: downloaded.bytes,
@@ -125,6 +146,7 @@ export async function readWeb(input: {
           fetcher,
           ...(input.mineruBaseUrl ? { baseUrl: input.mineruBaseUrl } : {}),
           requestTimeoutMs: timeoutMs,
+          signal,
         });
         const title = firstMarkdownTitle(parsed.content);
         return {
@@ -136,6 +158,7 @@ export async function readWeb(input: {
             sourceUrl: safe.url.toString(),
             ...(title ? { title } : {}),
             content: parsed.content,
+            resources: parsed.resources,
           }),
         };
       } catch (error) {
@@ -150,7 +173,7 @@ export async function readWeb(input: {
         Accept: "text/markdown",
         ...(input.jinaApiKey ? { Authorization: `Bearer ${input.jinaApiKey}` } : {}),
       },
-    }, timeoutMs);
+    }, timeoutMs, signal);
     if (!response.ok) {
       attempts.push(await responseFailure("jina", response));
     } else {
@@ -177,7 +200,7 @@ export async function readWeb(input: {
         method: "POST",
         headers: { Authorization: `Bearer ${input.firecrawlApiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({ url: safe.url.toString(), formats: ["markdown"], onlyMainContent: true }),
-      }, timeoutMs);
+      }, timeoutMs, signal);
       if (!response.ok) {
         attempts.push(await responseFailure("firecrawl", response));
       } else {
@@ -243,6 +266,8 @@ export async function searchWeb(input: {
   }
   const fetcher = input.fetcher ?? fetch;
   const timeoutMs = input.timeoutMs ?? 30_000;
+  const totalSignal = AbortSignal.timeout(input.totalTimeoutMs ?? timeoutMs);
+  const signal = input.signal ? AbortSignal.any([input.signal, totalSignal]) : totalSignal;
   try {
     const response = await request(fetcher, "https://api.tavily.com/search", {
       method: "POST",
@@ -255,7 +280,7 @@ export async function searchWeb(input: {
         include_answer: false,
         include_raw_content: false,
       }),
-    }, timeoutMs);
+    }, timeoutMs, signal);
     if (!response.ok) {
       const failure = await responseFailure("tavily", response);
       return { ok: false, error: { code: "search_failed", message: "Tavily search failed", attempts: [failure] } };

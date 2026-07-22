@@ -16,7 +16,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
     promptSnippet: "Read and archive a public web source with stable citation offsets",
     promptGuidelines: ["Use the returned archive path and absolute offsets when creating evidence."],
     parameters: Type.Object({ url: Type.String({ description: "Public HTTP(S) URL" }) }),
-    async execute(_toolCallId, params, _signal, onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, onUpdate, ctx) {
       onUpdate?.({ content: [{ type: "text", text: "Reading and archiving URL…" }], details: {} });
       const sessionId = ctx.sessionManager.getSessionId();
       const result = await readWeb({
@@ -26,6 +26,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
         ...(process.env.FIRECRAWL_API_KEY ? { firecrawlApiKey: process.env.FIRECRAWL_API_KEY } : {}),
         ...(process.env.MINERU_API_TOKEN ? { mineruApiToken: process.env.MINERU_API_TOKEN } : {}),
         ...(process.env.MINERU_V4_BASE_URL ? { mineruBaseUrl: process.env.MINERU_V4_BASE_URL } : {}),
+        ...(signal ? { signal } : {}),
       });
       if (!result.ok) throw toolError(result.error);
       const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path), { compactRead: true });
@@ -47,7 +48,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
       query: Type.String({ minLength: 2 }),
       max_results: Type.Optional(Type.Integer({ minimum: 1, maximum: 10 })),
     }),
-    async execute(_toolCallId, params, _signal, onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, onUpdate, ctx) {
       onUpdate?.({ content: [{ type: "text", text: "Searching and archiving results…" }], details: {} });
       const sessionId = ctx.sessionManager.getSessionId();
       const result = await searchWeb({
@@ -55,9 +56,10 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
         query: params.query,
         ...(params.max_results === undefined ? {} : { maxResults: params.max_results }),
         ...(process.env.TAVILY_API_KEY ? { tavilyApiKey: process.env.TAVILY_API_KEY } : {}),
+        ...(signal ? { signal } : {}),
       });
       if (!result.ok) throw toolError(result.error);
-      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path));
+      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path), { citationEligible: false });
       pi.events.emit("ebm:source_archived", {
         sessionId,
         provider: result.provider,

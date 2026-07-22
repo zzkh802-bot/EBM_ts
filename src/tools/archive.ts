@@ -3,18 +3,26 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { cleanExternalText, normalizeMarkdown } from "./markdown.js";
 
+export type SourceArchiveResource = {
+  path: string;
+  bytes: Uint8Array;
+  mediaType?: string;
+};
+
 export type SourceArchiveInput = {
   sessionDir: string;
   kind: "search" | "read" | "upload";
   sourceUrl?: string;
   title?: string;
   content: string;
+  resources?: SourceArchiveResource[];
 };
 
 export type SourceArchiveRecord = {
   path: string;
   archiveDir?: string;
   tocPath?: string;
+  resourcePaths?: string[];
   sha256: string;
   chars: number;
   lines: number;
@@ -116,7 +124,36 @@ async function archiveSearchFile(input: SourceArchiveInput, archived: string, ba
   }
 }
 
-async function archiveReadDirectory(input: SourceArchiveInput, archived: string, baseName: string, bodyLineStart: number): Promise<{ path: string; archiveDir: string; tocPath: string }> {
+function safeResourcePath(value: string): string {
+  const normalized = value.replaceAll("\\", "/").replace(/^\.\//, "");
+  if (!normalized || path.posix.isAbsolute(normalized) || normalized.split("/").some((part) => !part || part === "." || part === "..")) {
+    throw new Error(`unsafe archive resource path: ${value}`);
+  }
+  if (["full.md", "toc.md"].includes(normalized) || normalized.startsWith(".metadata/")) throw new Error(`reserved archive resource path: ${value}`);
+  return normalized;
+}
+
+async function writeArchiveResources(absDir: string, resources: SourceArchiveResource[]): Promise<string[]> {
+  if (!resources.length) return [];
+  const manifest: Array<{ path: string; media_type?: string; bytes: number; sha256: string }> = [];
+  for (const resource of resources) {
+    const rel = safeResourcePath(resource.path);
+    const abs = path.join(absDir, ...rel.split("/"));
+    await mkdir(path.dirname(abs), { recursive: true });
+    await writeFile(abs, resource.bytes, { flag: "wx" });
+    manifest.push({
+      path: rel,
+      ...(resource.mediaType ? { media_type: resource.mediaType } : {}),
+      bytes: resource.bytes.byteLength,
+      sha256: createHash("sha256").update(resource.bytes).digest("hex"),
+    });
+  }
+  await mkdir(path.join(absDir, ".metadata"), { recursive: true });
+  await writeFile(path.join(absDir, ".metadata", "resources.json"), `${JSON.stringify({ version: 1, resources: manifest }, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+  return manifest.map((item) => item.path);
+}
+
+async function archiveReadDirectory(input: SourceArchiveInput, archived: string, baseName: string, bodyLineStart: number): Promise<{ path: string; archiveDir: string; tocPath: string; resourcePaths?: string[] }> {
   const outRoot = path.join(input.sessionDir, "sources", input.kind);
   await mkdir(outRoot, { recursive: true });
   for (let suffix = 1; ; suffix += 1) {
@@ -129,11 +166,15 @@ async function archiveReadDirectory(input: SourceArchiveInput, archived: string,
       await mkdir(absDir);
       await writeFile(path.join(absDir, "full.md"), archived, { encoding: "utf8", flag: "wx" });
       await writeFile(path.join(absDir, "toc.md"), renderToc(sourcePath, input.content, bodyLineStart), { encoding: "utf8", flag: "wx" });
-      return { path: sourcePath, archiveDir, tocPath };
+      const resourcePaths = await writeArchiveResources(absDir, input.resources ?? []);
+      return { path: sourcePath, archiveDir, tocPath, ...(resourcePaths.length ? { resourcePaths } : {}) };
     } catch (error) {
       if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
       try {
-        if (await readFile(path.join(absDir, "full.md"), "utf8") === archived) return { path: sourcePath, archiveDir, tocPath };
+        if (await readFile(path.join(absDir, "full.md"), "utf8") === archived) {
+          const resourcePaths = (input.resources ?? []).map((resource) => safeResourcePath(resource.path));
+          return { path: sourcePath, archiveDir, tocPath, ...(resourcePaths.length ? { resourcePaths } : {}) };
+        }
       } catch {
         // A partially-created or unrelated directory is a collision; try the next suffix.
       }

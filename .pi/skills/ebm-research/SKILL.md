@@ -38,7 +38,7 @@ Preserve attribution boundaries:
 ## Minimal workflow
 
 1. State the research question and PICO.
-2. Use `pubmed_search` to review batched abstracts; similar-article hints are discovery only, not evidence.
+2. Use `pubmed_search` to review batched abstracts. Each complete PubMed abstract is also archived separately under the returned `Citation-capable abstract source` in `sources/read/`; use that path with provenance `primary_abstract` for claims explicitly stated in the abstract. The `sources/search/` snapshot and similar-article hints are discovery only, not evidence.
 3. Use `pubmed_read` only for selected records whose full text could change the decision; it reports whether PMC full text was obtained.
 4. Search/read outputs are already archived before exposure.
 5. Add exact-quote Markdown evidence records early when an abstract or full-text passage is decision-relevant.

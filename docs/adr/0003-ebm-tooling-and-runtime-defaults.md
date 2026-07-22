@@ -40,7 +40,7 @@ Normalization goals:
 
 ### Model-visible network read contract
 
-Read-like network tools archive the complete normalized source before model exposure. Each source uses a semantic directory containing canonical `full.md` and a generated `toc.md`; the TOC is navigation metadata, not a duplicate source. Their immediate model-visible result is navigation data plus a bounded exact preview, not the complete long document: semantic evidence path, Pi-readable full/TOC paths, total one-based line range, up to 20 Markdown heading locations, a 5KB preview, and a copyable `read(path, offset, limit)` continuation hint.
+Read-like network tools archive the complete normalized source before model exposure. Each source uses a semantic directory containing canonical `full.md` and a generated `toc.md`; the TOC is navigation metadata, not a duplicate source. Their immediate model-visible result is navigation data plus a bounded exact preview, not the complete long document: semantic evidence path, Pi-readable full/TOC paths, total one-based line range, up to 20 Markdown heading locations, a 5KB preview, and a copyable `read(path, offset, limit)` continuation hint with an exact overlapping next offset. Every truncation must preserve a reachable path and gap-free continuation; a bounded response without a continuation mechanism is invalid. If a heading map is partial, disclose its count and point to the complete `toc.md`.
 
 Pi's built-in `read` remains unchanged. Evidence windows use the same one-based line numbers as Pi `read`, so the model can pass an observed offset/limit directly to `evidence_add`.
 
@@ -82,9 +82,10 @@ PubMed should be split into two tools rather than one overloaded tool:
 
 1. `pubmed_search`
    - query/search terms
-   - returns PMID list, titles, abstracts/metadata when available
-   - includes similar/related article hints if requested
-   - archives search/summary records
+   - retrieves PMID records and complete available abstracts in one batch
+   - persists one reproducible `sources/search/` snapshot and one semantic `sources/read/` document per complete abstract, without extra network rounds
+   - exposes each abstract's citation-capable path and `primary_abstract` provenance
+   - includes similar/related article hints as discovery-only records if requested
 
 2. `pubmed_read`
    - accepts PMID/PMCID/DOI or a search result id
@@ -92,7 +93,7 @@ PubMed should be split into two tools rather than one overloaded tool:
    - discovers OA/full-text links where possible
    - archives the fetched record/full text
 
-Reason: split tools reduce model confusion and save tokens. Search is a discovery operation; read is an evidence acquisition operation. The model should not fetch full text for every search hit by default.
+Reason: split tools reduce model confusion and save tokens. The search snapshot is discovery history and can never be evidence, but a complete PubMed abstract returned by the same batch is an individually archived read source and can support claims explicitly stated in that abstract. Search output must put a compact index of every direct hit and citation-capable abstract path before long abstract bodies. Similar-article hints must include at least PMID and title, include journal/date when supplied by ESummary, and give an explicit `pubmed_read` next action. The model should not fetch full text for every search hit by default.
 
 A convenience wrapper can be added later only if tests show models struggle with the two-step flow.
 
@@ -116,7 +117,7 @@ Evidence IDs may remain stable machine identifiers because reports reference the
 
 ### Lean document handling
 
-Do not add a separate EBM workflow for user-upload parsing. Use MinerU directly as the document capability. Keep the existing read fallback chain small and trust the base model to decide when a document is worth pursuing.
+Do not add a separate EBM workflow for user-upload parsing. Use MinerU directly as the document capability. Retain `full.md` and only bounded image assets actually referenced by it, preserving relative links and a hidden hash manifest; discard unreferenced ZIP transport/layout intermediates and binary source copies. Keep the fallback chain small and trust the base model to decide when a document is worth pursuing.
 
 PubMed abstracts are valid evidence for claims explicitly present in the abstract. Full text is preferable when methods, exact recommendations, subgroup details, or limitations matter, but lack of full text must not force endless retrieval.
 

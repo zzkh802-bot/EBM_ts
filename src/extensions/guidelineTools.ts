@@ -37,7 +37,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
         ...(params.clinical_department ? { clinicalDepartment: params.clinical_department } : {}),
       });
       if (!result.ok) throw new Error(JSON.stringify(result.error));
-      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path));
+      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path), { citationEligible: false });
       pi.events.emit("ebm:source_archived", { sessionId, provider: "guideline_mcp", path: result.archive.path, kind: "search" });
       return {
         content: [{ type: "text", text: output.text }],
@@ -54,7 +54,6 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
     parameters: Type.Object({
       doc_id: Type.Optional(Type.String()),
       title: Type.Optional(Type.String()),
-      max_chars: Type.Optional(Type.Integer({ minimum: 1000, maximum: 500_000 })),
     }),
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {
       onUpdate?.({ content: [{ type: "text", text: "Reading and archiving guideline…" }], details: {} });
@@ -64,7 +63,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
         client,
         ...(params.doc_id ? { docId: params.doc_id } : {}),
         ...(params.title ? { title: params.title } : {}),
-        ...(params.max_chars === undefined ? {} : { maxChars: params.max_chars }),
+        maxChars: 500_000,
       });
       if (!result.ok) throw new Error(JSON.stringify(result.error));
       const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path), { compactRead: true });

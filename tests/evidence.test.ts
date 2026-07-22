@@ -69,6 +69,21 @@ describe("Markdown evidence ledger", () => {
     expect((await readEvidence(dir, node.id)).node.provenance).toBe("guideline_mirror_unverified");
   });
 
+  it("rejects discovery search snapshots even when provenance is omitted", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
+    await mkdir(path.join(dir, "sources", "search"), { recursive: true });
+    await writeFile(path.join(dir, "sources", "search", "query.md"), "Search snippet", "utf8");
+    await expect(addEvidence({
+      sessionDir: dir,
+      question: "q",
+      claim: "c",
+      relation: "supports",
+      sourcePath: "sources/search/query.md",
+      offset: 1,
+      limit: 1,
+    })).rejects.toThrow(/discovery artifacts/);
+  });
+
   it("rejects source symlinks that escape the session directory", async () => {
     const parent = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
     const sessionDir = path.join(parent, "session");

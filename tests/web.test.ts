@@ -51,6 +51,27 @@ describe("archived web tools", () => {
     expect(mock.calls).toHaveLength(3);
   });
 
+  it("detects an extensionless PDF by Content-Type before selecting MinerU", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
+    const archive = zipSync({ "result/full.md": strToU8("# Extensionless PDF\n\nParsed by VLM.") });
+    const mock = mockFetch([
+      new Response(null, { headers: { "content-type": "application/pdf" } }),
+      Response.json({ data: { task_id: "pdf-head-1" } }),
+      Response.json({ data: { state: "done", full_zip_url: "https://cdn.example/result.zip" } }),
+      new Response(archive),
+    ]);
+    const result = await readWeb({
+      sessionDir,
+      url: "https://example.org/download?id=123",
+      fetcher: mock.fetcher,
+      mineruApiToken: "token",
+      resolveHost: async () => ["93.184.216.34"],
+    });
+    expect(result).toMatchObject({ ok: true, provider: "mineru" });
+    expect(mock.calls[0]).toMatchObject({ input: "https://example.org/download?id=123", init: { method: "HEAD" } });
+    expect(mock.calls[1]!.input).toBe("https://mineru.net/api/v4/extract/task");
+  });
+
   it("downloads and uploads a PDF when Premium URL parsing cannot fetch it", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
     const parsedArchive = zipSync({ "result/full.md": strToU8("# Uploaded clinical guideline\n\nRecovered PDF evidence.") });

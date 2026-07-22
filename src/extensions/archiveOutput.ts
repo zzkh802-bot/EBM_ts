@@ -13,20 +13,18 @@ export function archiveDetails(record: SourceArchiveRecord): Omit<SourceArchiveR
   return details;
 }
 
-function sourceMap(content: string, bodyLineStart: number): string[] {
-  const items: string[] = [];
-  content.split("\n").forEach((line, index) => {
+function sourceMap(content: string, bodyLineStart: number): { items: string[]; total: number } {
+  const headings = content.split("\n").flatMap((line, index) => {
     const match = line.trim().match(/^(#{1,6})\s+(.+)$/);
-    if (!match || items.length >= MAP_MAX_ITEMS) return;
-    items.push(`- ${match[1]} ${match[2]} — line ${bodyLineStart + index}`);
+    return match ? [{ line: `- ${match[1]} ${match[2]} — line ${bodyLineStart + index}` }] : [];
   });
-  return items;
+  return { items: headings.slice(0, MAP_MAX_ITEMS).map((item) => item.line), total: headings.length };
 }
 
 export function archiveToolText(
   record: SourceArchiveRecord,
   readablePath = record.path,
-  options: { compactRead?: boolean } = {},
+  options: { compactRead?: boolean; citationEligible?: boolean } = {},
 ): { text: string; truncated: boolean } {
   const previewBytes = options.compactRead ? READ_PREVIEW_BYTES : DEFAULT_MAX_BYTES;
   const excerpt = truncateHead(record.content, {
@@ -36,20 +34,29 @@ export function archiveToolText(
   const visibleStart = record.bodyLineStart;
   const visibleEnd = visibleStart + excerpt.content.split("\n").length - 1;
   const totalLines = record.bodyLineStart + record.lines - 1;
-  const map = options.compactRead ? sourceMap(record.content, record.bodyLineStart) : [];
-  const readableTocPath = record.tocPath && readablePath.endsWith(record.path)
-    ? `${readablePath.slice(0, -record.path.length)}${record.tocPath}`
+  const map = options.compactRead ? sourceMap(record.content, record.bodyLineStart) : { items: [], total: 0 };
+  const readablePrefix = readablePath.endsWith(record.path) ? readablePath.slice(0, -record.path.length) : "";
+  const readableTocPath = record.tocPath && readablePrefix
+    ? `${readablePrefix}${record.tocPath}`
     : record.tocPath;
+  const readableResources = record.resourcePaths?.map((resourcePath) => record.archiveDir && readablePrefix
+    ? `${readablePrefix}${record.archiveDir}/${resourcePath}`
+    : resourcePath) ?? [];
   return {
     text: [
-      `Evidence source_path: ${record.path}`,
+      `${options.citationEligible === false ? "Discovery archive path" : "Evidence source_path"}: ${record.path}`,
       `Readable archive path: ${readablePath}`,
       ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
+      ...(readableResources.length ? [`Archived referenced resources: ${readableResources.join(", ")}`] : []),
       `Archive lines: 1-${totalLines} (${totalLines} total lines; 1-based).`,
       `Visible preview maps to lines ${visibleStart}-${visibleEnd}.`,
-      `Read more with read(path=${JSON.stringify(readablePath)}, offset=N, limit=M); use the same 1-based offset/limit with evidence_add.`,
+      `Read any archive window with read(path=${JSON.stringify(readablePath)}, offset=N, limit=M).`,
+      ...(options.citationEligible === false
+        ? ["This search snapshot is discovery history and cannot be passed to evidence_add; use an individually archived sources/read document."]
+        : ["For evidence, use the same source_path and 1-based offset/limit with evidence_add."]),
+      ...(excerpt.truncated ? [`Continue without gaps (the last preview line is intentionally repeated): read(path=${JSON.stringify(readablePath)}, offset=${Math.max(record.bodyLineStart, visibleEnd)}, limit=200).`] : []),
       ...(readableTocPath ? [`Read the complete section index with read(path=${JSON.stringify(readableTocPath)}).`] : []),
-      ...(map.length ? ["", "Source map:", ...map] : []),
+      ...(map.items.length ? ["", `Source map${map.total > map.items.length ? ` (first ${map.items.length} of ${map.total}; complete index is in toc.md)` : ""}:`, ...map.items] : []),
       "",
       "Preview:",
       "",

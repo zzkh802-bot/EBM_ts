@@ -30,6 +30,22 @@ describe("source archive", () => {
     expect(await readFile(path.join(sessionDir, first.path), "utf8")).toContain("first revision");
   });
 
+  it("preserves selected source resources beside full Markdown with a hash manifest", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
+    const record = await archiveSource({
+      sessionDir,
+      kind: "read",
+      title: "Illustrated guideline",
+      content: "# Guideline\n\n![Algorithm](images/algorithm.png)",
+      resources: [{ path: "images/algorithm.png", bytes: new TextEncoder().encode("png-bytes"), mediaType: "image/png" }],
+    });
+    expect(record.resourcePaths).toEqual(["images/algorithm.png"]);
+    expect(await readFile(path.join(sessionDir, record.archiveDir!, "images", "algorithm.png"), "utf8")).toBe("png-bytes");
+    const manifest = await readFile(path.join(sessionDir, record.archiveDir!, ".metadata", "resources.json"), "utf8");
+    expect(manifest).toContain('"path": "images/algorithm.png"');
+    expect(manifest).toContain('"sha256"');
+  });
+
   it("returns distinct workspace-readable and evidence-relative paths", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
     const record = await archiveSource({ sessionDir, kind: "read", title: "Stroke guideline", content: "recommendation" });
@@ -40,6 +56,16 @@ describe("source archive", () => {
     expect(output).toContain(`Readable archive path: data/sessions/session-1/${record.path}`);
     expect(output).toContain(`Archive lines: 1-${record.bodyLineStart + record.lines - 1}`);
     expect(output).toContain(`read(path=${JSON.stringify(readable)}, offset=N, limit=M)`);
+  });
+
+  it("labels search snapshots as discovery-only while preserving a read continuation", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
+    const record = await archiveSource({ sessionDir, kind: "search", title: "query", content: "# Search\n\nResult" });
+    const output = archiveToolText(record, readableArchivePath("session-1", record.path), { citationEligible: false }).text;
+    expect(output).toContain(`Discovery archive path: ${record.path}`);
+    expect(output).toContain("cannot be passed to evidence_add");
+    expect(output).toContain("Read any archive window with read(");
+    expect(output).not.toContain("Evidence source_path:");
   });
 
   it("returns a bounded read preview and a one-based heading map", async () => {
@@ -55,7 +81,9 @@ describe("source archive", () => {
     expect(output.text).toContain(`# Introduction — line ${record.bodyLineStart}`);
     expect(output.text).toContain("## Results — line");
     expect(output.text).toContain("Preview truncated at 5000 bytes");
-    expect(output.text).toContain("use the same 1-based offset/limit with evidence_add");
+    expect(output.text).toContain("Continue without gaps");
+    expect(output.text).toMatch(/Continue without gaps.*offset=\d+, limit=200/);
+    expect(output.text).toContain("use the same source_path and 1-based offset/limit with evidence_add");
   });
 
   it("normalizes content before hashing, archiving, and returning model-visible text", async () => {

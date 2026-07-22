@@ -18,6 +18,14 @@ import { piSessionDirectory } from "./sessionPath.js";
 import { registerTrajectoryRecorder } from "./trajectoryRecorder.js";
 import { registerWebTools } from "./webTools.js";
 
+function evidenceSourcePath(value: string, sessionId: string): string {
+  const normalized = value.replace(/^@/, "").replaceAll("\\", "/").replace(/^\.\//, "");
+  const workspacePrefix = `data/sessions/${sessionId}/`;
+  if (normalized.startsWith(workspacePrefix)) return normalized.slice(workspacePrefix.length);
+  if (normalized.startsWith("data/sessions/")) throw new Error("source_path points to a different session workspace");
+  return normalized;
+}
+
 export function registerEbmTools(pi: ExtensionAPI): void {
   registerEbmIdentity(pi);
 
@@ -47,7 +55,7 @@ export function registerEbmTools(pi: ExtensionAPI): void {
         "discovery_only",
         "other",
       ] as const)),
-      source_path: Type.String({ description: "Session-relative archived source Markdown path" }),
+      source_path: Type.String({ description: "Use the returned Evidence source_path; the current session's data/sessions/<id>/ readable path is also accepted and normalized" }),
       offset: Type.Integer({ minimum: 1, description: "One-based source line number, matching Pi read" }),
       limit: Type.Integer({ minimum: 1, maximum: 200, description: "Number of consecutive exact source lines" }),
     }),
@@ -61,7 +69,7 @@ export function registerEbmTools(pi: ExtensionAPI): void {
         claim: params.claim,
         relation: params.relation,
         ...(params.provenance ? { provenance: params.provenance } : {}),
-        sourcePath: params.source_path.replace(/^@/, ""),
+        sourcePath: evidenceSourcePath(params.source_path, sessionId),
         offset: params.offset,
         limit: params.limit,
       }));
@@ -103,8 +111,10 @@ export function registerEbmTools(pi: ExtensionAPI): void {
       const sessionId = ctx.sessionManager.getSessionId();
       const record = await readEvidence(piSessionDirectory(ctx.cwd, sessionId), params.evidence_id);
       const truncated = truncateHead(record.markdown, { maxBytes: DEFAULT_MAX_BYTES, maxLines: DEFAULT_MAX_LINES });
+      const evidencePath = `data/sessions/${sessionId}/evidence/${params.evidence_id}.md`;
+      const visibleLines = truncated.content.split("\n").length;
       const suffix = truncated.truncated
-        ? `\n\n[Evidence output truncated. Full record: evidence/${params.evidence_id}.md]`
+        ? `\n\n[Evidence output truncated. Continue without gaps with read(path=${JSON.stringify(evidencePath)}, offset=${Math.max(1, visibleLines)}, limit=200); the last visible line is intentionally repeated. Full record: ${evidencePath}]`
         : "";
       return {
         content: [{ type: "text", text: `${truncated.content}${suffix}` }],

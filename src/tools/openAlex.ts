@@ -35,6 +35,7 @@ export async function downloadPdf(input: {
   timeoutMs?: number;
   maxBytes?: number;
   maxRedirects?: number;
+  signal?: AbortSignal;
 }): Promise<OpenAccessPdfDownload> {
   const fetcher = input.fetcher ?? fetch;
   const resolveHost = input.resolveHost ?? defaultResolveHost;
@@ -49,7 +50,8 @@ export async function downloadPdf(input: {
       const checked = validateOutboundUrl(current);
       if (!checked.ok) throw new Error(`unsafe PDF URL: ${checked.reason}`);
       await assertPublicResolvedUrl(checked.url, resolveHost);
-      const response = await fetcher(checked.url.toString(), { signal: controller.signal, redirect: "manual", headers: { "User-Agent": "EBM-Agent-TS/0.1", Accept: "application/pdf" } });
+      const signal = input.signal ? AbortSignal.any([input.signal, controller.signal]) : controller.signal;
+      const response = await fetcher(checked.url.toString(), { signal, redirect: "manual", headers: { "User-Agent": "EBM-Agent-TS/0.1", Accept: "application/pdf" } });
       if ([301, 302, 303, 307, 308].includes(response.status)) {
         const location = response.headers.get("location");
         if (!location) throw new Error(`OA PDF redirect ${response.status} has no Location header`);
@@ -72,10 +74,54 @@ export async function downloadPdf(input: {
 
 export const downloadOpenAccessPdf = downloadPdf;
 
+export async function probePdfContentType(input: {
+  url: string;
+  fetcher?: typeof fetch;
+  resolveHost?: (host: string) => Promise<string[]>;
+  timeoutMs?: number;
+  maxRedirects?: number;
+  signal?: AbortSignal;
+}): Promise<boolean> {
+  const fetcher = input.fetcher ?? fetch;
+  const resolveHost = input.resolveHost ?? defaultResolveHost;
+  const controller = new AbortController();
+  const timeoutMs = input.timeoutMs ?? 5_000;
+  const timer = setTimeout(() => controller.abort(new Error(`PDF type probe timed out after ${timeoutMs}ms`)), timeoutMs);
+  try {
+    let current = input.url;
+    for (let redirects = 0; redirects <= (input.maxRedirects ?? 5); redirects += 1) {
+      const checked = validateOutboundUrl(current);
+      if (!checked.ok) throw new Error(`unsafe PDF probe URL: ${checked.reason}`);
+      await assertPublicResolvedUrl(checked.url, resolveHost);
+      const signal = input.signal ? AbortSignal.any([input.signal, controller.signal]) : controller.signal;
+      const response = await fetcher(checked.url.toString(), {
+        method: "HEAD",
+        redirect: "manual",
+        signal,
+        headers: { "User-Agent": "EBM-Agent-TS/0.1", Accept: "application/pdf,*/*;q=0.1" },
+      });
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        const location = response.headers.get("location");
+        if (!location) throw new Error(`PDF probe redirect ${response.status} has no Location header`);
+        current = new URL(location, checked.url).toString();
+        continue;
+      }
+      if (!response.ok) return false;
+      const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+      const disposition = response.headers.get("content-disposition") ?? "";
+      return contentType.includes("application/pdf") || /filename\*?=[^;]*\.pdf(?:["';]|$)/i.test(disposition) || /\.pdf(?:$|[?#&])/i.test(checked.url.toString());
+    }
+    throw new Error(`PDF type probe exceeded ${input.maxRedirects ?? 5} redirects`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function resolveOpenAlexPdf(input: {
   pmid: string;
   fetcher?: typeof fetch;
   timeoutMs?: number;
+  signal?: AbortSignal;
 }): Promise<OpenAlexPdfLocation | undefined> {
   if (!/^\d+$/.test(input.pmid)) throw new Error("OpenAlex resolution requires a numeric PMID");
   const controller = new AbortController();
@@ -83,7 +129,7 @@ export async function resolveOpenAlexPdf(input: {
   const timer = setTimeout(() => controller.abort(new Error(`OpenAlex request timed out after ${timeoutMs}ms`)), timeoutMs);
   try {
     const response = await (input.fetcher ?? fetch)(`https://api.openalex.org/works/${encodeURIComponent(`pmid:${input.pmid}`)}`, {
-      signal: controller.signal,
+      signal: input.signal ? AbortSignal.any([input.signal, controller.signal]) : controller.signal,
       headers: { "User-Agent": "EBM-Agent-TS/0.1" },
     });
     if (response.status === 404) return undefined;

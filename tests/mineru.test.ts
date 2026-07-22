@@ -15,7 +15,11 @@ function mockFetch(responses: Response[]) {
 
 describe("MinerU Premium document parsing", () => {
   it("creates, polls, downloads, and extracts Markdown from a Premium task", async () => {
-    const archive = zipSync({ "result/full.md": strToU8("# Parsed PDF\n\nClinical result.") });
+    const archive = zipSync({
+      "result/full.md": strToU8("# Parsed PDF\n\nClinical result.\n\n![Figure](images/figure.png)"),
+      "result/images/figure.png": strToU8("image-bytes"),
+      "result/middle.json": strToU8('{"transport":"not archived"}'),
+    });
     const mock = mockFetch([
       Response.json({ data: { task_id: "task-1" } }),
       Response.json({ data: { state: "running" } }),
@@ -30,7 +34,13 @@ describe("MinerU Premium document parsing", () => {
       pollIntervalMs: 0,
     });
 
-    expect(result).toMatchObject({ parser: "mineru-premium-url", taskId: "task-1", content: "# Parsed PDF\n\nClinical result." });
+    expect(result).toMatchObject({
+      parser: "mineru-premium-url",
+      taskId: "task-1",
+      content: "# Parsed PDF\n\nClinical result.\n\n![Figure](images/figure.png)",
+      resources: [{ path: "images/figure.png", mediaType: "image/png" }],
+    });
+    expect(result.resources.map((resource) => resource.path)).not.toContain("middle.json");
     expect(mock.calls[0]).toMatchObject({ url: "https://mineru.net/api/v4/extract/task", init: { method: "POST" } });
     expect(new Headers(mock.calls[0]!.init?.headers).get("authorization")).toBe("Bearer token");
     expect(JSON.parse(String(mock.calls[0]!.init?.body))).toMatchObject({ model_version: "vlm" });
@@ -55,6 +65,23 @@ describe("MinerU Premium document parsing", () => {
     expect(mock.calls[1]).toMatchObject({ url: "https://upload.example/signed", init: { method: "PUT" } });
     expect(new Headers(mock.calls[1]!.init?.headers).has("content-type")).toBe(false);
     expect(JSON.parse(String(mock.calls[0]!.init?.body))).toMatchObject({ model_version: "vlm" });
+  });
+
+  it("stops MinerU polling when the caller cancels", async () => {
+    const controller = new AbortController();
+    const mock = mockFetch([
+      Response.json({ data: { task_id: "task-cancel" } }),
+      Response.json({ data: { state: "running" } }),
+    ]);
+    setTimeout(() => controller.abort(new Error("cancelled by caller")), 0);
+    await expect(parseDocumentUrl({
+      url: "https://example.org/a.pdf",
+      apiToken: "token",
+      fetcher: mock.fetcher,
+      pollIntervalMs: 1_000,
+      signal: controller.signal,
+    })).rejects.toThrow(/cancelled by caller/);
+    expect(mock.calls).toHaveLength(2);
   });
 
   it("fails explicitly for task failure, malformed ZIP, and timeout", async () => {

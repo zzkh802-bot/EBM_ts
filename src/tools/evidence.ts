@@ -122,6 +122,10 @@ async function updateEvidenceIndex(outDir: string, node: EvidenceNode): Promise<
 
 export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode> {
   assertRelativeSafe(input.sourcePath);
+  const normalizedSourcePath = path.posix.normalize(input.sourcePath.replaceAll("\\", "/"));
+  if (normalizedSourcePath.startsWith("sources/search/")) {
+    throw new Error("search snapshots are discovery artifacts; create evidence from an individually archived sources/read document");
+  }
   if (input.limit <= 0) throw new Error("limit must be positive");
   if (input.offset < 1) throw new Error("offset must be a positive 1-based line number");
   if (!input.question.trim()) throw new Error("question is required");

@@ -27,15 +27,15 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - `npm run ebm` loads `.env`, launches native Pi TUI, and stores Pi sessions locally.
 - `web_read` (Jina → Firecrawl fallback) and `web_search` (Tavily) normalize/archive before model exposure and return explicit provider attempts on failure.
 - Real proxy-environment checks passed for Jina reading NCBI and Tavily search.
-- `pubmed_search` returns batched archived abstracts plus bounded ELink similar-article hints in one call.
+- `pubmed_search` still retrieves abstracts in one batch, but now persists query/result history under `sources/search/` and each complete abstract as its own semantic `sources/read/<article>/full.md`; a compact leading index exposes every citation-capable path before long bodies. Similar ELink/ESummary hints remain discovery-only but include PMID, title, available journal/date, and an explicit `pubmed_read` next action.
 - `pubmed_read` resolves identifiers and acquires PMC JATS full text when available.
 - Without usable PMC text, it performs one bounded OpenAlex OA-PDF lookup, validates DNS and every redirect, downloads at most 50 MB, and uploads local bytes to MinerU; failures remain explicit abstract-only results.
 - Real checks passed for PMC full text (PMID 33884067) and OpenAlex → local download → MinerU upload (PMID 36780904, 53,742 archived characters).
-- Evidence records carry provenance classes; discovery-only snippets and unverified guideline mirrors are mechanically citation-ineligible. PubMed abstracts remain citation-eligible for claims explicitly present in them.
+- Evidence records carry provenance classes; `evidence_add` now mechanically rejects every `sources/search/` snapshot, and discovery-only snippets/unverified mirrors are citation-ineligible. Separately archived PubMed abstracts remain citation-eligible for claims explicitly present in them.
 - The EBM skill now pivots from unavailable target guidelines to verified mirrors, attributed secondary evidence, or independent guidelines without conflating their claims.
 - `report_write` verifies every Markdown evidence reference against its archived source; evidence-gap reports require explicit opt-in.
 - `guideline_mcp_search` and `guideline_mcp_read` use a sequential Streamable HTTP client and archive all output; real internal search/read checks passed.
-- `web_read` routes recognized PDF/Office/e-book URLs through MinerU Premium VLM first. For PDFs that MinerU cannot fetch by URL, it now performs one SSRF-guarded, redirect-checked, 50 MB bounded local download and retries through MinerU Premium signed upload before Jina/Firecrawl; real direct-URL parsing returned 51,291 Markdown characters.
+- `web_read` routes recognized PDF/Office/e-book URLs through MinerU Premium VLM first. Extensionless PDF candidates are detected through a public-DNS/redirect-validated HEAD Content-Type probe. For PDFs that MinerU cannot fetch by URL, it performs one SSRF-guarded, redirect-checked, 50 MB bounded local download and retries through MinerU Premium signed upload before Jina/Firecrawl; real direct-URL parsing returned 51,291 Markdown characters.
 - Migrated the Python clinical report-writing skill and adapted obsolete tool references to Pi/evidence IDs; removed the legacy mandatory `research_frame.md` workflow.
 - Pi's generated system prompt and general-purpose tools remain intact; a `before_agent_start` extension replaces only the opening coding-agent identity with an EBM-agent identity.
 - Vertical acceptance covers discovery archive → exact evidence → verified report.
@@ -46,19 +46,21 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - No dedicated user-upload workflow is planned; MinerU remains the direct document capability.
 - Acute-stroke real E2E baseline completed in 164.51 wall-clock seconds (163.001 traced seconds): 33 turns, 52 tool calls, and first evidence at 85.72 seconds.
 - After returning a separate workspace-readable archive path, the fixed-case rerun completed in 111.47 wall-clock seconds (109.905 traced seconds): 17 turns, 30 tool calls, first evidence at 40.099 seconds, 4 PubMed searches instead of 13, and 1 shell call instead of 13. Both runs produced verified reports.
-- Read-like network tools (`web_read`, `pubmed_read`, `guideline_mcp_read`) archive each complete normalized source as `sources/read/<semantic-name>/full.md` plus generated `toc.md`, but expose only a 5KB model preview, up to 20 one-based heading-map entries, readable full/TOC paths, total lines, and an actionable `read(offset, limit)` hint.
+- Read-like network tools (`web_read`, `pubmed_read`, `guideline_mcp_read`) archive each complete normalized source as `sources/read/<semantic-name>/full.md` plus generated `toc.md`, but expose only a 5KB model preview, up to 20 one-based heading-map entries, readable full/TOC paths, total lines, and an exact gap-free continuation command that deliberately overlaps the last preview line. Partial maps disclose their count and point to complete `toc.md`. MinerU additionally retains only referenced bounded image assets beside `full.md`, with hashes in `.metadata/resources.json`; transport JSON and unreferenced ZIP internals are discarded.
 - Archive renderers convert structured provider results into semantic Markdown sections before persistence. Guideline MCP search arrays become result headings/metadata/excerpts; transport JSON is not copied into `.md` source bodies.
 - Source/evidence line windows are uniformly one-based to match Pi `read`; archive metadata now uses `bodyLineStart` rather than a zero-based offset.
 - External source normalization decodes numeric/common HTML entities, removes zero-width/control characters, normalizes Unicode spacing, and preserves PubMed mixed inline XML text order. Guideline MCP JSON envelopes are reduced to their semantic title and Markdown content before archive.
 - PubMed search explicitly uses relevance ordering and marks zero-result archives as `Status: no_results`; `pubmed_read` accepts model-natural `PMID:`, `PMCID:`, and `DOI:` prefixes.
-- `npm run check`: 18 test files / 51 tests passing.
+- A dedicated abstract-only real E2E completed in 45.45 wall-clock seconds (43.861 traced): 7 turns, 6 tool calls, 0 errors, one `pubmed_search`, no `pubmed_read`, one `primary_abstract` evidence record, and a verified report. This confirms separate abstract evidence adds no second PubMed network round.
+- `evidence_add` accepts either the returned session-relative evidence path or the current session's Pi-readable `data/sessions/<id>/...` path and canonicalizes it; other-session paths remain rejected.
+- `npm run check`: 18 test files / 58 tests passing.
 
 ## Non-negotiable decisions
 
 - Pi owns runtime, events, tool calling, provider streaming, compaction, and TUI.
 - Normalize network content before archive and model visibility; preserve identical line numbering.
 - Evidence source of truth is Markdown; no redundant raw JSON body.
-- Web pages: Jina first, Firecrawl fallback. Recognized PDFs: MinerU Premium VLM URL task first, then bounded secure download and Premium VLM signed upload, then Jina/Firecrawl.
+- Web pages: Jina first, Firecrawl fallback. Recognized or Content-Type-detected PDFs: MinerU Premium VLM URL task first, then bounded secure download and Premium VLM signed upload, then Jina/Firecrawl. Pi cancellation and a 240-second total read budget propagate through probing, download, MinerU polling/upload/ZIP retrieval, and web fallbacks.
 - General search: Tavily first; biomedical search: PubMed-specific tools.
 - Guideline MCP calls are explicit, timeout-bounded, and initially sequential.
 - No old session migration, subagents, scheduler, or SQLite.

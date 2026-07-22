@@ -1,7 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
 import { Agent, fetch as undiciFetch } from "undici";
 import { archiveSource, type SourceArchiveRecord } from "./archive.js";
-import { parseDocumentBytes } from "./mineru.js";
+import { parseDocumentBytes, type MineruResource } from "./mineru.js";
 import { downloadOpenAccessPdf, resolveOpenAlexPdf } from "./openAlex.js";
 
 const ncbiDispatcher = new Agent({ connect: { family: 4 } });
@@ -20,7 +20,7 @@ export type PubMedError = {
 };
 
 export type PubMedSearchResult =
-  | { ok: true; pmids: string[]; relatedPmids: string[]; abstractCount: number; warnings: string[]; archive: SourceArchiveRecord }
+  | { ok: true; pmids: string[]; relatedPmids: string[]; abstractCount: number; abstractArchives: SourceArchiveRecord[]; warnings: string[]; archive: SourceArchiveRecord }
   | { ok: false; error: PubMedError };
 
 export type PubMedReadResult =
@@ -41,6 +41,8 @@ type FetchOptions = {
   email?: string;
   apiKey?: string;
   retries?: number;
+  signal?: AbortSignal;
+  totalTimeoutMs?: number;
 };
 
 type ParsedArticle = {
@@ -52,13 +54,13 @@ type ParsedArticle = {
   abstractParts: string[];
 };
 
-async function fetchTimed(fetcher: typeof fetch, url: URL, timeoutMs: number, retries: number): Promise<Response> {
+async function fetchTimed(fetcher: typeof fetch, url: URL, timeoutMs: number, retries: number, signal?: AbortSignal): Promise<Response> {
   let lastError: unknown;
   for (let attemptIndex = 0; attemptIndex <= retries; attemptIndex += 1) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const response = await fetcher(url, { signal: controller.signal, headers: { "User-Agent": "EBM-Agent-TS/0.1" } });
+      const response = await fetcher(url, { signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal, headers: { "User-Agent": "EBM-Agent-TS/0.1" } });
       if ((response.status === 429 || response.status >= 500) && attemptIndex < retries) {
         await response.body?.cancel();
       } else {
@@ -160,7 +162,7 @@ async function fetchPubmedArticles(
   url.searchParams.set("id", pmids.join(","));
   url.searchParams.set("retmode", "xml");
   addNcbiIdentity(url, options);
-  const response = await fetchTimed(fetcher, url, timeoutMs, retries);
+  const response = await fetchTimed(fetcher, url, timeoutMs, retries, options.signal);
   const failure = await requireOk(response);
   if (failure) throw Object.assign(new Error(failure.message), { pubmedError: failure });
   return parsePubmedArticles(await response.text());
@@ -182,7 +184,7 @@ async function fetchRelated(
   linkUrl.searchParams.set("linkname", "pubmed_pubmed");
   linkUrl.searchParams.set("retmode", "json");
   addNcbiIdentity(linkUrl, options);
-  const response = await fetchTimed(fetcher, linkUrl, timeoutMs, retries);
+  const response = await fetchTimed(fetcher, linkUrl, timeoutMs, retries, options.signal);
   const failure = await requireOk(response);
   if (failure) throw new Error(failure.message);
   const payload = await response.json() as { linksets?: Array<{ linksetdbs?: Array<{ links?: unknown }> }> };
@@ -205,7 +207,7 @@ async function fetchRelated(
   summaryUrl.searchParams.set("retmode", "json");
   summaryUrl.searchParams.set("id", related.join(","));
   addNcbiIdentity(summaryUrl, options);
-  const summaryResponse = await fetchTimed(fetcher, summaryUrl, timeoutMs, retries);
+  const summaryResponse = await fetchTimed(fetcher, summaryUrl, timeoutMs, retries, options.signal);
   const summaryFailure = await requireOk(summaryResponse);
   if (summaryFailure) throw new Error(summaryFailure.message);
   const summaryPayload = await summaryResponse.json() as { result?: Record<string, any> };
@@ -218,6 +220,7 @@ function renderSearch(
   articles: ParsedArticle[],
   related: { pmids: string[]; summaries: Record<string, any> },
   warnings: string[],
+  abstractSources: Map<string, string>,
 ): string {
   const byPmid = new Map(articles.map((article) => [article.pmid, article]));
   const lines = [
@@ -228,25 +231,40 @@ function renderSearch(
     ...(pmids.length ? [] : ["", "No PubMed records matched this query."]),
     "",
   ];
-  pmids.forEach((pmid, index) => {
-    const article = byPmid.get(pmid);
-    lines.push(`## ${index + 1}. ${article?.title ?? `PMID ${pmid}`}`, "", `PMID: ${pmid}`, "Source status: PubMed abstract");
-    if (article?.pmcid) lines.push(`PMCID: ${article.pmcid}`);
-    if (article?.doi) lines.push(`DOI: ${article.doi}`);
-    if (article?.journal) lines.push(`Journal: ${article.journal}`);
-    lines.push("", "### Abstract", "", ...(article?.abstractParts.length ? article.abstractParts : ["No abstract available from PubMed."]), "");
-  });
-  if (warnings.length) {
-    lines.push("## Retrieval notes", "", ...warnings.map((warning) => `- ${warning}`), "");
-  }
-  if (related.pmids.length) {
-    lines.push("## Similar article hints", "", "Discovery hints only; these related records have not been read as evidence.", "");
-    related.pmids.forEach((pmid) => {
-      const item = related.summaries[pmid] ?? {};
-      lines.push(`- PMID ${pmid}: ${typeof item.title === "string" ? item.title : "Related PubMed record"}`);
+  if (pmids.length) {
+    lines.push("## Result index", "", "Complete abstracts appear later in this file. Use the separate `sources/read/` path for evidence.", "");
+    pmids.forEach((pmid, index) => {
+      const article = byPmid.get(pmid);
+      const abstractSource = abstractSources.get(pmid);
+      lines.push(`- ${index + 1}. PMID ${pmid}: ${article?.title ?? "PubMed record"}${abstractSource ? ` — abstract source: ${abstractSource}` : " — no complete abstract archived"}`);
     });
     lines.push("");
   }
+  if (related.pmids.length) {
+    lines.push("## Similar article hints", "", "Discovery hints only; call `pubmed_read` or run a targeted search before using one as evidence.", "");
+    related.pmids.forEach((pmid) => {
+      const item = related.summaries[pmid] ?? {};
+      const title = typeof item.title === "string" && item.title.trim() ? item.title.trim() : "Related PubMed record";
+      const metadata = [
+        typeof item.source === "string" && item.source.trim() ? `Journal: ${item.source.trim()}` : undefined,
+        typeof item.pubdate === "string" && item.pubdate.trim() ? `Date: ${item.pubdate.trim()}` : undefined,
+      ].filter(Boolean).join("; ");
+      lines.push(`- PMID ${pmid}: ${title}${metadata ? ` (${metadata})` : ""}. Continue with \`pubmed_read(identifier=\"PMID: ${pmid}\")\`.`);
+    });
+    lines.push("");
+  }
+  if (warnings.length) lines.push("## Retrieval notes", "", ...warnings.map((warning) => `- ${warning}`), "");
+  if (pmids.length) lines.push("## Retrieved abstracts", "");
+  pmids.forEach((pmid, index) => {
+    const article = byPmid.get(pmid);
+    lines.push(`### ${index + 1}. ${article?.title ?? `PMID ${pmid}`}`, "", `PMID: ${pmid}`, "Source status: PubMed abstract");
+    const abstractSource = abstractSources.get(pmid);
+    if (abstractSource) lines.push(`Citation-capable abstract source: ${abstractSource}`, "Evidence provenance: primary_abstract");
+    if (article?.pmcid) lines.push(`PMCID: ${article.pmcid}`);
+    if (article?.doi) lines.push(`DOI: ${article.doi}`);
+    if (article?.journal) lines.push(`Journal: ${article.journal}`);
+    lines.push("", "#### Abstract", "", ...(article?.abstractParts.length ? article.abstractParts : ["No abstract available from PubMed."]), "");
+  });
   return lines.join("\n");
 }
 
@@ -261,6 +279,9 @@ export async function searchPubMed(input: {
   const fetcher = input.fetcher ?? defaultNcbiFetch;
   const timeoutMs = input.timeoutMs ?? 30_000;
   const retries = input.retries ?? 2;
+  const totalSignal = AbortSignal.timeout(input.totalTimeoutMs ?? 90_000);
+  const operationSignal = input.signal ? AbortSignal.any([input.signal, totalSignal]) : totalSignal;
+  const options = { ...input, signal: operationSignal };
   try {
     const searchUrl = new URL(`${EUTILS}/esearch.fcgi`);
     searchUrl.searchParams.set("db", "pubmed");
@@ -268,8 +289,8 @@ export async function searchPubMed(input: {
     searchUrl.searchParams.set("retmax", String(Math.min(Math.max(input.maxResults ?? 10, 1), 50)));
     searchUrl.searchParams.set("term", input.query);
     searchUrl.searchParams.set("sort", "relevance");
-    addNcbiIdentity(searchUrl, input);
-    const searchResponse = await fetchTimed(fetcher, searchUrl, timeoutMs, retries);
+    addNcbiIdentity(searchUrl, options);
+    const searchResponse = await fetchTimed(fetcher, searchUrl, timeoutMs, retries, operationSignal);
     const searchFailure = await requireOk(searchResponse);
     if (searchFailure) return { ok: false, error: searchFailure };
     const searchPayload = await searchResponse.json() as { esearchresult?: { idlist?: unknown } };
@@ -277,22 +298,31 @@ export async function searchPubMed(input: {
       return { ok: false, error: { code: "invalid_ncbi_response", message: "NCBI esearch response has no idlist" } };
     }
     const pmids = searchPayload.esearchresult.idlist.filter((id): id is string => typeof id === "string" && /^\d+$/.test(id));
-    const articles = await fetchPubmedArticles(pmids, fetcher, timeoutMs, retries, input);
+    const articles = await fetchPubmedArticles(pmids, fetcher, timeoutMs, retries, options);
     const warnings: string[] = [];
     let related: { pmids: string[]; summaries: Record<string, any> } = { pmids: [], summaries: {} };
     if (input.includeSimilar !== false) {
       try {
-        related = await fetchRelated(pmids, fetcher, timeoutMs, retries, input, Math.min(Math.max(input.maxSimilar ?? 5, 0), 10));
+        related = await fetchRelated(pmids, fetcher, timeoutMs, retries, options, Math.min(Math.max(input.maxSimilar ?? 5, 0), 10));
       } catch (error) {
         warnings.push(`Optional similar-article lookup failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
-    const content = renderSearch(input.query, pmids, articles, related, warnings);
+    const abstractArchives = await Promise.all(articles.filter((article) => article.abstractParts.length > 0).map((article) => archiveSource({
+      sessionDir: input.sessionDir,
+      kind: "read",
+      sourceUrl: `https://pubmed.ncbi.nlm.nih.gov/${article.pmid}/`,
+      title: article.title,
+      content: renderAbstractOnly(article),
+    })));
+    const abstractSources = new Map(articles.filter((article) => article.abstractParts.length > 0).map((article, index) => [article.pmid, abstractArchives[index]!.path]));
+    const content = renderSearch(input.query, pmids, articles, related, warnings, abstractSources);
     return {
       ok: true,
       pmids,
       relatedPmids: related.pmids,
-      abstractCount: articles.filter((article) => article.abstractParts.length > 0).length,
+      abstractCount: abstractArchives.length,
+      abstractArchives,
       warnings,
       archive: await archiveSource({
         sessionDir: input.sessionDir,
@@ -314,7 +344,7 @@ async function resolvePmid(identifier: string, fetcher: typeof fetch, timeoutMs:
   url.searchParams.set("format", "json");
   url.searchParams.set("ids", identifier);
   if (options.email) url.searchParams.set("email", options.email);
-  const response = await fetchTimed(fetcher, url, timeoutMs, retries);
+  const response = await fetchTimed(fetcher, url, timeoutMs, retries, options.signal);
   if (!response.ok) return undefined;
   const payload = await response.json() as { records?: Array<{ pmid?: unknown }> };
   const pmid = payload.records?.[0]?.pmid;
@@ -407,10 +437,13 @@ export async function readPubMed(input: {
   const fetcher = input.fetcher ?? defaultNcbiFetch;
   const timeoutMs = input.timeoutMs ?? 30_000;
   const retries = input.retries ?? 2;
+  const totalSignal = AbortSignal.timeout(input.totalTimeoutMs ?? 240_000);
+  const operationSignal = input.signal ? AbortSignal.any([input.signal, totalSignal]) : totalSignal;
+  const options = { ...input, signal: operationSignal };
   try {
-    const pmid = await resolvePmid(identifier, fetcher, timeoutMs, retries, input);
+    const pmid = await resolvePmid(identifier, fetcher, timeoutMs, retries, options);
     if (!pmid) return { ok: false, error: { code: "identifier_not_found", message: `No PMID found for ${identifier}` } };
-    const articles = await fetchPubmedArticles([pmid], fetcher, timeoutMs, retries, input);
+    const articles = await fetchPubmedArticles([pmid], fetcher, timeoutMs, retries, options);
     const article = articles[0];
     if (!article) return { ok: false, error: { code: "invalid_ncbi_response", message: "NCBI efetch response has no article" } };
 
@@ -418,15 +451,16 @@ export async function readPubMed(input: {
     let fullText = false;
     let fullTextSource: "pmc" | "openalex_mineru" | "abstract_only" = "abstract_only";
     let sourceUrl = `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`;
+    let parsedMineruResources: MineruResource[] | undefined;
     const warnings: string[] = [];
     if (article.pmcid) {
       const pmcUrl = new URL(`${EUTILS}/efetch.fcgi`);
       pmcUrl.searchParams.set("db", "pmc");
       pmcUrl.searchParams.set("id", article.pmcid.replace(/^PMC/i, ""));
       pmcUrl.searchParams.set("retmode", "xml");
-      addNcbiIdentity(pmcUrl, input);
+      addNcbiIdentity(pmcUrl, options);
       try {
-        const pmcResponse = await fetchTimed(fetcher, pmcUrl, timeoutMs, retries);
+        const pmcResponse = await fetchTimed(fetcher, pmcUrl, timeoutMs, retries, operationSignal);
         const pmcFailure = await requireOk(pmcResponse);
         if (pmcFailure) throw new Error(pmcFailure.message);
         content = renderFullText(article, await pmcResponse.text());
@@ -444,6 +478,7 @@ export async function readPubMed(input: {
           pmid,
           fetcher,
           ...(input.openAlexTimeoutMs === undefined ? {} : { timeoutMs: input.openAlexTimeoutMs }),
+          signal: operationSignal,
         });
         if (oa) {
           const downloaded = await downloadOpenAccessPdf({
@@ -451,6 +486,7 @@ export async function readPubMed(input: {
             fetcher,
             ...(input.resolveHost ? { resolveHost: input.resolveHost } : {}),
             ...(input.oaDownloadTimeoutMs === undefined ? {} : { timeoutMs: input.oaDownloadTimeoutMs }),
+            signal: operationSignal,
           });
           const parsed = await parseDocumentBytes({
             bytes: downloaded.bytes,
@@ -459,8 +495,10 @@ export async function readPubMed(input: {
             fetcher,
             ...(input.mineruBaseUrl ? { baseUrl: input.mineruBaseUrl } : {}),
             requestTimeoutMs: 25_000,
+            signal: operationSignal,
           });
           content = renderOpenAlexFullText(article, parsed.content, oa.sourceName);
+          parsedMineruResources = parsed.resources;
           fullText = true;
           fullTextSource = "openalex_mineru";
           sourceUrl = downloaded.finalUrl;
@@ -487,6 +525,7 @@ export async function readPubMed(input: {
         sourceUrl,
         title: article.title,
         content,
+        ...(fullTextSource === "openalex_mineru" && parsedMineruResources ? { resources: parsedMineruResources } : {}),
       }),
     };
   } catch (error) {

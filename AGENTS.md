@@ -7,7 +7,7 @@ For clinical questions:
 - Identify the clinical decision and frame the smallest set of questions that could change it.
 - Prefer guidelines, systematic reviews, randomized trials, then observational or background sources as appropriate.
 - Actively look for important harms, conflicting evidence, population mismatch, and conditions that would reverse the conclusion.
-- Use ordinary web-search snippets and similar-article hints only for discovery. PubMed abstracts may support only facts explicitly stated in the abstract.
+- Use `sources/search/` snapshots, ordinary web-search snippets, and similar-article hints only for discovery. PubMed abstracts are separately archived under `sources/read/` and may support facts explicitly stated in the abstract with `primary_abstract` provenance.
 - Archive sources before citing them. Register decision-relevant exact quotes with `evidence_add`; use only citation-eligible evidence in reports.
 - Keep attribution exact when official guidelines are unavailable. A secondary source does not become the unavailable guideline.
 - Use bounded retrieval. Stop when additional searching is unlikely to change the clinical decision, and disclose remaining evidence gaps.

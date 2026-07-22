@@ -2,6 +2,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { archiveSource } from "../src/tools/archive.js";
 import { addEvidence } from "../src/tools/evidence.js";
 import { writeReport } from "../src/tools/report.js";
 import { searchWeb } from "../src/tools/web.js";
@@ -21,7 +22,24 @@ describe("basic EBM vertical flow", () => {
     expect(search.ok).toBe(true);
     if (!search.ok) return;
 
-    const bodyLines = search.archive.content.split("\n");
+    await expect(addEvidence({
+      sessionDir,
+      question: "Does the intervention reduce the primary outcome?",
+      claim: "The intervention reduced the primary outcome.",
+      relation: "supports",
+      sourcePath: search.archive.path,
+      offset: search.archive.bodyLineStart,
+      limit: 1,
+    })).rejects.toThrow(/discovery artifacts/);
+
+    const source = await archiveSource({
+      sessionDir,
+      kind: "read",
+      sourceUrl: "https://example.org/trial",
+      title: "Randomized trial",
+      content: "# Randomized trial\n\nThe intervention reduced the primary outcome.",
+    });
+    const bodyLines = source.content.split("\n");
     const quoteIndex = bodyLines.indexOf("The intervention reduced the primary outcome.");
     expect(quoteIndex).toBeGreaterThanOrEqual(0);
     const evidence = await addEvidence({
@@ -29,8 +47,8 @@ describe("basic EBM vertical flow", () => {
       question: "Does the intervention reduce the primary outcome?",
       claim: "The intervention reduced the primary outcome.",
       relation: "supports",
-      sourcePath: search.archive.path,
-      offset: search.archive.bodyLineStart + quoteIndex,
+      sourcePath: source.path,
+      offset: source.bodyLineStart + quoteIndex,
       limit: 1,
     });
     const report = await writeReport({

@@ -43,8 +43,13 @@ describe("PubMed archive adapters", () => {
     expect(result.archive.content).toContain("PMID: 123");
     expect(result.archive.content).toContain("Aspirin trial");
     expect(result.archive.content).toContain("**RESULTS:** Reduced events with p < 0.001.");
-    expect(result.archive.content).toContain("Similar prevention trial");
+    expect(result.archive.content).toContain("Similar prevention trial (Journal: Related Journal; Date: 2024)");
+    expect(result.archive.content).toContain('pubmed_read(identifier="PMID: 456")');
     expect(result.relatedPmids).toEqual(["456"]);
+    expect(result.abstractArchives).toHaveLength(1);
+    expect(result.abstractArchives[0]!.path).toBe("sources/read/aspirin-trial/full.md");
+    expect(result.archive.content).toContain(`Citation-capable abstract source: ${result.abstractArchives[0]!.path}`);
+    expect(await readFile(path.join(sessionDir, result.abstractArchives[0]!.path), "utf8")).toContain("**RESULTS:** Reduced events with p < 0.001.");
     expect(await readFile(path.join(sessionDir, result.archive.path), "utf8")).toContain("Source status: PubMed abstract");
     expect(mock.urls.some((url) => url.includes("api_key=test-secret"))).toBe(true);
     expect(result.archive.sourceUrl).not.toContain("api_key");
