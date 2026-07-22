@@ -36,14 +36,16 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - `report_write` verifies every Markdown evidence reference against its archived source; evidence-gap reports require explicit opt-in.
 - `guideline_mcp_search` and `guideline_mcp_read` use a sequential Streamable HTTP client and archive all output; real internal search/read checks passed.
 - `web_read` now routes PDF/Office/e-book URLs through MinerU Premium first; real demo PDF parsing returned 51,291 Markdown characters.
-- Migrated the Python clinical report-writing skill and adapted obsolete tool references to Pi/evidence IDs.
+- Migrated the Python clinical report-writing skill and adapted obsolete tool references to Pi/evidence IDs; removed the legacy mandatory `research_frame.md` workflow.
+- Pi's generated system prompt and general-purpose tools remain intact; a `before_agent_start` extension replaces only the opening coding-agent identity with an EBM-agent identity.
 - Vertical acceptance covers discovery archive → exact evidence → verified report.
 - Pi `session_compact` summaries are atomically mirrored as project-local JSON artifacts without replacing Pi compaction behavior.
 - A project-local Pi trajectory recorder writes developer-only `trajectory.md` and `trajectory.jsonl` files with finalized thinking, responses, tool lifecycle/timing, provider request status, model configuration, usage, compaction, and session events. It never enters model context.
-- `npm run trace:analyze` summarizes turns, duplicate actions, tool failures/latency, evidence timing, full-text outcomes, thinking volume, provider errors, and token/cache usage for eval.
+- `npm run trace:analyze` summarizes end-to-end, turn, first-delta, model, provider, tool, and first-evidence timing in seconds, plus duplicate actions, failures, full-text outcomes, thinking volume, and token/cache usage.
 - Source and report artifacts now use Unicode-preserving semantic filenames with numeric collision suffixes; SHA-256 remains metadata rather than filename content.
 - No dedicated user-upload workflow is planned; MinerU remains the direct document capability.
-- `npm run check`: 17 test files / 46 tests passing.
+- Acute-stroke real E2E baseline completed in 164.51 wall-clock seconds (163.001 traced seconds): 33 turns, 52 tool calls, first evidence at 85.72 seconds, 8 registered evidence records, and one verified report.
+- `npm run check`: 18 test files / 48 tests passing.
 
 ## Non-negotiable decisions
 
@@ -57,7 +59,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 
 ## Active task
 
-Basic refactor is complete. The new trajectory logs now provide the measurement seam needed to compare representative EBM runs before experimenting with lazy POMDP belief state.
+Basic refactor is complete. The first measured E2E run exposed excessive source-location work: 33 turns, including repeated shell calls caused by session-relative archive paths not being directly readable by Pi's workspace-relative `read`. Fix that locality issue before repeating the fixed case; do not add belief state yet.
 
 ## Next commands
 

@@ -25,7 +25,7 @@ async function latestTrace(root: string): Promise<string> {
 function markdown(analysis: ReturnType<typeof analyzeTrajectory>, tracePath: string): string {
   const toolRows = Object.entries(analysis.tools)
     .sort(([, a], [, b]) => b.calls - a.calls)
-    .map(([name, value]) => `| ${name} | ${value.calls} | ${value.errors} | ${value.average_duration_ms} |`)
+    .map(([name, value]) => `| ${name} | ${value.calls} | ${value.errors} | ${value.average_duration_seconds} |`)
     .join("\n");
   return [
     "# Trajectory Analysis",
@@ -34,12 +34,16 @@ function markdown(analysis: ReturnType<typeof analyzeTrajectory>, tracePath: str
     `- Session: ${analysis.session_id}`,
     `- Runs: ${analysis.runs}`,
     `- Turns: ${analysis.turns}`,
+    `- Total elapsed: ${analysis.total_elapsed_seconds} s`,
     `- Tool calls/errors: ${analysis.tool_calls}/${analysis.tool_errors}`,
     `- Duplicate tool actions: ${analysis.duplicate_tool_actions}`,
     `- Thinking/response characters: ${analysis.thinking_chars}/${analysis.response_chars}`,
     `- Provider requests/errors: ${analysis.provider_requests}/${analysis.provider_errors}`,
     `- Full-text/abstract-only reads: ${analysis.full_text_reads}/${analysis.abstract_only_reads}`,
-    `- First evidence_add: ${analysis.first_evidence_add_turn ? `turn ${analysis.first_evidence_add_turn}` : "not observed"}`,
+    `- First model delta: ${analysis.average_first_delta_seconds ?? "not observed"} s average`,
+    `- Model completion: ${analysis.average_model_completion_seconds ?? "not observed"} s average`,
+    `- Provider headers: ${analysis.average_provider_headers_seconds ?? "not observed"} s average`,
+    `- First evidence_add: ${analysis.first_evidence_add_turn ? `turn ${analysis.first_evidence_add_turn}, ${analysis.first_evidence_add_delay_seconds} s` : "not observed"}`,
     "",
     "## Tokens",
     "",
@@ -49,7 +53,7 @@ function markdown(analysis: ReturnType<typeof analyzeTrajectory>, tracePath: str
     "",
     "## Tools",
     "",
-    "| Tool | Calls | Errors | Avg duration ms |",
+    "| Tool | Calls | Errors | Avg duration s |",
     "|---|---:|---:|---:|",
     toolRows || "| — | 0 | 0 | 0 |",
     "",

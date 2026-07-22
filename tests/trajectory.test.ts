@@ -51,8 +51,28 @@ describe("developer trajectory recorder", () => {
       type: "tool_execution_end",
       toolCallId: "call-1",
       toolName: "pubmed_search",
-      result: { content: [{ type: "text", text: "Three abstracts found" }], details: { resultCount: 3 } },
+      result: {
+        content: [{
+          type: "text",
+          text: "Three abstracts found\nAuthorization: Bearer oauth-secret\nOPENAI_API_KEY=sk-live-secret\nhttps://open.feishu.cn/open-apis/bot/v2/hook/private-hook-id",
+        }],
+        details: { resultCount: 3, refresh: "oauth-refresh-secret" },
+      },
       isError: false,
+    }, ctx);
+    await harness.emit("before_provider_request", {
+      type: "before_provider_request",
+      payload: { model: "deepseek-v4-flash", messages: [{}], tools: [{}], stream: true },
+    }, ctx);
+    await harness.emit("after_provider_response", {
+      type: "after_provider_response",
+      status: 200,
+      headers: { "x-request-id": "request-1" },
+    }, ctx);
+    await harness.emit("message_update", {
+      type: "message_update",
+      message: { role: "assistant" },
+      assistantMessageEvent: { type: "thinking_delta", delta: "I", contentIndex: 0 },
     }, ctx);
     await harness.emit("message_end", {
       type: "message_end",
@@ -74,17 +94,26 @@ describe("developer trajectory recorder", () => {
     const traceDir = path.join(cwd, "data", "sessions", "session-1", "trace");
     const lines = (await readFile(path.join(traceDir, "trajectory.jsonl"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
     expect(lines.map((line) => line.event)).toEqual(expect.arrayContaining([
-      "session_start", "run_start", "turn_start", "tool_start", "tool_end", "assistant_message", "run_settled",
+      "session_start", "run_start", "turn_start", "tool_start", "tool_end", "provider_request",
+      "provider_response", "model_first_delta", "assistant_message", "run_settled",
     ]));
     expect(lines.find((line) => line.event === "tool_start").data.args.api_key).toBe("[REDACTED]");
     expect(lines.find((line) => line.event === "assistant_message").data.content[0].thinking).toContain("compare benefit and harm");
     expect(lines.find((line) => line.event === "assistant_message").data.usage.totalTokens).toBe(200);
     expect(lines.find((line) => line.event === "tool_end").data.duration_ms).toBeGreaterThanOrEqual(0);
+    expect(lines.find((line) => line.event === "tool_end").data.duration_seconds).toBeGreaterThanOrEqual(0);
+    expect(lines.find((line) => line.event === "model_first_delta").data.duration_seconds).toBeGreaterThanOrEqual(0);
+    expect(lines.find((line) => line.event === "assistant_message").data.request_timing.duration_seconds).toBeGreaterThanOrEqual(0);
+    expect(lines.find((line) => line.event === "run_settled").data.duration_seconds).toBeGreaterThanOrEqual(0);
 
     const markdown = await readFile(path.join(traceDir, "trajectory.md"), "utf8");
     expect(markdown).toContain("## Thinking");
     expect(markdown).toContain("I should compare benefit and harm.");
     expect(markdown).toContain("pubmed_search");
     expect(markdown).not.toContain("must-not-leak");
+    expect(markdown).not.toContain("oauth-secret");
+    expect(markdown).not.toContain("sk-live-secret");
+    expect(markdown).not.toContain("private-hook-id");
+    expect(markdown).not.toContain("oauth-refresh-secret");
   });
 });

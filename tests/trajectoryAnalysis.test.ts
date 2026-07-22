@@ -33,10 +33,19 @@ describe("trajectory analysis", () => {
       tool_calls: 3,
       tool_errors: 1,
       duplicate_tool_actions: 1,
+      total_elapsed_seconds: 8,
       first_evidence_add_delay_ms: 6000,
+      first_evidence_add_delay_seconds: 6,
       first_evidence_add_turn: 2,
       tokens: { input: 100, output: 20, cache_read: 50, total: 170 },
     });
-    expect(analysis.tools.pubmed_search).toMatchObject({ calls: 2, errors: 1, total_duration_ms: 1900 });
+    expect(analysis.tools.pubmed_search).toMatchObject({
+      calls: 2,
+      errors: 1,
+      total_duration_ms: 1900,
+      total_duration_seconds: 1.9,
+      average_duration_seconds: 0.95,
+    });
+    expect(analysis.run_summaries[0]).toMatchObject({ duration_seconds: 8 });
   });
 });

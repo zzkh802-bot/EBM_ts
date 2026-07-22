@@ -5,6 +5,8 @@ export type ToolAnalysis = {
   errors: number;
   total_duration_ms: number;
   average_duration_ms: number;
+  total_duration_seconds: number;
+  average_duration_seconds: number;
 };
 
 export type TrajectoryAnalysis = {
@@ -20,7 +22,12 @@ export type TrajectoryAnalysis = {
   provider_requests: number;
   provider_errors: number;
   compactions: number;
+  total_elapsed_seconds: number;
+  average_first_delta_seconds?: number;
+  average_model_completion_seconds?: number;
+  average_provider_headers_seconds?: number;
   first_evidence_add_delay_ms?: number;
+  first_evidence_add_delay_seconds?: number;
   first_evidence_add_turn?: number;
   full_text_reads: number;
   abstract_only_reads: number;
@@ -36,6 +43,7 @@ export type TrajectoryAnalysis = {
   run_summaries: Array<{
     run_id: string;
     duration_ms?: number;
+    duration_seconds?: number;
     turns: number;
     tool_calls: number;
     tool_errors: number;
@@ -91,6 +99,9 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
   let providerRequests = 0;
   let providerErrors = 0;
   let compactions = 0;
+  const firstDeltaSeconds: number[] = [];
+  const modelCompletionSeconds: number[] = [];
+  const providerHeadersSeconds: number[] = [];
   let firstEvidenceTimestamp: string | undefined;
   let firstEvidenceTurn: number | undefined;
   let fullTextReads = 0;
@@ -134,12 +145,18 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
         firstEvidenceTimestamp = record.timestamp;
         firstEvidenceTurn = record.turn_index === undefined ? undefined : record.turn_index + 1;
       }
-      tools[name] ??= { calls: 0, errors: 0, total_duration_ms: 0, average_duration_ms: 0 };
+      tools[name] ??= {
+        calls: 0, errors: 0, total_duration_ms: 0, average_duration_ms: 0,
+        total_duration_seconds: 0, average_duration_seconds: 0,
+      };
       tools[name].calls += 1;
     }
     if (record.event === "tool_end") {
       const name = String(data?.tool_name ?? toolStarts.get(String(data?.tool_call_id))?.name ?? "unknown");
-      tools[name] ??= { calls: 0, errors: 0, total_duration_ms: 0, average_duration_ms: 0 };
+      tools[name] ??= {
+        calls: 0, errors: 0, total_duration_ms: 0, average_duration_ms: 0,
+        total_duration_seconds: 0, average_duration_seconds: 0,
+      };
       const duration = Number(data?.duration_ms ?? 0);
       if (Number.isFinite(duration)) tools[name].total_duration_ms += duration;
       if (data?.is_error === true) {
@@ -154,16 +171,30 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
       }
     }
     if (record.event === "provider_request") providerRequests += 1;
-    if (record.event === "provider_response" && Number(data?.status ?? 0) >= 400) providerErrors += 1;
+    if (record.event === "provider_response") {
+      if (Number(data?.status ?? 0) >= 400) providerErrors += 1;
+      if (numeric(data?.duration_seconds) > 0) providerHeadersSeconds.push(numeric(data.duration_seconds));
+    }
+    if (record.event === "model_first_delta" && numeric(data?.duration_seconds) > 0) firstDeltaSeconds.push(numeric(data.duration_seconds));
+    if (record.event === "assistant_message" && numeric(data?.request_timing?.duration_seconds) > 0) modelCompletionSeconds.push(numeric(data.request_timing.duration_seconds));
     if (record.event === "compaction") compactions += 1;
   }
 
   for (const value of Object.values(tools)) {
     value.average_duration_ms = value.calls ? Math.round((value.total_duration_ms / value.calls) * 100) / 100 : 0;
+    value.total_duration_seconds = Math.round(value.total_duration_ms) / 1000;
+    value.average_duration_seconds = value.calls ? Math.round((value.total_duration_seconds / value.calls) * 1000) / 1000 : 0;
   }
   const firstRunStart = [...runStarts.values()].sort()[0];
   const firstEvidenceDelay = milliseconds(firstRunStart, firstEvidenceTimestamp);
   const runIds = [...new Set([...runStarts.keys(), ...runEnds.keys(), ...runTurns.keys()])];
+  const runDurations = runIds.map((id) => milliseconds(runStarts.get(id), runEnds.get(id))).filter((value): value is number => value !== undefined);
+  const average = (values: number[]): number | undefined => values.length
+    ? Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 1000) / 1000
+    : undefined;
+  const averageFirstDelta = average(firstDeltaSeconds);
+  const averageModelCompletion = average(modelCompletionSeconds);
+  const averageProviderHeaders = average(providerHeadersSeconds);
 
   return {
     session_id: sessionId,
@@ -178,7 +209,14 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
     provider_requests: providerRequests,
     provider_errors: providerErrors,
     compactions,
-    ...(firstEvidenceDelay === undefined ? {} : { first_evidence_add_delay_ms: firstEvidenceDelay }),
+    total_elapsed_seconds: Math.round(runDurations.reduce((sum, value) => sum + value, 0)) / 1000,
+    ...(averageFirstDelta === undefined ? {} : { average_first_delta_seconds: averageFirstDelta }),
+    ...(averageModelCompletion === undefined ? {} : { average_model_completion_seconds: averageModelCompletion }),
+    ...(averageProviderHeaders === undefined ? {} : { average_provider_headers_seconds: averageProviderHeaders }),
+    ...(firstEvidenceDelay === undefined ? {} : {
+      first_evidence_add_delay_ms: firstEvidenceDelay,
+      first_evidence_add_delay_seconds: Math.round(firstEvidenceDelay) / 1000,
+    }),
     ...(firstEvidenceTurn === undefined ? {} : { first_evidence_add_turn: firstEvidenceTurn }),
     full_text_reads: fullTextReads,
     abstract_only_reads: abstractOnlyReads,
@@ -188,7 +226,7 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
       const duration = milliseconds(runStarts.get(runId), runEnds.get(runId));
       return {
         run_id: runId,
-        ...(duration === undefined ? {} : { duration_ms: duration }),
+        ...(duration === undefined ? {} : { duration_ms: duration, duration_seconds: Math.round(duration) / 1000 }),
         turns: runTurns.get(runId)?.size ?? 0,
         tool_calls: runToolCalls.get(runId) ?? 0,
         tool_errors: runToolErrors.get(runId) ?? 0,

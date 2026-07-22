@@ -5,7 +5,20 @@ import { TrajectoryWriter } from "../observability/trajectory.js";
 import { piSessionDirectory } from "./sessionPath.js";
 
 type ActiveTool = { startedAt: number; toolName: string; args: unknown };
-type ActiveProvider = { id: number; startedAt: number };
+type ActiveProvider = {
+  id: number;
+  startedAt: number;
+  headersAt?: number;
+  firstDeltaAt?: number;
+};
+
+function elapsed(startedAt: number, endedAt = performance.now()): { duration_ms: number; duration_seconds: number } {
+  const milliseconds = Math.max(0, endedAt - startedAt);
+  return {
+    duration_ms: Math.round(milliseconds * 100) / 100,
+    duration_seconds: Math.round(milliseconds) / 1000,
+  };
+}
 
 function contentChars(content: unknown): number {
   if (typeof content === "string") return content.length;
@@ -59,6 +72,9 @@ export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on">): void {
   let turnIndex: number | undefined;
   let providerCounter = 0;
   let activeProvider: ActiveProvider | undefined;
+  let runStartedAt: number | undefined;
+  let agentStartedAt: number | undefined;
+  let turnStartedAt: number | undefined;
   const activeTools = new Map<string, ActiveTool>();
 
   const ensureWriter = (ctx: any): TrajectoryWriter => {
@@ -83,6 +99,9 @@ export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on">): void {
     turnIndex = undefined;
     activeTools.clear();
     activeProvider = undefined;
+    runStartedAt = undefined;
+    agentStartedAt = undefined;
+    turnStartedAt = undefined;
     await record(ctx, "session_start", {
       reason: event.reason,
       previous_session_file: event.previousSessionFile,
@@ -94,6 +113,7 @@ export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on">): void {
     runCounter += 1;
     runId = `${compactTimestamp()}-${runCounter}`;
     turnIndex = undefined;
+    runStartedAt = performance.now();
     const skills = Array.isArray(event.systemPromptOptions?.skills)
       ? event.systemPromptOptions.skills.map((skill: any) => skill?.name).filter(Boolean)
       : [];
@@ -111,18 +131,29 @@ export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on">): void {
     }, true);
   });
 
-  pi.on("agent_start", async (_event, ctx) => record(ctx, "agent_start"));
-  pi.on("agent_end", async (event, ctx) => record(ctx, "agent_end", { generated_message_count: event.messages.length }));
-  pi.on("agent_settled", async (_event, ctx) => record(ctx, "run_settled", { context_usage: ctx.getContextUsage?.() }));
+  pi.on("agent_start", async (_event, ctx) => {
+    agentStartedAt = performance.now();
+    await record(ctx, "agent_start");
+  });
+  pi.on("agent_end", async (event, ctx) => record(ctx, "agent_end", {
+    generated_message_count: event.messages.length,
+    ...(agentStartedAt === undefined ? {} : elapsed(agentStartedAt)),
+  }));
+  pi.on("agent_settled", async (_event, ctx) => record(ctx, "run_settled", {
+    context_usage: ctx.getContextUsage?.(),
+    ...(runStartedAt === undefined ? {} : elapsed(runStartedAt)),
+  }));
 
   pi.on("turn_start", async (event, ctx) => {
     turnIndex = event.turnIndex;
+    turnStartedAt = performance.now();
     await record(ctx, "turn_start", { pi_timestamp: event.timestamp });
   });
   pi.on("turn_end", async (event, ctx) => record(ctx, "turn_end", {
     tool_result_count: event.toolResults.length,
     stop_reason: event.message?.role === "assistant" ? event.message.stopReason : undefined,
     context_usage: ctx.getContextUsage?.(),
+    ...(turnStartedAt === undefined ? {} : elapsed(turnStartedAt)),
   }));
 
   pi.on("context", async (event, ctx) => record(ctx, "context_snapshot", {
@@ -130,9 +161,34 @@ export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on">): void {
     context_usage: ctx.getContextUsage?.(),
   }));
 
+  pi.on("message_update", async (event, ctx) => {
+    const deltaType = event.assistantMessageEvent.type;
+    if (!activeProvider || activeProvider.firstDeltaAt !== undefined || !["thinking_delta", "text_delta", "toolcall_delta"].includes(deltaType)) return;
+    activeProvider.firstDeltaAt = performance.now();
+    await record(ctx, "model_first_delta", {
+      request_index: activeProvider.id,
+      delta_type: deltaType,
+      ...elapsed(activeProvider.startedAt, activeProvider.firstDeltaAt),
+    });
+  });
+
   pi.on("message_end", async (event, ctx) => {
     if (event.message.role !== "assistant") return;
-    await record(ctx, "assistant_message", event.message, true);
+    const request = activeProvider;
+    activeProvider = undefined;
+    await record(ctx, "assistant_message", {
+      ...event.message,
+      request_timing: request ? {
+        request_index: request.id,
+        ...elapsed(request.startedAt),
+        ...(request.headersAt === undefined ? {} : {
+          headers_seconds: elapsed(request.startedAt, request.headersAt).duration_seconds,
+        }),
+        ...(request.firstDeltaAt === undefined ? {} : {
+          first_delta_seconds: elapsed(request.startedAt, request.firstDeltaAt).duration_seconds,
+        }),
+      } : undefined,
+    }, true);
   });
 
   pi.on("tool_execution_start", async (event, ctx) => {
@@ -150,7 +206,7 @@ export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on">): void {
       tool_call_id: event.toolCallId,
       tool_name: event.toolName,
       is_error: event.isError,
-      duration_ms: active ? Math.round((performance.now() - active.startedAt) * 100) / 100 : undefined,
+      ...(active ? elapsed(active.startedAt) : {}),
       result: event.result,
     });
   });
@@ -166,13 +222,13 @@ export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on">): void {
   });
   pi.on("after_provider_response", async (event, ctx) => {
     const request = activeProvider;
-    activeProvider = undefined;
+    if (request) request.headersAt = performance.now();
     await record(ctx, "provider_response", {
       request_index: request?.id,
       provider: ctx.model?.provider,
       model: ctx.model?.id,
       status: event.status,
-      duration_to_headers_ms: request ? Math.round((performance.now() - request.startedAt) * 100) / 100 : undefined,
+      ...(request ? elapsed(request.startedAt, request.headersAt) : {}),
       headers: selectedResponseHeaders(event.headers),
     });
   });

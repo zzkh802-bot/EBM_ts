@@ -10,6 +10,7 @@ import {
 import { Type } from "typebox";
 import { addEvidence, listEvidence, readEvidence } from "../tools/evidence.js";
 import { registerCompactionArtifacts } from "./compactionArtifacts.js";
+import { registerEbmIdentity } from "./ebmIdentity.js";
 import { registerGuidelineTools } from "./guidelineTools.js";
 import { registerPubMedTools } from "./pubmedTools.js";
 import { registerReportTools } from "./reportTools.js";
@@ -18,6 +19,8 @@ import { registerTrajectoryRecorder } from "./trajectoryRecorder.js";
 import { registerWebTools } from "./webTools.js";
 
 export function registerEbmTools(pi: ExtensionAPI): void {
+  registerEbmIdentity(pi);
+
   pi.registerTool({
     name: "evidence_add",
     label: "Add Evidence",

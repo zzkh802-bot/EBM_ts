@@ -164,3 +164,13 @@ The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening ra
 - Markdown provides a readable run/turn/thinking/tool chronology. JSONL uses a versioned normalized event record for downstream model analysis and eval.
 - Large tool strings are bounded while finalized thinking is preserved; obvious secret-bearing fields are redacted and files use owner-only permissions.
 - Added `npm run trace:analyze` to calculate turns, tool failures and latency, repeated tool actions, time/turn to first `evidence_add`, full-text versus abstract-only reads, provider errors, compactions, thinking/response volume, and token/cache usage.
+- Added explicit second-level wall-clock fields for the full run, each turn, provider headers, first thinking/text/tool-call delta, complete model message, and each tool invocation.
+- Hardened trace redaction for embedded Authorization/OAuth/API-key/cookie/Lark webhook text as well as structured secret fields. Pi native session JSONL can still retain text already exposed to the model, so diagnostics must never print credentials.
+
+### First measured real E2E baseline
+
+- Kept Pi's generated system prompt, dynamic tools, guidelines, context, and skills. A small `before_agent_start` extension changes only the opening coding-agent identity to an evidence-based-medicine agent identity.
+- Removed the legacy mandatory `research_frame.md` sections from the clinical writing skill and aligned it with the mechanical rule that ordinary web-search snippets are discovery-only while explicit PubMed abstract claims remain eligible.
+- Ran the acute ischemic stroke/alteplase example with DeepSeek V4 Flash and high thinking. It completed successfully, registered eight evidence records, and wrote a verified Chinese report.
+- Independent wall time was 164.51 seconds; trajectory time was 163.001 seconds. The run used 33 turns and 52 tool calls, reached first evidence at turn 17 / 85.72 seconds, and had no provider HTTP errors.
+- The trajectory exposed a concrete locality defect rather than a belief-state defect: archive output told the model to use Pi `read` with a session-relative `sources/...` path, but built-in `read` resolves from the workspace root. The model spent repeated `bash/find/grep` calls locating files and initially supplied two invalid evidence ranges. Fix model-visible read paths before rerunning the case.

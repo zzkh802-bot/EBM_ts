@@ -92,7 +92,9 @@ data/sessions/{sessionId}/trace/trajectory.md     # human-readable thinking/tool
 data/sessions/{sessionId}/trace/trajectory.jsonl  # machine-readable eval stream
 ```
 
-The recorder uses Pi's native message, turn, tool, provider, model, compaction, and session hooks. It stores finalized thinking blocks when the provider exposes them, tool arguments/results and durations, provider status/latency, token/cache usage, and runtime configuration hashes. It never calls `sendMessage()` or `appendEntry()`, so trace data is not sent to the model. Trace files are local, ignored by git, and created with owner-only permissions.
+The recorder uses Pi's native message, turn, tool, provider, model, compaction, and session hooks. It stores finalized thinking blocks when the provider exposes them, tool arguments/results and durations, end-to-end/turn/model/provider timing in seconds, token/cache usage, and runtime configuration hashes. It never calls `sendMessage()` or `appendEntry()`, so trace data is not sent to the model. Structured secret fields and common embedded Authorization, OAuth, API-key, cookie, and Lark webhook forms are redacted. Trace files are local, ignored by git, and created with owner-only permissions. Pi's native session JSONL may still preserve diagnostic text that was already exposed to the model, so credentials must never be printed by tools or diagnostics.
+
+Pi's generated default system prompt and complete general-purpose tool set are retained; a project extension changes only the opening coding-agent identity to an EBM-agent identity. Detailed clinical behavior remains in project context and lazily loaded skills.
 
 Analyze the newest trace or an explicit file:
 

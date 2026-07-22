@@ -120,6 +120,12 @@ Do not migrate old Python sessions/data. The old repo remains reference material
 
 Migrate writing/style skills that constrain final report/manuscript style. Do not bulk-migrate unrelated workflow/runtime skills.
 
+### Pi system prompt adaptation
+
+Retain Pi's generated default system prompt structure and all general-purpose tools. Do not replace it with a static `.pi/SYSTEM.md`, because that would discard dynamic tool snippets and guidelines. A project-local `before_agent_start` hook replaces only the opening coding-assistant identity with an EBM-agent identity; project context and skills provide the clinical rules. Modify vendored prompt construction only if measured behavior cannot be corrected through this native hook.
+
+Do not require `research_frame.md`, `state.md`, or a Todo ledger. Reconsider a sparse belief checkpoint only after trajectory evidence demonstrates a continuity failure.
+
 ### Developer observability
 
 Use Pi's native extension lifecycle events and persisted session JSONL instead of adding hooks to the AgentLoop. A project-local extension may write derived developer traces under the ignored session workspace.

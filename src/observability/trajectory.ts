@@ -12,13 +12,24 @@ export type TrajectoryRecord = {
   data: unknown;
 };
 
-const SECRET_KEY = /^(?:api[_-]?key|authorization|password|passwd|secret|token|access[_-]?token|refresh[_-]?token|auth[_-]?token|cookie)$/i;
+const SECRET_KEY = /^(?:api[_-]?key|authorization|password|passwd|secret|token|access|refresh|access[_-]?token|refresh[_-]?token|auth[_-]?token|id[_-]?token|client[_-]?secret|cookie|set-cookie)$/i;
+
+function redactText(value: string): string {
+  return value
+    .replace(/(authorization\s*:\s*(?:bearer|basic)\s+)[^\s,;]+/gi, "$1[REDACTED]")
+    .replace(/((?:set-)?cookie\s*:\s*)[^\r\n]+/gi, "$1[REDACTED]")
+    .replace(/((?:api[_-]?key|access[_-]?token|refresh[_-]?token|auth[_-]?token|id[_-]?token|client[_-]?secret|password|passwd|secret)\s*["']?\s*[:=]\s*["']?)[^\s"',;}\]]+/gi, "$1[REDACTED]")
+    .replace(/([?&](?:access_token|refresh_token|token|key)=)[^&#\s]+/gi, "$1[REDACTED]")
+    .replace(/https:\/\/(?:open\.feishu\.cn|open\.larksuite\.com)\/open-apis\/bot\/v2\/hook\/[^\s"'?#]+/gi, "[REDACTED_LARK_WEBHOOK]")
+    .replace(/\bsk-[A-Za-z0-9_-]{12,}\b/g, "[REDACTED_API_KEY]");
+}
 
 function sanitize(value: unknown, key = "", preserveLongStrings = false): unknown {
   if (SECRET_KEY.test(key)) return "[REDACTED]";
   if (typeof value === "string") {
-    if (preserveLongStrings || value.length <= 12_000) return value;
-    return { truncated: true, chars: value.length, preview: value.slice(0, 12_000) };
+    const redacted = redactText(value);
+    if (preserveLongStrings || redacted.length <= 12_000) return redacted;
+    return { truncated: true, chars: redacted.length, preview: redacted.slice(0, 12_000) };
   }
   if (Array.isArray(value)) return value.slice(0, 200).map((item) => sanitize(item, "", preserveLongStrings));
   if (value && typeof value === "object") {
@@ -49,6 +60,7 @@ function formatAssistant(data: any): string[] {
   if (data.provider || data.model) lines.push(`- Model: ${data.provider ?? "unknown"}/${data.model ?? "unknown"}`);
   if (data.stopReason) lines.push(`- Stop reason: ${data.stopReason}`);
   if (data.usage) lines.push(`- Usage: ${JSON.stringify(data.usage)}`);
+  if (data.request_timing) lines.push(`- Model timing: ${JSON.stringify(data.request_timing)}`);
   lines.push("");
   for (const part of Array.isArray(data.content) ? data.content : []) {
     if (part?.type === "thinking") lines.push("#### Thinking", "", markdownFence(String(part.thinking ?? "")), "");
@@ -79,7 +91,7 @@ function formatMarkdown(record: TrajectoryRecord): string {
       lines.push(`### Tool start: ${data.tool_name ?? "unknown"}`, "", `- Call: ${data.tool_call_id ?? "unknown"}`, `- ${meta.join(" · ")}`, "", blockText(data.args ?? {}), "");
       break;
     case "tool_end":
-      lines.push(`### Tool end: ${data.tool_name ?? "unknown"}`, "", `- Call: ${data.tool_call_id ?? "unknown"}`, `- Status: ${data.is_error ? "error" : "success"}`, `- Duration: ${data.duration_ms ?? "?"} ms`, "", blockText(data.result ?? {}), "");
+      lines.push(`### Tool end: ${data.tool_name ?? "unknown"}`, "", `- Call: ${data.tool_call_id ?? "unknown"}`, `- Status: ${data.is_error ? "error" : "success"}`, `- Duration: ${data.duration_seconds ?? "?"} s (${data.duration_ms ?? "?"} ms)`, "", blockText(data.result ?? {}), "");
       break;
     case "provider_request":
     case "provider_response":
@@ -88,7 +100,7 @@ function formatMarkdown(record: TrajectoryRecord): string {
       lines.push(`### ${record.event.replaceAll("_", " ")}`, "", `_${meta.join(" · ")}_`, "", blockText(data), "");
       break;
     case "run_settled":
-      lines.push("### Run settled", "", `_${meta.join(" · ")}_`, "");
+      lines.push("### Run settled", "", `- Total elapsed: ${data.duration_seconds ?? "?"} s`, `_${meta.join(" · ")}_`, "");
       break;
     default:
       lines.push(`### ${record.event.replaceAll("_", " ")}`, "", `_${meta.join(" · ")}_`, "", blockText(data), "");
