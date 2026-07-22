@@ -38,6 +38,14 @@ Normalization goals:
 - keep headings/lists readable
 - produce deterministic output for identical input
 
+### Model-visible network read contract
+
+Read-like network tools archive the complete normalized source before model exposure. Their immediate model-visible result is navigation data plus a bounded exact preview, not the complete long document: semantic evidence path, Pi-readable workspace path, total one-based line range, up to 20 Markdown heading locations, a 5KB preview, and a copyable `read(path, offset, limit)` continuation hint.
+
+Pi's built-in `read` remains unchanged. Evidence windows use the same one-based line numbers as Pi `read`, so the model can pass an observed offset/limit directly to `evidence_add`.
+
+Normalize external transport artifacts before both archive and preview: decode numeric/common HTML entities, normalize Unicode spacing, remove zero-width/invalid control characters, and preserve inline PubMed XML text order. Transport envelopes such as guideline MCP JSON are not source content and must be unwrapped before archive.
+
 ### web_read fallback order
 
 Accepted order:

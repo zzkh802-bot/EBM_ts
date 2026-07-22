@@ -117,7 +117,8 @@ function textOf(value: unknown): string {
 }
 
 function parsePubmedArticles(xml: string): ParsedArticle[] {
-  const parsed = xmlParser.parse(xml) as any;
+  const withoutInlineFormatting = xml.replace(/<\/?(?:i|b|em|strong|sup|sub|u)(?:\s[^>]*)?>/gi, "");
+  const parsed = xmlParser.parse(withoutInlineFormatting) as any;
   return asArray(parsed?.PubmedArticleSet?.PubmedArticle).map((article: any): ParsedArticle => {
     const citation = article?.MedlineCitation ?? {};
     const articleData = citation.Article ?? {};
@@ -219,7 +220,14 @@ function renderSearch(
   warnings: string[],
 ): string {
   const byPmid = new Map(articles.map((article) => [article.pmid, article]));
-  const lines = [`# PubMed search: ${query}`, "", `Results: ${pmids.length}`, ""];
+  const lines = [
+    `# PubMed search: ${query}`,
+    "",
+    `Status: ${pmids.length ? "completed" : "no_results"}`,
+    `Results: ${pmids.length}`,
+    ...(pmids.length ? [] : ["", "No PubMed records matched this query."]),
+    "",
+  ];
   pmids.forEach((pmid, index) => {
     const article = byPmid.get(pmid);
     lines.push(`## ${index + 1}. ${article?.title ?? `PMID ${pmid}`}`, "", `PMID: ${pmid}`, "Source status: PubMed abstract");
@@ -259,6 +267,7 @@ export async function searchPubMed(input: {
     searchUrl.searchParams.set("retmode", "json");
     searchUrl.searchParams.set("retmax", String(Math.min(Math.max(input.maxResults ?? 10, 1), 50)));
     searchUrl.searchParams.set("term", input.query);
+    searchUrl.searchParams.set("sort", "relevance");
     addNcbiIdentity(searchUrl, input);
     const searchResponse = await fetchTimed(fetcher, searchUrl, timeoutMs, retries);
     const searchFailure = await requireOk(searchResponse);

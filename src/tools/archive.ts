@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { normalizeMarkdown } from "./markdown.js";
+import { cleanExternalText, normalizeMarkdown } from "./markdown.js";
 
 export type SourceArchiveInput = {
   sessionDir: string;
@@ -16,7 +16,7 @@ export type SourceArchiveRecord = {
   sha256: string;
   chars: number;
   lines: number;
-  bodyLineOffset: number;
+  bodyLineStart: number;
   content: string;
   sourceUrl?: string;
   title?: string;
@@ -49,7 +49,7 @@ export function stableArchiveName(input: Pick<SourceArchiveInput, "kind" | "sour
 }
 
 export async function archiveSource(input: SourceArchiveInput): Promise<SourceArchiveRecord> {
-  const content = normalizeMarkdown(input.content);
+  const content = normalizeMarkdown(cleanExternalText(input.content));
   const normalizedInput = { ...input, content };
   const sha256 = createHash("sha256").update(content).digest("hex");
   const baseName = stableArchiveName(normalizedInput).replace(/\.md$/, "");
@@ -80,13 +80,13 @@ export async function archiveSource(input: SourceArchiveInput): Promise<SourceAr
       }
     }
   }
-  const bodyLineOffset = (frontmatter.match(/\n/g) ?? []).length;
+  const bodyLineStart = (frontmatter.match(/\n/g) ?? []).length + 1;
   return {
     path: rel,
     sha256,
     chars: content.length,
     lines: content.split("\n").length,
-    bodyLineOffset,
+    bodyLineStart,
     content,
     ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
     ...(input.title ? { title: input.title } : {}),

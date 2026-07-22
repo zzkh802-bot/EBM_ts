@@ -62,7 +62,7 @@ describe("EBM Pi extension tools", () => {
       claim: "It works.",
       relation: "supports",
       source_path: "sources/read/study.md",
-      offset: 1,
+      offset: 2,
       limit: 1,
     }, undefined, undefined, ctx);
 

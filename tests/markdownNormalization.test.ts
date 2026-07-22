@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeMarkdown } from "../src/tools/markdown.js";
+import { cleanExternalText, normalizeMarkdown } from "../src/tools/markdown.js";
 
 describe("normalizeMarkdown", () => {
   it("splits pathological one-line prose into deterministic stable lines", () => {
@@ -14,6 +14,11 @@ describe("normalizeMarkdown", () => {
     expect(lines.length).toBeGreaterThan(10);
     expect(Math.max(...lines.map((line) => line.length))).toBeLessThanOrEqual(160);
     expect(first.replace(/\n/g, " ")).toBe(input);
+  });
+
+  it("cleans encoded entities, zero-width characters, non-breaking spaces, and controls", () => {
+    const input = "BP&#xa0;&lt;185/110&#x2009;mmHg\u200B\u0007 and &amp; mortality";
+    expect(cleanExternalText(input)).toBe("BP <185/110 mmHg and & mortality");
   });
 
   it("does not wrap fenced code or Markdown table rows", () => {

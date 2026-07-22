@@ -48,7 +48,7 @@ export function registerEbmTools(pi: ExtensionAPI): void {
         "other",
       ] as const)),
       source_path: Type.String({ description: "Session-relative archived source Markdown path" }),
-      offset: Type.Integer({ minimum: 0, description: "Zero-based source line offset" }),
+      offset: Type.Integer({ minimum: 1, description: "One-based source line number, matching Pi read" }),
       limit: Type.Integer({ minimum: 1, maximum: 200, description: "Number of consecutive exact source lines" }),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

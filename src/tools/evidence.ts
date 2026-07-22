@@ -123,14 +123,14 @@ async function updateEvidenceIndex(outDir: string, node: EvidenceNode): Promise<
 export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode> {
   assertRelativeSafe(input.sourcePath);
   if (input.limit <= 0) throw new Error("limit must be positive");
-  if (input.offset < 0) throw new Error("offset must be non-negative");
+  if (input.offset < 1) throw new Error("offset must be a positive 1-based line number");
   if (!input.question.trim()) throw new Error("question is required");
   if (!input.claim.trim()) throw new Error("claim is required");
 
   const sourceAbs = await resolveExistingSessionPath(input.sessionDir, input.sourcePath);
   const text = await readFile(sourceAbs, "utf8");
   const lines = text.split("\n");
-  const selected = lines.slice(input.offset, input.offset + input.limit);
+  const selected = lines.slice(input.offset - 1, input.offset - 1 + input.limit);
   if (selected.length !== input.limit) throw new Error("source line range is outside source file");
   const quote = selected.join("\n");
   const contentHash = createHash("sha256").update(quote).digest("hex");
@@ -275,7 +275,7 @@ export async function verifyEvidence(sessionDir: string, node: EvidenceNode): Pr
   try {
     const sourcePath = await resolveExistingSessionPath(sessionDir, node.sourcePath);
     const source = await readFile(sourcePath, "utf8");
-    const quote = source.split("\n").slice(node.lineStart, node.lineEnd + 1).join("\n");
+    const quote = source.split("\n").slice(node.lineStart - 1, node.lineEnd).join("\n");
     if (quote !== node.quote) errors.push("quote does not match source slice");
     const hash = createHash("sha256").update(node.quote).digest("hex");
     if (hash !== node.contentHash) errors.push("contentHash mismatch");

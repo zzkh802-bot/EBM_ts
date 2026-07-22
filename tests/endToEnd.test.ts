@@ -30,7 +30,7 @@ describe("basic EBM vertical flow", () => {
       claim: "The intervention reduced the primary outcome.",
       relation: "supports",
       sourcePath: search.archive.path,
-      offset: search.archive.bodyLineOffset + quoteIndex,
+      offset: search.archive.bodyLineStart + quoteIndex,
       limit: 1,
     });
     const report = await writeReport({

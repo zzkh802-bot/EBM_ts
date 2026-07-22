@@ -15,7 +15,7 @@ async function fixture() {
     claim: "Treatment reduced mortality.",
     relation: "supports",
     sourcePath: "sources/read/study.md",
-    offset: 1,
+    offset: 2,
     limit: 1,
   });
   return { sessionDir, evidence };
@@ -73,7 +73,7 @@ describe("verified Markdown reports", () => {
       relation: "supports",
       provenance: "guideline_mirror_unverified",
       sourcePath: "mirror.md",
-      offset: 0,
+      offset: 1,
       limit: 1,
     });
     await expect(writeReport({

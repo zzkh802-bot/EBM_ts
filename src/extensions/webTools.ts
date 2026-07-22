@@ -28,7 +28,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
         ...(process.env.MINERU_V4_BASE_URL ? { mineruBaseUrl: process.env.MINERU_V4_BASE_URL } : {}),
       });
       if (!result.ok) throw toolError(result.error);
-      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path));
+      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path), { compactRead: true });
       pi.events.emit("ebm:source_archived", { sessionId, provider: result.provider, path: result.archive.path, kind: "read" });
       return {
         content: [{ type: "text", text: output.text }],

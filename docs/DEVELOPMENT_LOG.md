@@ -177,3 +177,14 @@ The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening ra
 - Changed archive output to distinguish the session-relative `Evidence source_path` consumed by `evidence_add` from the workspace-relative `Readable archive path` consumed by Pi `read`.
 - Repeated the exact acute-stroke prompt. Wall time fell from 164.51 to 111.47 seconds; traced time from 163.001 to 109.905 seconds; turns from 33 to 17; tool calls from 52 to 30; first evidence from 85.72 to 40.099 seconds; PubMed searches from 13 to 4; shell calls from 13 to 1.
 - The rerun exposed two smaller mechanical errors. Archive output now states its total valid offset range, and `pubmed_read` strips common `PMID:`, `PMCID:`, and `DOI:` labels before identifier resolution.
+
+### Network acquisition output aligned with the Python EBM contract
+
+- Kept Pi's general-purpose `read` unchanged. Enhanced only model-visible output from read-like network tools.
+- `web_read`, `pubmed_read`, and `guideline_mcp_read` now archive the complete normalized source while returning at most a 5KB exact preview, a heading map with up to 20 one-based line locations, total archive lines, and a copyable Pi `read(path, offset, limit)` continuation hint.
+- Converted archive/evidence windows from zero-based offsets to one-based lines so Pi `read` output can be passed directly to `evidence_add` without arithmetic or off-by-one risk.
+- Added pre-archive external-text cleaning for numeric/common HTML entities, NBSP/thin spaces, zero-width characters, soft hyphens, BOMs, and invalid control characters.
+- Removed common inline formatting tags before PubMed XML parsing so mixed content such as `<i>p</i> &lt; 0.001` retains word order instead of becoming detached `p p p` tokens.
+- Guideline MCP read responses that contain a JSON envelope now archive only the embedded Markdown under the semantic guideline title, rather than archiving transport fields and hash-like `doc_id` values as the document body/name.
+- PubMed ESearch now requests relevance ordering explicitly. Empty searches remain reproducible retrieval artifacts but are marked `Status: no_results` with an explicit no-match message.
+- A direct network check for `NINDS rt-PA acute ischemic stroke` returned an archived result with one-based `bodyLineStart`, no encoded numeric entities, and `Status: completed`.

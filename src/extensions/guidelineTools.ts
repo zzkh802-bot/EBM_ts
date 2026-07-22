@@ -67,7 +67,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
         ...(params.max_chars === undefined ? {} : { maxChars: params.max_chars }),
       });
       if (!result.ok) throw new Error(JSON.stringify(result.error));
-      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path));
+      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path), { compactRead: true });
       pi.events.emit("ebm:source_archived", { sessionId, provider: "guideline_mcp", path: result.archive.path, kind: "read" });
       return {
         content: [{ type: "text", text: output.text }],

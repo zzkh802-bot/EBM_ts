@@ -37,8 +37,22 @@ describe("source archive", () => {
 
     expect(output).toContain(`Evidence source_path: ${record.path}`);
     expect(output).toContain(`Readable archive path: data/sessions/session-1/${record.path}`);
-    expect(output).toContain(`Archive offsets: 0-${record.bodyLineOffset + record.lines - 1}`);
-    expect(output).toContain(`read with path ${readable}`);
+    expect(output).toContain(`Archive lines: 1-${record.bodyLineStart + record.lines - 1}`);
+    expect(output).toContain(`read(path=${JSON.stringify(readable)}, offset=N, limit=M)`);
+  });
+
+  it("returns a bounded read preview and a one-based heading map", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
+    const content = `# Introduction\n\n${"clinical evidence ".repeat(500)}\n\n## Results\n\nOutcome improved.`;
+    const record = await archiveSource({ sessionDir, kind: "read", title: "Long source", content });
+    const output = archiveToolText(record, readableArchivePath("session-1", record.path), { compactRead: true });
+
+    expect(output.truncated).toBe(true);
+    expect(output.text).toContain("Source map:");
+    expect(output.text).toContain(`# Introduction — line ${record.bodyLineStart}`);
+    expect(output.text).toContain("## Results — line");
+    expect(output.text).toContain("Preview truncated at 5000 bytes");
+    expect(output.text).toContain("use the same 1-based offset/limit with evidence_add");
   });
 
   it("normalizes content before hashing, archiving, and returning model-visible text", async () => {
@@ -52,6 +66,6 @@ describe("source archive", () => {
     expect(record.content).toBe(archivedBody);
     expect(record.content.split("\n").length).toBeGreaterThan(1);
     expect(record.lines).toBe(record.content.split("\n").length);
-    expect(saved.split("\n").slice(record.bodyLineOffset).join("\n")).toBe(record.content);
+    expect(saved.split("\n").slice(record.bodyLineStart - 1).join("\n")).toBe(record.content);
   });
 });

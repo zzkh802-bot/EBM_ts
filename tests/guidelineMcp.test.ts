@@ -52,7 +52,12 @@ describe("guideline MCP", () => {
     const client = {
       callTool: async (name: string) => {
         calls.push(name);
-        return { text: name === "search" ? '[{"doc_id":"g1","title":"Guideline"}]' : "# Guideline\n\nRecommendation text.", raw: {} };
+        return {
+          text: name === "search"
+            ? '[{"doc_id":"g1","title":"Guideline"}]'
+            : JSON.stringify({ doc_id: "g1_hash", title: "Heart Failure Guideline 2025", content: "# Guideline\n\nRecommendation&#xa0;text." }),
+          raw: {},
+        };
       },
     };
     const search = await searchGuidelines({ sessionDir, query: "heart failure", client });
@@ -60,7 +65,11 @@ describe("guideline MCP", () => {
 
     expect(calls).toEqual(["search", "read"]);
     expect(search.ok && search.archive.path).toMatch(/^sources\/search/);
-    expect(read.ok && read.archive.path).toMatch(/^sources\/read/);
-    if (read.ok) expect(await readFile(path.join(sessionDir, read.archive.path), "utf8")).toContain("Recommendation text");
+    expect(read.ok && read.archive.path).toBe("sources/read/heart-failure-guideline-2025.md");
+    if (read.ok) {
+      const archived = await readFile(path.join(sessionDir, read.archive.path), "utf8");
+      expect(archived).toContain("Recommendation text");
+      expect(archived).not.toContain("doc_id");
+    }
   });
 });

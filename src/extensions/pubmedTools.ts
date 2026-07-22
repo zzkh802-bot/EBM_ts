@@ -78,7 +78,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
         ...ncbiOptions(),
       });
       if (!result.ok) throw toolError(result.error);
-      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path));
+      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path), { compactRead: true });
       const warningText = result.warnings.length ? `\n\nWarnings:\n${result.warnings.map((warning) => `- ${warning}`).join("\n")}` : "";
       pi.events.emit("ebm:source_archived", { sessionId, provider: "pubmed", path: result.archive.path, kind: "read", pmid: result.pmid });
       return {

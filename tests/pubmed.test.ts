@@ -16,7 +16,7 @@ function mockFetch(responses: Response[]) {
   return { fetcher: fetcher as typeof fetch, urls };
 }
 
-const articleXml = `<?xml version="1.0"?><PubmedArticleSet><PubmedArticle><MedlineCitation><PMID>123</PMID><Article><ArticleTitle>Aspirin trial</ArticleTitle><Abstract><AbstractText Label="BACKGROUND">Clinical background.</AbstractText><AbstractText Label="RESULTS">Reduced events.</AbstractText></Abstract><Journal><Title>Medical Journal</Title></Journal></Article></MedlineCitation><PubmedData><ArticleIdList><ArticleId IdType="pubmed">123</ArticleId><ArticleId IdType="pmc">PMC999</ArticleId><ArticleId IdType="doi">10.1/example</ArticleId></ArticleIdList></PubmedData></PubmedArticle></PubmedArticleSet>`;
+const articleXml = `<?xml version="1.0"?><PubmedArticleSet><PubmedArticle><MedlineCitation><PMID>123</PMID><Article><ArticleTitle>Aspirin trial</ArticleTitle><Abstract><AbstractText Label="BACKGROUND">Clinical background.</AbstractText><AbstractText Label="RESULTS">Reduced events with <i>p</i> &lt; 0.001.</AbstractText></Abstract><Journal><Title>Medical Journal</Title></Journal></Article></MedlineCitation><PubmedData><ArticleIdList><ArticleId IdType="pubmed">123</ArticleId><ArticleId IdType="pmc">PMC999</ArticleId><ArticleId IdType="doi">10.1/example</ArticleId></ArticleIdList></PubmedData></PubmedArticle></PubmedArticleSet>`;
 const pmcXml = `<?xml version="1.0"?><pmc-articleset><article><front><article-meta><title-group><article-title>Aspirin trial</article-title></title-group></article-meta></front><body><sec><title>Results</title><p>The full text reports reduced cardiovascular events.</p></sec><sec><title>Limitations</title><p>Follow-up was limited.</p></sec></body></article></pmc-articleset>`;
 
 describe("PubMed archive adapters", () => {
@@ -42,7 +42,7 @@ describe("PubMed archive adapters", () => {
     expect(result.pmids).toEqual(["123"]);
     expect(result.archive.content).toContain("PMID: 123");
     expect(result.archive.content).toContain("Aspirin trial");
-    expect(result.archive.content).toContain("**RESULTS:** Reduced events.");
+    expect(result.archive.content).toContain("**RESULTS:** Reduced events with p < 0.001.");
     expect(result.archive.content).toContain("Similar prevention trial");
     expect(result.relatedPmids).toEqual(["456"]);
     expect(await readFile(path.join(sessionDir, result.archive.path), "utf8")).toContain("Source status: PubMed abstract");
@@ -132,7 +132,9 @@ describe("PubMed archive adapters", () => {
     ]);
     const result = await searchPubMed({ sessionDir, query: "aspirin", fetcher: mock.fetcher, retries: 1 });
     expect(result).toMatchObject({ ok: true, pmids: [] });
+    if (result.ok) expect(result.archive.content).toContain("Status: no_results");
     expect(mock.urls).toHaveLength(2);
+    expect(mock.urls[1]).toContain("sort=relevance");
   });
 
   it("returns structured NCBI errors rather than empty success", async () => {

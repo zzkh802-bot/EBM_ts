@@ -160,6 +160,21 @@ export async function searchGuidelines(input: {
   }
 }
 
+function extractGuidelineDocument(text: string): { content: string; title?: string } {
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const record = parsed as Record<string, unknown>;
+      const content = typeof record.content === "string" ? record.content : undefined;
+      const title = typeof record.title === "string" && record.title.trim() ? record.title.trim() : undefined;
+      if (content?.trim()) return { content, ...(title ? { title } : {}) };
+    }
+  } catch {
+    // Plain Markdown is already the desired document representation.
+  }
+  return { content: text };
+}
+
 export async function readGuideline(input: {
   sessionDir: string;
   client: GuidelineClient;
@@ -174,13 +189,14 @@ export async function readGuideline(input: {
       ...(input.title ? { title: input.title } : {}),
       ...(input.maxChars === undefined ? {} : { max_chars: input.maxChars }),
     });
+    const document = extractGuidelineDocument(result.text);
     return {
       ok: true,
       archive: await archiveSource({
         sessionDir: input.sessionDir,
         kind: "read",
-        title: input.title ?? input.docId ?? "guideline",
-        content: result.text,
+        title: document.title ?? input.title ?? input.docId ?? "guideline",
+        content: document.content,
       }),
     };
   } catch (error) {

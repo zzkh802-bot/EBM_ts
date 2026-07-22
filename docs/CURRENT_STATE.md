@@ -46,8 +46,11 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - No dedicated user-upload workflow is planned; MinerU remains the direct document capability.
 - Acute-stroke real E2E baseline completed in 164.51 wall-clock seconds (163.001 traced seconds): 33 turns, 52 tool calls, and first evidence at 85.72 seconds.
 - After returning a separate workspace-readable archive path, the fixed-case rerun completed in 111.47 wall-clock seconds (109.905 traced seconds): 17 turns, 30 tool calls, first evidence at 40.099 seconds, 4 PubMed searches instead of 13, and 1 shell call instead of 13. Both runs produced verified reports.
-- Archive output now exposes total line bounds, and `pubmed_read` accepts model-natural `PMID:`, `PMCID:`, and `DOI:` prefixes; these address the remaining deterministic errors seen in the second run.
-- `npm run check`: 18 test files / 49 tests passing.
+- Read-like network tools (`web_read`, `pubmed_read`, `guideline_mcp_read`) archive the complete normalized source but expose only a 5KB model preview, up to 20 one-based heading-map entries, the Pi-readable path, total lines, and an actionable `read(offset, limit)` hint.
+- Source/evidence line windows are uniformly one-based to match Pi `read`; archive metadata now uses `bodyLineStart` rather than a zero-based offset.
+- External source normalization decodes numeric/common HTML entities, removes zero-width/control characters, normalizes Unicode spacing, and preserves PubMed mixed inline XML text order. Guideline MCP JSON envelopes are reduced to their semantic title and Markdown content before archive.
+- PubMed search explicitly uses relevance ordering and marks zero-result archives as `Status: no_results`; `pubmed_read` accepts model-natural `PMID:`, `PMCID:`, and `DOI:` prefixes.
+- `npm run check`: 18 test files / 51 tests passing.
 
 ## Non-negotiable decisions
 

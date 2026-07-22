@@ -14,7 +14,7 @@ describe("Markdown evidence ledger", () => {
       claim: "Intervention improves outcome.",
       relation: "supports",
       sourcePath: "source.md",
-      offset: 1,
+      offset: 2,
       limit: 1,
     });
 
@@ -39,7 +39,7 @@ describe("Markdown evidence ledger", () => {
       claim: "The intervention has an effect.",
       relation: "supports",
       sourcePath: "source.md",
-      offset: 1,
+      offset: 2,
       limit: 1,
     });
 
@@ -62,7 +62,7 @@ describe("Markdown evidence ledger", () => {
       relation: "partially_supports",
       provenance: "guideline_mirror_unverified",
       sourcePath: "source.md",
-      offset: 0,
+      offset: 1,
       limit: 1,
     });
     expect(node).toMatchObject({ provenance: "guideline_mirror_unverified", citationEligible: false });
@@ -83,7 +83,7 @@ describe("Markdown evidence ledger", () => {
       claim: "c",
       relation: "supports",
       sourcePath: "linked.md",
-      offset: 0,
+      offset: 1,
       limit: 1,
     })).rejects.toThrow(/outside session directory/);
   });
@@ -96,7 +96,7 @@ describe("Markdown evidence ledger", () => {
       claim: "c",
       relation: "supports",
       sourcePath: "../secret.txt",
-      offset: 0,
+      offset: 1,
       limit: 1,
     })).rejects.toThrow(/unsafe relative path/);
   });

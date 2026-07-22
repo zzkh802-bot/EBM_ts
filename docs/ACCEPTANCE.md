@@ -21,12 +21,12 @@ Expected:
 | Area | Test file | Invariant |
 | --- | --- | --- |
 | URL/Jina | `tests/urlSafety.test.ts` | metadata/private URLs rejected; Jina target preserves HTTPS |
-| Archive | `tests/archive.test.ts` | archive filenames are deterministic; output separates Pi-readable workspace paths from evidence-relative paths and exposes valid offset bounds |
+| Archive | `tests/archive.test.ts` | full normalized sources persist; read-like network output exposes a 5KB preview, one-based heading map, Pi-readable path, and continuation hint |
 | Web | `tests/web.test.ts` | MinerU/Jina/Firecrawl routing is ordered; Tavily/Jina/MinerU results are normalized and archived before exposure |
 | MinerU | `tests/mineru.test.ts` | Premium task polling and ZIP Markdown extraction succeed; task/ZIP failures are explicit |
-| PubMed | `tests/pubmed.test.ts` | search batches abstracts/related hints; read accepts labeled identifiers, uses PMC then bounded OpenAlex/MinerU fallback or marks abstract-only partial results; secrets stay out of archives |
+| PubMed | `tests/pubmed.test.ts` | search uses relevance ordering, marks zero-result snapshots, preserves mixed inline XML text, batches abstracts/related hints; read accepts labeled identifiers and uses bounded full-text fallback |
 | OA resolution | `tests/openAlex.test.ts` | exact PMID resolution, direct-PDF selection, bounded download, and redirect/private-address rejection |
-| Evidence provenance | `tests/evidence.test.ts` | provenance persists; discovery-only and unverified mirrors are citation-ineligible |
+| Evidence provenance | `tests/evidence.test.ts` | provenance persists; discovery-only and unverified mirrors are citation-ineligible; source windows use the same one-based offsets as Pi read |
 | EBM system identity | `tests/ebmIdentity.test.ts` | replaces only Pi's opening coding identity while preserving generated tools, guidelines, context, and skills |
 | Developer trajectory | `tests/trajectory.test.ts` | Pi events produce private Markdown/JSONL traces with full finalized thinking, embedded/structured secret redaction, second-level run/model/tool timing, and no model-context injection |
 | Trajectory analysis | `tests/trajectoryAnalysis.test.ts` | derives turns, repeated actions, evidence timing, tool latency/errors, thinking volume, and token/cache usage |
