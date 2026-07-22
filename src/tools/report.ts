@@ -38,32 +38,33 @@ function renderReferenceSection(references: ReportReference[]): string {
   ].join("\n");
 }
 
-function hasReferenceSection(content: string): boolean {
-  return content.split(/\r?\n/).some((line) => {
-    const match = /^#{1,6}\s*(.*?)\s*$/.exec(line);
-    if (!match) return false;
-    const heading = match[1]!.trim().toLowerCase();
-    return [
-      "参考文献",
-      "参考资料",
-      "参考来源",
-      "资料来源",
-      "引用文献",
-      "引用资料",
-      "参考",
-      "文献",
-      "资料",
-      "references",
-      "bibliography",
-      "sources",
-    ].includes(heading);
-  });
+const REFERENCE_HEADINGS = new Set([
+  "参考文献",
+  "参考资料",
+  "参考来源",
+  "资料来源",
+  "引用文献",
+  "引用资料",
+  "参考",
+  "文献",
+  "资料",
+  "references",
+  "bibliography",
+  "sources",
+]);
+
+function referenceHeadingMatch(line: string): RegExpExecArray | null {
+  const match = /^(?:#{1,6}\s*)?(.*?)\s*$/.exec(line);
+  if (!match) return null;
+  return REFERENCE_HEADINGS.has(match[1]!.trim().toLowerCase()) ? match : null;
 }
 
 function ensureReferenceSection(content: string, references: ReportReference[]): string {
   if (!references.length) return content;
-  if (hasReferenceSection(content)) return content;
-  return normalizeMarkdown(`${content}\n\n${renderReferenceSection(references)}`);
+  const lines = content.split(/\r?\n/);
+  const headingIndex = lines.findIndex((line) => !!referenceHeadingMatch(line));
+  const body = headingIndex >= 0 ? lines.slice(0, headingIndex).join("\n") : content;
+  return normalizeMarkdown(`${body}\n\n${renderReferenceSection(references)}`);
 }
 
 function slug(value: string): string {

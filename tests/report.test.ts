@@ -69,7 +69,7 @@ describe("verified Markdown reports", () => {
     expect(saved).not.toContain(evidence.id);
   });
 
-  it("recognizes common reference-heading variants without duplicate auto-append", async () => {
+  it("canonicalizes common reference-heading variants from structured references", async () => {
     for (const heading of ["# 参考文献", "##    参考文献   ", "# 参考", "# 文献", "# 资料", "### References", "## Sources"]) {
       const { sessionDir, evidence } = await fixture();
       const report = await writeReport({
@@ -80,8 +80,35 @@ describe("verified Markdown reports", () => {
       });
       const saved = await readFile(path.join(sessionDir, report.path), "utf8");
       expect(saved.match(/\[1\]/g)?.length).toBe(2);
-      expect(saved).not.toContain("Randomized trial of the intervention.");
+      expect(saved).toContain("## 参考文献\n\n[1] Randomized trial of the intervention.");
+      expect(saved).not.toContain("Existing reference");
     }
+  });
+
+  it("rewrites one-line model-authored references into one entry per line", async () => {
+    const { sessionDir, evidence } = await fixture();
+    await writeFile(path.join(sessionDir, "sources", "read", "study2.md"), "second result", "utf8");
+    const evidence2 = await addEvidence({
+      sessionDir,
+      question: "Does treatment reduce mortality?",
+      claim: "Second source supports treatment.",
+      relation: "supports",
+      sourcePath: "sources/read/study2.md",
+      offset: 1,
+      limit: 1,
+    });
+    const report = await writeReport({
+      sessionDir,
+      title: "One-line refs report",
+      content: "# Conclusion\n\nTreatment reduced mortality [1,2].\n\n参考文献\n[1] Old one. [2] Old two.",
+      references: [
+        { number: 1, citation: "Randomized trial one.", evidenceId: evidence.id },
+        { number: 2, citation: "Randomized trial two.", evidenceId: evidence2.id },
+      ],
+    });
+    const saved = await readFile(path.join(sessionDir, report.path), "utf8");
+    expect(saved).toContain("## 参考文献\n\n[1] Randomized trial one.\n[2] Randomized trial two.");
+    expect(saved).not.toContain("Old one. [2] Old two.");
   });
 
   it("does not treat non-reference source-context headings as reference sections", async () => {
