@@ -35,6 +35,7 @@ describe("EBM Pi extension tools", () => {
       "evidence_read",
       "pubmed_read",
       "pubmed_search",
+      "report_write",
       "web_read",
       "web_search",
     ]);

@@ -29,7 +29,8 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - Real proxy-environment checks passed for Jina reading NCBI and Tavily search.
 - `pubmed_search` and `pubmed_read` use official E-utilities parameters, direct IPv4, bounded retries, and archived Markdown outputs.
 - Real PubMed search/read checks passed with configured email and API key.
-- `npm run check`: 9 test files / 21 tests passing.
+- `report_write` verifies every Markdown evidence reference against its archived source; evidence-gap reports require explicit opt-in.
+- `npm run check`: 10 test files / 24 tests passing.
 
 ## Non-negotiable decisions
 
@@ -43,7 +44,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 
 ## Active task
 
-Implement verified Markdown report writing, then guideline MCP search/read.
+Implement sequential guideline MCP search/read with timeout and malformed-protocol coverage.
 
 ## Next commands
 

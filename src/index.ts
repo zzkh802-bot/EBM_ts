@@ -10,6 +10,8 @@ export { readWeb, searchWeb } from "./tools/web.js";
 export type { WebReadResult, WebSearchResult, WebToolError } from "./tools/web.js";
 export { readPubMed, searchPubMed } from "./tools/pubmed.js";
 export type { PubMedReadResult, PubMedSearchResult, PubMedError } from "./tools/pubmed.js";
+export { writeReport } from "./tools/report.js";
+export type { ReportRecord, ReportWriteInput } from "./tools/report.js";
 export { JsonSessionStore } from "./session/jsonSessionStore.js";
 export type { EvidenceNode, EvidenceRelation } from "./tools/evidence.js";
 export type { JsonSession, SessionMessage } from "./session/jsonSessionStore.js";

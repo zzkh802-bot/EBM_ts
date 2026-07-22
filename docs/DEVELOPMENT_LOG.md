@@ -85,6 +85,15 @@ Continue through archived web read/search, PubMed, guideline MCP, and verified M
 - Real checks passed for search and abstract read with `NCBI_EMAIL` and `NCBI_API_KEY` configured.
 - Verification: `npm run check` — 9 files, 21 tests passed.
 
+### Completed slice: verified Markdown reports
+
+- Added `report_write` and core `writeReport()`.
+- Report evidence IDs are extracted from Markdown, loaded from Markdown evidence records, and reverified against archived source slices before write.
+- Unknown, stale, hash-mismatched, or citation-ineligible evidence blocks report generation.
+- Evidence-free reports require explicit `allow_no_evidence` and are marked as evidence gaps.
+- Reports are normalized Markdown with deterministic content hashes and evidence metadata.
+- Verification: `npm run check` — 10 files, 24 tests passed.
+
 ### Active slice
 
-- Add verified Markdown report writing, then guideline MCP search/read.
+- Implement sequential guideline MCP search/read with timeout and protocol error coverage.
