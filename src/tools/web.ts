@@ -1,5 +1,6 @@
 import { archiveSource, type SourceArchiveRecord } from "./archive.js";
-import { parseDocumentUrl } from "./mineru.js";
+import { parseDocumentBytes, parseDocumentUrl } from "./mineru.js";
+import { downloadPdf } from "./openAlex.js";
 import { jinaReaderUrl, validateOutboundUrl } from "./urlSafety.js";
 
 export type NetworkAttempt = {
@@ -26,6 +27,20 @@ type FetchOptions = {
   fetcher?: typeof fetch;
   timeoutMs?: number;
 };
+
+function firstMarkdownTitle(markdown: string): string | undefined {
+  const title = markdown.split("\n").map((line) => line.match(/^#\s+(.+)$/)?.[1]?.trim()).find(Boolean);
+  return title || undefined;
+}
+
+function pdfFileName(url: string): string {
+  try {
+    const name = decodeURIComponent(new URL(url).pathname.split("/").filter(Boolean).at(-1) ?? "");
+    return /^[^/\\]+\.pdf$/i.test(name) ? name : "document.pdf";
+  } catch {
+    return "document.pdf";
+  }
+}
 
 async function request(fetcher: typeof fetch, input: string, init: RequestInit, timeoutMs: number): Promise<Response> {
   const controller = new AbortController();
@@ -57,6 +72,8 @@ export async function readWeb(input: {
   firecrawlApiKey?: string;
   mineruApiToken?: string;
   mineruBaseUrl?: string;
+  pdfDownloadTimeoutMs?: number;
+  resolveHost?: (host: string) => Promise<string[]>;
 } & FetchOptions): Promise<WebReadResult> {
   const safe = validateOutboundUrl(input.url);
   if (!safe.ok) {
@@ -65,7 +82,8 @@ export async function readWeb(input: {
   const fetcher = input.fetcher ?? fetch;
   const timeoutMs = input.timeoutMs ?? 30_000;
   const attempts: NetworkAttempt[] = [];
-  const isDocument = /\.(?:pdf|docx?|pptx?|xlsx?|epub|mobi)(?:$|[?#])/i.test(safe.url.toString());
+  const isDocument = /\.(?:pdf|docx?|pptx?|xlsx?|epub|mobi)(?:$|[?#&])/i.test(safe.url.toString());
+  const isPdf = /\.pdf(?:$|[?#&])/i.test(safe.url.toString());
 
   if (isDocument && input.mineruApiToken) {
     try {
@@ -76,6 +94,7 @@ export async function readWeb(input: {
         ...(input.mineruBaseUrl ? { baseUrl: input.mineruBaseUrl } : {}),
         requestTimeoutMs: timeoutMs,
       });
+      const title = firstMarkdownTitle(parsed.content);
       return {
         ok: true,
         provider: "mineru",
@@ -83,11 +102,45 @@ export async function readWeb(input: {
           sessionDir: input.sessionDir,
           kind: "read",
           sourceUrl: safe.url.toString(),
+          ...(title ? { title } : {}),
           content: parsed.content,
         }),
       };
     } catch (error) {
-      attempts.push(attempt("mineru", error));
+      attempts.push(attempt("mineru", new Error(`Premium URL parsing failed: ${error instanceof Error ? error.message : String(error)}`)));
+    }
+
+    if (isPdf) {
+      try {
+        const downloaded = await downloadPdf({
+          url: safe.url.toString(),
+          fetcher,
+          ...(input.resolveHost ? { resolveHost: input.resolveHost } : {}),
+          timeoutMs: input.pdfDownloadTimeoutMs ?? 25_000,
+        });
+        const parsed = await parseDocumentBytes({
+          bytes: downloaded.bytes,
+          fileName: pdfFileName(downloaded.finalUrl),
+          apiToken: input.mineruApiToken,
+          fetcher,
+          ...(input.mineruBaseUrl ? { baseUrl: input.mineruBaseUrl } : {}),
+          requestTimeoutMs: timeoutMs,
+        });
+        const title = firstMarkdownTitle(parsed.content);
+        return {
+          ok: true,
+          provider: "mineru",
+          archive: await archiveSource({
+            sessionDir: input.sessionDir,
+            kind: "read",
+            sourceUrl: safe.url.toString(),
+            ...(title ? { title } : {}),
+            content: parsed.content,
+          }),
+        };
+      } catch (error) {
+        attempts.push(attempt("mineru", new Error(`Premium local-upload fallback failed: ${error instanceof Error ? error.message : String(error)}`)));
+      }
     }
   }
 

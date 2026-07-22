@@ -33,6 +33,7 @@ describe("MinerU Premium document parsing", () => {
     expect(result).toMatchObject({ parser: "mineru-premium-url", taskId: "task-1", content: "# Parsed PDF\n\nClinical result." });
     expect(mock.calls[0]).toMatchObject({ url: "https://mineru.net/api/v4/extract/task", init: { method: "POST" } });
     expect(new Headers(mock.calls[0]!.init?.headers).get("authorization")).toBe("Bearer token");
+    expect(JSON.parse(String(mock.calls[0]!.init?.body))).toMatchObject({ model_version: "vlm" });
   });
 
   it("uploads locally downloaded bytes through a signed Premium batch URL", async () => {
@@ -53,6 +54,7 @@ describe("MinerU Premium document parsing", () => {
     expect(result).toMatchObject({ parser: "mineru-premium-upload", taskId: "batch-1", content: "# Uploaded PDF\n\nRecovered OA content." });
     expect(mock.calls[1]).toMatchObject({ url: "https://upload.example/signed", init: { method: "PUT" } });
     expect(new Headers(mock.calls[1]!.init?.headers).has("content-type")).toBe(false);
+    expect(JSON.parse(String(mock.calls[0]!.init?.body))).toMatchObject({ model_version: "vlm" });
   });
 
   it("fails explicitly for task failure, malformed ZIP, and timeout", async () => {

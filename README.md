@@ -73,7 +73,7 @@ xinqiong/deepseek-v4-flash
 | Tool | Purpose |
 | --- | --- |
 | `web_search` | Tavily discovery; archives normalized result sets |
-| `web_read` | MinerU for document URLs, otherwise Jina then Firecrawl |
+| `web_read` | Recognized PDFs: MinerU Premium VLM URL → secure local download + Premium upload → Jina/Firecrawl; other pages: Jina → Firecrawl |
 | `pubmed_search` | PubMed discovery with batched abstracts and similar-article hints |
 | `pubmed_read` | PMC full text first, then bounded OpenAlex OA PDF download + MinerU upload, with explicit abstract-only fallback |
 | `guideline_mcp_search` | sequential internal guideline document search |

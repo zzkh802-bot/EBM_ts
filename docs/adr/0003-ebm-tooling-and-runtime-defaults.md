@@ -52,9 +52,9 @@ Accepted order:
 
 1. URL safety check.
 2. PDF/document detection.
-3. For PDF/Office: MinerU Premium first when key is configured.
-4. If remote MinerU is unstable or cannot fetch the URL, download locally and upload to MinerU Premium.
-5. Local parser fallback if MinerU fails.
+3. For recognized PDF/Office URLs: MinerU Premium VLM first when the key is configured.
+4. If MinerU cannot fetch a PDF URL, securely download and upload it to MinerU Premium VLM; enforce public DNS at every redirect, a byte cap, timeout, and PDF magic validation.
+5. If both MinerU PDF paths fail, use Jina and then Firecrawl as explicit degraded readers; do not add another local PDF parser without measured need.
 6. For normal web pages: Jina Reader first.
 7. Firecrawl fallback for Jina failures, JS/anti-bot pages, or explicit crawl/interact needs.
 

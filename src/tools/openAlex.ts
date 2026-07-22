@@ -24,11 +24,11 @@ async function defaultResolveHost(host: string): Promise<string[]> {
 
 async function assertPublicResolvedUrl(url: URL, resolveHost: (host: string) => Promise<string[]>): Promise<void> {
   const addresses = await resolveHost(url.hostname);
-  if (!addresses.length) throw new Error(`OA host did not resolve: ${url.hostname}`);
-  if (addresses.some(isPrivateAddress)) throw new Error(`OA URL resolves to a private address: ${url.hostname}`);
+  if (!addresses.length) throw new Error(`PDF host did not resolve: ${url.hostname}`);
+  if (addresses.some(isPrivateAddress)) throw new Error(`PDF URL resolves to a private address: ${url.hostname}`);
 }
 
-export async function downloadOpenAccessPdf(input: {
+export async function downloadPdf(input: {
   url: string;
   fetcher?: typeof fetch;
   resolveHost?: (host: string) => Promise<string[]>;
@@ -42,12 +42,12 @@ export async function downloadOpenAccessPdf(input: {
   const maxRedirects = input.maxRedirects ?? 5;
   const controller = new AbortController();
   const timeoutMs = input.timeoutMs ?? 25_000;
-  const timer = setTimeout(() => controller.abort(new Error(`OA PDF download timed out after ${timeoutMs}ms`)), timeoutMs);
+  const timer = setTimeout(() => controller.abort(new Error(`PDF download timed out after ${timeoutMs}ms`)), timeoutMs);
   try {
     let current = input.url;
     for (let redirects = 0; redirects <= maxRedirects; redirects += 1) {
       const checked = validateOutboundUrl(current);
-      if (!checked.ok) throw new Error(`unsafe OA PDF URL: ${checked.reason}`);
+      if (!checked.ok) throw new Error(`unsafe PDF URL: ${checked.reason}`);
       await assertPublicResolvedUrl(checked.url, resolveHost);
       const response = await fetcher(checked.url.toString(), { signal: controller.signal, redirect: "manual", headers: { "User-Agent": "EBM-Agent-TS/0.1", Accept: "application/pdf" } });
       if ([301, 302, 303, 307, 308].includes(response.status)) {
@@ -56,19 +56,21 @@ export async function downloadOpenAccessPdf(input: {
         current = new URL(location, checked.url).toString();
         continue;
       }
-      if (!response.ok) throw new Error(`OA PDF returned HTTP ${response.status}`);
+      if (!response.ok) throw new Error(`PDF returned HTTP ${response.status}`);
       const declaredLength = Number(response.headers.get("content-length"));
-      if (Number.isFinite(declaredLength) && declaredLength > maxBytes) throw new Error(`OA PDF exceeds ${maxBytes} byte limit`);
+      if (Number.isFinite(declaredLength) && declaredLength > maxBytes) throw new Error(`PDF exceeds ${maxBytes} byte limit`);
       const bytes = new Uint8Array(await response.arrayBuffer());
-      if (bytes.byteLength > maxBytes) throw new Error(`OA PDF exceeds ${maxBytes} byte limit`);
-      if (new TextDecoder().decode(bytes.slice(0, 5)) !== "%PDF-") throw new Error("OA location did not return a PDF document");
+      if (bytes.byteLength > maxBytes) throw new Error(`PDF exceeds ${maxBytes} byte limit`);
+      if (new TextDecoder().decode(bytes.slice(0, 5)) !== "%PDF-") throw new Error("URL did not return a PDF document");
       return { bytes, finalUrl: checked.url.toString() };
     }
-    throw new Error(`OA PDF exceeded ${maxRedirects} redirects`);
+    throw new Error(`PDF exceeded ${maxRedirects} redirects`);
   } finally {
     clearTimeout(timer);
   }
 }
+
+export const downloadOpenAccessPdf = downloadPdf;
 
 export async function resolveOpenAlexPdf(input: {
   pmid: string;

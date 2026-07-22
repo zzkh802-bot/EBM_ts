@@ -51,6 +51,40 @@ describe("archived web tools", () => {
     expect(mock.calls).toHaveLength(3);
   });
 
+  it("downloads and uploads a PDF when Premium URL parsing cannot fetch it", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
+    const parsedArchive = zipSync({ "result/full.md": strToU8("# Uploaded clinical guideline\n\nRecovered PDF evidence.") });
+    const mock = mockFetch([
+      new Response("MinerU cannot fetch origin", { status: 502 }),
+      new Response(new TextEncoder().encode("%PDF-1.7 source bytes"), { headers: { "content-type": "application/pdf" } }),
+      Response.json({ data: { batch_id: "batch-1", file_urls: ["https://upload.example/signed"] } }),
+      new Response(null, { status: 200 }),
+      Response.json({ data: { extract_result: [{ state: "done", full_zip_url: "https://cdn.example/result.zip" }] } }),
+      new Response(parsedArchive),
+    ]);
+
+    const result = await readWeb({
+      sessionDir,
+      url: "https://publisher.example/download/guideline.pdf",
+      fetcher: mock.fetcher,
+      mineruApiToken: "token",
+      resolveHost: async () => ["93.184.216.34"],
+    });
+
+    expect(result).toMatchObject({ ok: true, provider: "mineru" });
+    if (!result.ok) return;
+    expect(result.archive.path).toBe("sources/read/uploaded-clinical-guideline/full.md");
+    expect(result.archive.content).toContain("Recovered PDF evidence.");
+    expect(mock.calls.map((call) => call.input)).toEqual([
+      "https://mineru.net/api/v4/extract/task",
+      "https://publisher.example/download/guideline.pdf",
+      "https://mineru.net/api/v4/file-urls/batch",
+      "https://upload.example/signed",
+      "https://mineru.net/api/v4/extract-results/batch/batch-1",
+      "https://cdn.example/result.zip",
+    ]);
+  });
+
   it("falls back to Firecrawl and reports all failures explicitly", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
     const fallback = mockFetch([

@@ -35,7 +35,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - The EBM skill now pivots from unavailable target guidelines to verified mirrors, attributed secondary evidence, or independent guidelines without conflating their claims.
 - `report_write` verifies every Markdown evidence reference against its archived source; evidence-gap reports require explicit opt-in.
 - `guideline_mcp_search` and `guideline_mcp_read` use a sequential Streamable HTTP client and archive all output; real internal search/read checks passed.
-- `web_read` now routes PDF/Office/e-book URLs through MinerU Premium first; real demo PDF parsing returned 51,291 Markdown characters.
+- `web_read` routes recognized PDF/Office/e-book URLs through MinerU Premium VLM first. For PDFs that MinerU cannot fetch by URL, it now performs one SSRF-guarded, redirect-checked, 50 MB bounded local download and retries through MinerU Premium signed upload before Jina/Firecrawl; real direct-URL parsing returned 51,291 Markdown characters.
 - Migrated the Python clinical report-writing skill and adapted obsolete tool references to Pi/evidence IDs; removed the legacy mandatory `research_frame.md` workflow.
 - Pi's generated system prompt and general-purpose tools remain intact; a `before_agent_start` extension replaces only the opening coding-agent identity with an EBM-agent identity.
 - Vertical acceptance covers discovery archive → exact evidence → verified report.
@@ -58,7 +58,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - Pi owns runtime, events, tool calling, provider streaming, compaction, and TUI.
 - Normalize network content before archive and model visibility; preserve identical line numbering.
 - Evidence source of truth is Markdown; no redundant raw JSON body.
-- Web pages: Jina first, Firecrawl fallback. PDFs: MinerU Premium first, then download/upload, then local fallback.
+- Web pages: Jina first, Firecrawl fallback. Recognized PDFs: MinerU Premium VLM URL task first, then bounded secure download and Premium VLM signed upload, then Jina/Firecrawl.
 - General search: Tavily first; biomedical search: PubMed-specific tools.
 - Guideline MCP calls are explicit, timeout-bounded, and initially sequential.
 - No old session migration, subagents, scheduler, or SQLite.
