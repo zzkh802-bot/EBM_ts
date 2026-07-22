@@ -30,7 +30,8 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - `pubmed_search` and `pubmed_read` use official E-utilities parameters, direct IPv4, bounded retries, and archived Markdown outputs.
 - Real PubMed search/read checks passed with configured email and API key.
 - `report_write` verifies every Markdown evidence reference against its archived source; evidence-gap reports require explicit opt-in.
-- `npm run check`: 10 test files / 24 tests passing.
+- `guideline_mcp_search` and `guideline_mcp_read` use a sequential Streamable HTTP client and archive all output; real internal search/read checks passed.
+- `npm run check`: 11 test files / 27 tests passing.
 
 ## Non-negotiable decisions
 
@@ -44,7 +45,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 
 ## Active task
 
-Implement sequential guideline MCP search/read with timeout and malformed-protocol coverage.
+Add PDF/document detection and MinerU-first parsing to `web_read`, then run the basic-refactor end-to-end smoke path.
 
 ## Next commands
 

@@ -24,6 +24,7 @@ Expected:
 | Archive | `tests/archive.test.ts` | archive filenames are deterministic; body offsets map model excerpts to stored files |
 | Web | `tests/web.test.ts` | Jina/Firecrawl failures are explicit; Tavily/Jina results are normalized and archived before exposure |
 | PubMed | `tests/pubmed.test.ts` | ESearch/ESummary/EFetch outputs are archived; transient failures retry; API keys never enter archives |
+| Guideline MCP | `tests/guidelineMcp.test.ts` | Streamable HTTP session/SSE works; malformed JSON and timeouts are explicit; output is archived |
 | Evidence | `tests/evidence.test.ts` | Markdown evidence stores and verifies exact source slices; traversal/symlink escape rejected |
 | Reports | `tests/report.test.ts` | unknown/stale evidence blocks report writes; evidence-gap reports require explicit opt-in |
 | Session | `tests/sessionStore.test.ts` | JSON session store persists messages and compaction summaries |
@@ -40,7 +41,7 @@ Add tests before implementation for:
 3. `evidence_add` archives only exact source windows and `evidence_read` reports later source/hash mismatches.
 4. report generation audits citation placement/claim coverage beyond verifying referenced evidence IDs.
 5. provider stream tests cover partial tool-call JSON and context overflow normalization.
-6. internal guideline MCP adapter returns structured errors for connect failure, timeout, and malformed tool JSON.
+6. internal guideline MCP reconnect/session-expiry behavior is covered if the server starts expiring long-lived sessions.
 7. `pubmed_read` appends PMC open-access full text when available instead of returning only a full-text warning.
 8. source normalization turns pathological one-line reader output into deterministic multi-line Markdown before archive and model-visible line hints.
 9. cloud API session isolation prevents one user reading another user's session directory when cloud work begins.

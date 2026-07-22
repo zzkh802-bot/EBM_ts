@@ -94,6 +94,15 @@ Continue through archived web read/search, PubMed, guideline MCP, and verified M
 - Reports are normalized Markdown with deterministic content hashes and evidence metadata.
 - Verification: `npm run check` — 10 files, 24 tests passed.
 
+### Completed slice: internal guideline MCP
+
+- Added a lean Streamable HTTP JSON-RPC client without importing a heavyweight MCP runtime.
+- Initialization, negotiated session headers, JSON and SSE responses, tool errors, malformed JSON, HTTP failures, and hard timeouts are explicit.
+- Calls are serialized because the internal server is not assumed parallel-safe.
+- `guideline_mcp_search` and `guideline_mcp_read` archive normalized output before model exposure.
+- Real internal-server checks passed for search and read (`max_chars=3000`).
+- Verification: `npm run check` — 11 files, 27 tests passed.
+
 ### Active slice
 
-- Implement sequential guideline MCP search/read with timeout and protocol error coverage.
+- Add PDF/document detection and MinerU-first parsing to `web_read`, then complete basic-refactor documentation and end-to-end smoke validation.
