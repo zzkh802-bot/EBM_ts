@@ -135,6 +135,55 @@ export class GuidelineMcpClient implements GuidelineClient {
   }
 }
 
+function guidelineSearchItems(text: string): Array<Record<string, unknown>> | undefined {
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (Array.isArray(parsed)) return parsed.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)));
+    if (parsed && typeof parsed === "object") {
+      const record = parsed as Record<string, unknown>;
+      for (const key of ["results", "data", "items"]) {
+        if (Array.isArray(record[key])) return (record[key] as unknown[]).filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)));
+      }
+      return [record];
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+function renderGuidelineSearch(query: string, text: string): string {
+  const items = guidelineSearchItems(text);
+  if (!items) return `# Guideline search: ${query}\n\n${text.trim()}`;
+  const lines = [
+    `# Guideline search: ${query}`,
+    "",
+    `Status: ${items.length ? "completed" : "no_results"}`,
+    `Results: ${items.length}`,
+    "",
+  ];
+  items.forEach((item, index) => {
+    const title = String(item.title ?? item.name ?? item.doc_id ?? `Result ${index + 1}`).trim();
+    lines.push(`## ${index + 1}. ${title}`, "");
+    const fields: Array<[string, string]> = [
+      ["Document ID", "doc_id"],
+      ["Institution", "source_institution"],
+      ["Publication date", "publication_date"],
+      ["Department", "clinical_department"],
+      ["Document kind", "document_kind"],
+    ];
+    for (const [label, key] of fields) {
+      const value = item[key];
+      if (value !== undefined && value !== null && String(value).trim()) lines.push(`- ${label}: ${String(value).trim()}`);
+    }
+    const excerpt = [item.snippet, item.summary, item.content].find((value) => typeof value === "string" && value.trim());
+    if (typeof excerpt === "string") lines.push("", "### Excerpt", "", excerpt.trim());
+    lines.push("");
+  });
+  if (!items.length) lines.push("No guideline records matched this query.", "");
+  return lines.join("\n");
+}
+
 export async function searchGuidelines(input: {
   sessionDir: string;
   query: string;
@@ -150,7 +199,7 @@ export async function searchGuidelines(input: {
       ...(input.sourceInstitution ? { source_institution: input.sourceInstitution } : {}),
       ...(input.clinicalDepartment ? { clinical_department: input.clinicalDepartment } : {}),
     });
-    const content = `# Guideline search: ${input.query}\n\n${result.text}`;
+    const content = renderGuidelineSearch(input.query, result.text);
     return {
       ok: true,
       archive: await archiveSource({ sessionDir: input.sessionDir, kind: "search", title: input.query, content }),

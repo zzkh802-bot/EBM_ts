@@ -37,13 +37,18 @@ export function archiveToolText(
   const visibleEnd = visibleStart + excerpt.content.split("\n").length - 1;
   const totalLines = record.bodyLineStart + record.lines - 1;
   const map = options.compactRead ? sourceMap(record.content, record.bodyLineStart) : [];
+  const readableTocPath = record.tocPath && readablePath.endsWith(record.path)
+    ? `${readablePath.slice(0, -record.path.length)}${record.tocPath}`
+    : record.tocPath;
   return {
     text: [
       `Evidence source_path: ${record.path}`,
       `Readable archive path: ${readablePath}`,
+      ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
       `Archive lines: 1-${totalLines} (${totalLines} total lines; 1-based).`,
       `Visible preview maps to lines ${visibleStart}-${visibleEnd}.`,
       `Read more with read(path=${JSON.stringify(readablePath)}, offset=N, limit=M); use the same 1-based offset/limit with evidence_add.`,
+      ...(readableTocPath ? [`Read the complete section index with read(path=${JSON.stringify(readableTocPath)}).`] : []),
       ...(map.length ? ["", "Source map:", ...map] : []),
       "",
       "Preview:",

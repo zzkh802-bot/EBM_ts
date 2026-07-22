@@ -21,7 +21,7 @@ Expected:
 | Area | Test file | Invariant |
 | --- | --- | --- |
 | URL/Jina | `tests/urlSafety.test.ts` | metadata/private URLs rejected; Jina target preserves HTTPS |
-| Archive | `tests/archive.test.ts` | full normalized sources persist; read-like network output exposes a 5KB preview, one-based heading map, Pi-readable path, and continuation hint |
+| Archive | `tests/archive.test.ts` | full normalized read sources persist under semantic `full.md`/`toc.md` directories; output exposes a 5KB preview, one-based heading map, readable paths, and continuation hint |
 | Web | `tests/web.test.ts` | MinerU/Jina/Firecrawl routing is ordered; Tavily/Jina/MinerU results are normalized and archived before exposure |
 | MinerU | `tests/mineru.test.ts` | Premium task polling and ZIP Markdown extraction succeed; task/ZIP failures are explicit |
 | PubMed | `tests/pubmed.test.ts` | search uses relevance ordering, marks zero-result snapshots, preserves mixed inline XML text, batches abstracts/related hints; read accepts labeled identifiers and uses bounded full-text fallback |
@@ -30,7 +30,7 @@ Expected:
 | EBM system identity | `tests/ebmIdentity.test.ts` | replaces only Pi's opening coding identity while preserving generated tools, guidelines, context, and skills |
 | Developer trajectory | `tests/trajectory.test.ts` | Pi events produce private Markdown/JSONL traces with full finalized thinking, embedded/structured secret redaction, second-level run/model/tool timing, and no model-context injection |
 | Trajectory analysis | `tests/trajectoryAnalysis.test.ts` | derives turns, repeated actions, evidence timing, tool latency/errors, thinking volume, and token/cache usage |
-| Guideline MCP | `tests/guidelineMcp.test.ts` | Streamable HTTP session/SSE works; malformed JSON and timeouts are explicit; output is archived |
+| Guideline MCP | `tests/guidelineMcp.test.ts` | Streamable HTTP session/SSE works; malformed JSON/timeouts are explicit; search envelopes render as semantic Markdown and read envelopes archive only titled source content |
 | Vertical flow | `tests/endToEnd.test.ts` | discovery archive becomes exact evidence and then a source-reverified report |
 | Pi resources | `tests/ebmToolsExtension.test.ts` | extension and both project skills load without diagnostics |
 | Compaction | `tests/compactionArtifact.test.ts` | Pi summaries are mirrored atomically without replacing native compaction |

@@ -40,11 +40,11 @@ Normalization goals:
 
 ### Model-visible network read contract
 
-Read-like network tools archive the complete normalized source before model exposure. Their immediate model-visible result is navigation data plus a bounded exact preview, not the complete long document: semantic evidence path, Pi-readable workspace path, total one-based line range, up to 20 Markdown heading locations, a 5KB preview, and a copyable `read(path, offset, limit)` continuation hint.
+Read-like network tools archive the complete normalized source before model exposure. Each source uses a semantic directory containing canonical `full.md` and a generated `toc.md`; the TOC is navigation metadata, not a duplicate source. Their immediate model-visible result is navigation data plus a bounded exact preview, not the complete long document: semantic evidence path, Pi-readable full/TOC paths, total one-based line range, up to 20 Markdown heading locations, a 5KB preview, and a copyable `read(path, offset, limit)` continuation hint.
 
 Pi's built-in `read` remains unchanged. Evidence windows use the same one-based line numbers as Pi `read`, so the model can pass an observed offset/limit directly to `evidence_add`.
 
-Normalize external transport artifacts before both archive and preview: decode numeric/common HTML entities, normalize Unicode spacing, remove zero-width/invalid control characters, and preserve inline PubMed XML text order. Transport envelopes such as guideline MCP JSON are not source content and must be unwrapped before archive.
+Normalize external transport artifacts before both archive and preview: decode numeric/common HTML entities, normalize Unicode spacing, remove zero-width/invalid control characters, and preserve inline PubMed XML text order. Transport envelopes such as guideline MCP JSON are not source content and must be unwrapped and rendered into semantic Markdown sections before archive. A `.md` suffix must never be used merely to rename raw JSON.
 
 ### web_read fallback order
 

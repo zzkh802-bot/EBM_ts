@@ -23,9 +23,10 @@ describe("source archive", () => {
     const duplicate = await archiveSource({ sessionDir, kind: "read", title: "中国高血压防治指南 2024", content: "first revision" });
     const second = await archiveSource({ sessionDir, kind: "read", title: "中国高血压防治指南 2024", content: "second revision" });
 
-    expect(first.path).toBe("sources/read/中国高血压防治指南-2024.md");
+    expect(first.path).toBe("sources/read/中国高血压防治指南-2024/full.md");
+    expect(first.tocPath).toBe("sources/read/中国高血压防治指南-2024/toc.md");
     expect(duplicate.path).toBe(first.path);
-    expect(second.path).toBe("sources/read/中国高血压防治指南-2024-2.md");
+    expect(second.path).toBe("sources/read/中国高血压防治指南-2024-2/full.md");
     expect(await readFile(path.join(sessionDir, first.path), "utf8")).toContain("first revision");
   });
 
@@ -49,6 +50,8 @@ describe("source archive", () => {
 
     expect(output.truncated).toBe(true);
     expect(output.text).toContain("Source map:");
+    expect(output.text).toContain("Readable source index:");
+    expect(await readFile(path.join(sessionDir, record.tocPath!), "utf8")).toContain("H2 Results — lines");
     expect(output.text).toContain(`# Introduction — line ${record.bodyLineStart}`);
     expect(output.text).toContain("## Results — line");
     expect(output.text).toContain("Preview truncated at 5000 bytes");

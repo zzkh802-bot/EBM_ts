@@ -65,7 +65,12 @@ describe("guideline MCP", () => {
 
     expect(calls).toEqual(["search", "read"]);
     expect(search.ok && search.archive.path).toMatch(/^sources\/search/);
-    expect(read.ok && read.archive.path).toBe("sources/read/heart-failure-guideline-2025.md");
+    if (search.ok) {
+      expect(search.archive.content).toContain("## 1. Guideline");
+      expect(search.archive.content).toContain("- Document ID: g1");
+      expect(search.archive.content).not.toContain('[{"doc_id"');
+    }
+    expect(read.ok && read.archive.path).toBe("sources/read/heart-failure-guideline-2025/full.md");
     if (read.ok) {
       const archived = await readFile(path.join(sessionDir, read.archive.path), "utf8");
       expect(archived).toContain("Recommendation text");

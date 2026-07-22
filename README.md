@@ -83,7 +83,7 @@ xinqiong/deepseek-v4-flash
 | `evidence_read` | read and reverify evidence against its source |
 | `report_write` | write a report only after verifying all referenced evidence |
 
-Read-like network tools retain complete normalized Markdown under the session workspace while returning only a 5KB exact preview, a one-based heading map, total lines, and a Pi `read(path, offset, limit)` continuation hint. Pi `read` and `evidence_add` use the same one-based source lines.
+Read-like network tools retain each complete normalized source as `sources/read/<semantic-name>/full.md` with a generated `toc.md`. They return only a 5KB exact preview, a one-based heading map, both readable paths, total lines, and a Pi `read(path, offset, limit)` continuation hint. Pi `read` and `evidence_add` use the same one-based source lines. Structured provider envelopes are rendered as semantic Markdown before archive rather than copied as JSON into `.md` files.
 
 ## Developer trajectory logs
 
