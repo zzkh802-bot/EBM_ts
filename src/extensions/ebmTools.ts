@@ -10,6 +10,7 @@ import {
 import { Type } from "typebox";
 import { addEvidence, listEvidence, readEvidence } from "../tools/evidence.js";
 import { registerCompactionArtifacts } from "./compactionArtifacts.js";
+import { registerContextPruner } from "./contextPruner.js";
 import { registerEbmIdentity } from "./ebmIdentity.js";
 import { registerGuidelineTools } from "./guidelineTools.js";
 import { registerPubMedTools } from "./pubmedTools.js";
@@ -148,4 +149,5 @@ export function registerEbmTools(pi: ExtensionAPI): void {
   registerGuidelineTools(pi);
   registerCompactionArtifacts(pi);
   registerTrajectoryRecorder(pi);
+  registerContextPruner(pi);
 }

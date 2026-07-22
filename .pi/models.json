@@ -1,0 +1,18 @@
+{
+  "providers": {
+    "deepseek": {
+      "modelOverrides": {
+        "deepseek-v4-flash": {
+          "contextWindow": 466384
+        }
+      }
+    },
+    "xinqiong": {
+      "modelOverrides": {
+        "deepseek-v4-flash": {
+          "contextWindow": 466384
+        }
+      }
+    }
+  }
+}

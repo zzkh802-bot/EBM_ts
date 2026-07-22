@@ -26,6 +26,7 @@ export PI_SKIP_VERSION_CHECK="${PI_SKIP_VERSION_CHECK:-1}"
 # EBM_PI_AGENT_DIR is an explicit escape hatch for developers who need another sandbox.
 export PI_CODING_AGENT_DIR="${EBM_PI_AGENT_DIR:-$ROOT/data/pi-agent}"
 mkdir -p "$PI_CODING_AGENT_DIR" data/pi-sessions data/sessions
+cp "$ROOT/.pi/models.json" "$PI_CODING_AGENT_DIR/models.json"
 exec ./node_modules/.bin/pi \
   --approve \
   --session-dir "$ROOT/data/pi-sessions" \
