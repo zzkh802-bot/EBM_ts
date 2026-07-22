@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { TrajectoryWriter } from "../observability/trajectory.js";
+import { compactBeijingTimestamp } from "../tools/time.js";
 import { piSessionDirectory } from "./sessionPath.js";
 
 type ActiveTool = { startedAt: number; toolName: string; args: unknown };
@@ -62,7 +63,7 @@ function selectedResponseHeaders(headers: Record<string, string>): Record<string
 }
 
 function compactTimestamp(): string {
-  return new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  return compactBeijingTimestamp().replace(/\.\d{3}\+0800$/, "+0800");
 }
 
 export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on">): void {

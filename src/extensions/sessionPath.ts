@@ -2,6 +2,7 @@ import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { formatBeijingDate, formatBeijingTimestamp } from "../tools/time.js";
 
 const workspaceCache = new Map<string, string>();
 const workspaceInitializations = new Map<string, Promise<string>>();
@@ -80,8 +81,9 @@ export function piSessionCreatedDate(cwd: string, sessionId: string): string | u
   try {
     const metadata = JSON.parse(readFileSync(path.join(workspace, ".metadata", "session.json"), "utf8")) as { createdAt?: unknown };
     if (typeof metadata.createdAt !== "string") return undefined;
-    const match = /^\d{4}-\d{2}-\d{2}/.exec(metadata.createdAt);
-    return match?.[0];
+    const date = new Date(metadata.createdAt);
+    if (Number.isNaN(date.getTime())) return undefined;
+    return formatBeijingDate(date);
   } catch {
     return undefined;
   }
@@ -176,7 +178,7 @@ async function initializePiSessionDirectoryUnlocked(cwd: string, sessionId: stri
     sessionId,
     directory,
     displayName: label,
-    createdAt: new Date().toISOString(),
+    createdAt: formatBeijingTimestamp(),
   };
   await writeFile(path.join(workspaceMetadataDir, "session.json"), `${JSON.stringify(metadata, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
   const targetMapping = mappingPath(cwd, sessionId);

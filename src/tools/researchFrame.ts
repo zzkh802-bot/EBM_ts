@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { normalizeMarkdown } from "./markdown.js";
+import { formatBeijingTimestamp } from "./time.js";
 
 export type ResearchFrameInput = {
   sessionDir: string;
@@ -133,7 +134,7 @@ export async function appendResearchFrameScratchpad(sessionDir: string, note: st
   const end = current.content.indexOf(nextHeading);
   if (start < 0 || end < 0 || end <= start) throw new Error("research_frame scratchpad section is missing or reordered");
   const insertAt = end;
-  const timestamp = new Date().toISOString();
+  const timestamp = formatBeijingTimestamp();
   const entry = `\n### Scratchpad update ${timestamp}\n\n${normalizeMarkdown(note)}\n`;
   const content = `${current.content.slice(0, insertAt).replace(/\s*$/, "\n")}${entry}\n${current.content.slice(insertAt)}`;
   return updateResearchFrame(sessionDir, content);

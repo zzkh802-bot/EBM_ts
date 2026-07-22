@@ -25,7 +25,7 @@ describe("EBM system identity", () => {
 
   it("can append a stable day-precision session date", () => {
     const prompted = withSessionCreatedDate("System", "2026-07-22");
-    expect(prompted).toContain("EBM session date: 2026-07-22");
+    expect(prompted).toContain("EBM session date: 2026-07-22 (Beijing time, Asia/Shanghai)");
     expect(prompted).toContain("fixed for the current session");
     expect(withSessionCreatedDate("System")).toBe("System");
   });

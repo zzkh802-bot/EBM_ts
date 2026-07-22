@@ -1,5 +1,6 @@
 import { appendFile, chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { formatBeijingTimestamp } from "../tools/time.js";
 
 export type TrajectoryRecord = {
   schema_version: 1;
@@ -129,7 +130,7 @@ export class TrajectoryWriter {
   }): Promise<void> {
     const record: TrajectoryRecord = {
       schema_version: 1,
-      timestamp: new Date().toISOString(),
+      timestamp: formatBeijingTimestamp(),
       sequence: ++this.sequence,
       session_id: this.sessionId,
       ...(input.runId ? { run_id: input.runId } : {}),

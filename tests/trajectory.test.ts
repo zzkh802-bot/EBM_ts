@@ -97,6 +97,7 @@ describe("developer trajectory recorder", () => {
       "session_start", "run_start", "turn_start", "tool_start", "tool_end", "provider_request",
       "provider_response", "model_first_delta", "assistant_message", "run_settled",
     ]));
+    expect(lines.every((line) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+08:00$/.test(line.timestamp))).toBe(true);
     expect(lines.find((line) => line.event === "tool_start").data.args.api_key).toBe("[REDACTED]");
     expect(lines.find((line) => line.event === "assistant_message").data.content[0].thinking).toContain("compare benefit and harm");
     expect(lines.find((line) => line.event === "assistant_message").data.usage.totalTokens).toBe(200);

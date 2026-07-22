@@ -1,6 +1,7 @@
 import { mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
+import { formatBeijingTimestamp } from "./time.js";
 
 export type EvidenceRelation = "supports" | "partially_supports" | "refutes";
 export type EvidenceConfidence = "low" | "moderate" | "high";
@@ -158,7 +159,7 @@ export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode
   const node: EvidenceNode = {
     id: evidenceId(base),
     ...base,
-    createdAt: new Date().toISOString(),
+    createdAt: formatBeijingTimestamp(),
     citationEligible: !["guideline_mirror_unverified", "discovery_only"].includes(base.provenance),
   };
   const outDir = path.join(input.sessionDir, "evidence");

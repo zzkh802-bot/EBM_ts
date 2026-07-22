@@ -12,7 +12,7 @@ export function adaptEbmSystemPrompt(systemPrompt: string): string {
 
 export function withSessionCreatedDate(systemPrompt: string, date?: string): string {
   if (!date) return systemPrompt;
-  return `${systemPrompt}\n\nEBM session date: ${date}. This date is fixed for the current session and is precise only to the day; use it as the stable reference point for "recent", "last 3 years", and guideline freshness judgments, not as a real-time clock.`;
+  return `${systemPrompt}\n\nEBM session date: ${date} (Beijing time, Asia/Shanghai). This date is fixed for the current session and is precise only to the day; use it as the stable reference point for "recent", "last 3 years", and guideline freshness judgments, not as a real-time clock.`;
 }
 
 export function registerEbmIdentity(pi: Pick<ExtensionAPI, "on">): void {

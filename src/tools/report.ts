@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { readEvidence } from "./evidence.js";
 import { normalizeMarkdown } from "./markdown.js";
+import { formatBeijingTimestamp } from "./time.js";
 
 export type ReportReference = {
   number: number;
@@ -108,7 +109,7 @@ export async function writeReport(input: ReportWriteInput): Promise<ReportRecord
     }
   }
   const sha256 = createHash("sha256").update(`${title}\n${content}`).digest("hex");
-  const createdAt = new Date().toISOString();
+  const createdAt = formatBeijingTimestamp();
   const outDir = path.join(input.sessionDir, "reports");
   const baseName = slug(title);
   const metadata = {

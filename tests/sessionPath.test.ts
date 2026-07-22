@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { registerTrajectoryRecorder } from "../src/extensions/trajectoryRecorder.js";
-import { initializePiSessionDirectory, piReadableSessionPath, piSessionDirectory, registerSessionWorkspace } from "../src/extensions/sessionPath.js";
+import { initializePiSessionDirectory, piReadableSessionPath, piSessionCreatedDate, piSessionDirectory, registerSessionWorkspace } from "../src/extensions/sessionPath.js";
 
 describe("semantic session workspaces", () => {
   it("initializes the semantic workspace before the trajectory recorder writes its first artifact", async () => {
@@ -52,6 +52,14 @@ describe("semantic session workspaces", () => {
     expect(piSessionDirectory(cwd, sessionId)).toBe(workspace);
     expect(piReadableSessionPath(cwd, sessionId, "sources/read/trial/full.md")).toBe("data/sessions/019f892b_急性卒中-rt-pa-与血压管理/sources/read/trial/full.md");
     await expect(readFile(path.join(workspace, ".metadata", "session.json"), "utf8")).resolves.toContain(`"sessionId": "${sessionId}"`);
+  });
+
+  it("reports session created date in Beijing time", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "ebm-workspace-"));
+    const sessionId = "beijing-date-session";
+    const workspace = await initializePiSessionDirectory(cwd, sessionId, { firstPrompt: "Date boundary" });
+    await writeFile(path.join(workspace, ".metadata", "session.json"), JSON.stringify({ sessionId, createdAt: "2026-01-01T16:30:00.000Z" }), "utf8");
+    expect(piSessionCreatedDate(cwd, sessionId)).toBe("2026-01-02");
   });
 
   it("keeps workspaces distinct when short ids and semantic names collide", async () => {
