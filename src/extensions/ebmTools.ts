@@ -9,6 +9,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { addEvidence, listEvidence, readEvidence } from "../tools/evidence.js";
+import { registerPubMedTools } from "./pubmedTools.js";
 import { piSessionDirectory } from "./sessionPath.js";
 import { registerWebTools } from "./webTools.js";
 
@@ -91,4 +92,5 @@ export function registerEbmTools(pi: Pick<ExtensionAPI, "registerTool" | "events
   });
 
   registerWebTools(pi);
+  registerPubMedTools(pi);
 }

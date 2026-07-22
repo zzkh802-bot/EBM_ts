@@ -17,7 +17,9 @@
   "dependencies": {
     "@earendil-works/pi-ai": "^0.80.10",
     "@earendil-works/pi-coding-agent": "file:vendor/pi-coding-agent",
+    "fast-xml-parser": "^5.10.1",
     "typebox": "^1.0.55",
+    "undici": "^8.5.0",
     "zod": "^4.1.13"
   },
   "devDependencies": {

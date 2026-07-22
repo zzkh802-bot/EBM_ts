@@ -75,6 +75,16 @@ Continue through archived web read/search, PubMed, guideline MCP, and verified M
 - Real proxy-environment checks passed: Jina archived NCBI (8,973 chars); Tavily archived two results.
 - Verification: `npm run check` — 8 files, 17 tests passed.
 
+### Completed slice: PubMed search/read
+
+- Added `pubmed_search` using ESearch + ESummary and `pubmed_read` using EFetch XML.
+- PMID, PMCID, and DOI resolution paths are supported; records are normalized and archived before exposure.
+- NCBI `tool`, `email`, and `api_key` parameters follow official E-utilities guidance; secrets never enter archives.
+- Added bounded retries for connection errors, HTTP 429, and 5xx responses with explicit terminal errors.
+- Diagnosed local Node/NCBI dual-stack failure: curl IPv4 and an Undici IPv4 dispatcher succeeded while default fetch timed out. NCBI calls now use direct IPv4 and do not require a proxy.
+- Real checks passed for search and abstract read with `NCBI_EMAIL` and `NCBI_API_KEY` configured.
+- Verification: `npm run check` — 9 files, 21 tests passed.
+
 ### Active slice
 
-- Implement `pubmed_search` and `pubmed_read` against NCBI E-utilities with archived records.
+- Add verified Markdown report writing, then guideline MCP search/read.

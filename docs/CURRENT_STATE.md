@@ -27,7 +27,9 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - `npm run ebm` loads `.env`, launches native Pi TUI, and stores Pi sessions locally.
 - `web_read` (Jina → Firecrawl fallback) and `web_search` (Tavily) normalize/archive before model exposure and return explicit provider attempts on failure.
 - Real proxy-environment checks passed for Jina reading NCBI and Tavily search.
-- `npm run check`: 8 test files / 17 tests passing.
+- `pubmed_search` and `pubmed_read` use official E-utilities parameters, direct IPv4, bounded retries, and archived Markdown outputs.
+- Real PubMed search/read checks passed with configured email and API key.
+- `npm run check`: 9 test files / 21 tests passing.
 
 ## Non-negotiable decisions
 
@@ -41,7 +43,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 
 ## Active task
 
-Implement archived `pubmed_search` and `pubmed_read` tools using NCBI E-utilities.
+Implement verified Markdown report writing, then guideline MCP search/read.
 
 ## Next commands
 
