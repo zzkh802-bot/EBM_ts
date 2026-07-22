@@ -59,8 +59,25 @@ function referenceHeadingMatch(line: string): RegExpExecArray | null {
   return REFERENCE_HEADINGS.has(match[1]!.trim().toLowerCase()) ? match : null;
 }
 
+function splitReferenceEntries(section: string): string[] {
+  const compact = section.replace(/\s+/g, " ").trim();
+  if (!compact) return [];
+  const entries = compact.split(/\s+(?=\[\d+\]\s+)/).map((entry) => entry.trim()).filter(Boolean);
+  return entries.length && entries.every((entry) => /^\[\d+\]\s+/.test(entry)) ? entries : [];
+}
+
+function canonicalizeExistingReferenceSection(content: string): string {
+  const lines = content.split(/\r?\n/);
+  const headingIndex = lines.findIndex((line) => !!referenceHeadingMatch(line));
+  if (headingIndex < 0) return content;
+  const body = lines.slice(0, headingIndex).join("\n");
+  const entries = splitReferenceEntries(lines.slice(headingIndex + 1).join("\n"));
+  if (!entries.length) return content;
+  return normalizeMarkdown(`${body}\n\n## 参考文献\n\n${entries.join("\n")}`);
+}
+
 function ensureReferenceSection(content: string, references: ReportReference[]): string {
-  if (!references.length) return content;
+  if (!references.length) return canonicalizeExistingReferenceSection(content);
   const lines = content.split(/\r?\n/);
   const headingIndex = lines.findIndex((line) => !!referenceHeadingMatch(line));
   const body = headingIndex >= 0 ? lines.slice(0, headingIndex).join("\n") : content;

@@ -85,6 +85,18 @@ describe("verified Markdown reports", () => {
     }
   });
 
+  it("canonicalizes model-authored one-line references even without structured references", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-report-"));
+    const report = await writeReport({
+      sessionDir,
+      title: "Model refs only",
+      content: "# Conclusion\n\nEvidence gap report.\n\n参考文献\n[1] First citation. [2] Second citation. PMID: 123. [3] Third citation.",
+      allowNoEvidence: true,
+    });
+    const saved = await readFile(path.join(sessionDir, report.path), "utf8");
+    expect(saved).toContain("## 参考文献\n\n[1] First citation.\n[2] Second citation. PMID: 123.\n[3] Third citation.");
+  });
+
   it("rewrites one-line model-authored references into one entry per line", async () => {
     const { sessionDir, evidence } = await fixture();
     await writeFile(path.join(sessionDir, "sources", "read", "study2.md"), "second result", "utf8");
