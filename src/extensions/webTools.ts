@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { readWeb, searchWeb, type WebToolError } from "../tools/web.js";
-import { archiveDetails, archiveToolText } from "./archiveOutput.js";
+import { archiveDetails, archiveToolText, readableArchivePath } from "./archiveOutput.js";
 import { piSessionDirectory } from "./sessionPath.js";
 
 function toolError(error: WebToolError): Error {
@@ -28,7 +28,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
         ...(process.env.MINERU_V4_BASE_URL ? { mineruBaseUrl: process.env.MINERU_V4_BASE_URL } : {}),
       });
       if (!result.ok) throw toolError(result.error);
-      const output = archiveToolText(result.archive);
+      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path));
       pi.events.emit("ebm:source_archived", { sessionId, provider: result.provider, path: result.archive.path, kind: "read" });
       return {
         content: [{ type: "text", text: output.text }],
@@ -57,7 +57,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
         ...(process.env.TAVILY_API_KEY ? { tavilyApiKey: process.env.TAVILY_API_KEY } : {}),
       });
       if (!result.ok) throw toolError(result.error);
-      const output = archiveToolText(result.archive);
+      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path));
       pi.events.emit("ebm:source_archived", {
         sessionId,
         provider: result.provider,

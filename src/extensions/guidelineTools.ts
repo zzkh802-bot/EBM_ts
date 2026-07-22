@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { GuidelineMcpClient, readGuideline, searchGuidelines } from "../tools/guidelineMcp.js";
-import { archiveDetails, archiveToolText } from "./archiveOutput.js";
+import { archiveDetails, archiveToolText, readableArchivePath } from "./archiveOutput.js";
 import { piSessionDirectory } from "./sessionPath.js";
 
 const DEFAULT_GUIDELINE_MCP_URL = "http://172.20.252.15:8000/mcp";
@@ -37,7 +37,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
         ...(params.clinical_department ? { clinicalDepartment: params.clinical_department } : {}),
       });
       if (!result.ok) throw new Error(JSON.stringify(result.error));
-      const output = archiveToolText(result.archive);
+      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path));
       pi.events.emit("ebm:source_archived", { sessionId, provider: "guideline_mcp", path: result.archive.path, kind: "search" });
       return {
         content: [{ type: "text", text: output.text }],
@@ -67,7 +67,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
         ...(params.max_chars === undefined ? {} : { maxChars: params.max_chars }),
       });
       if (!result.ok) throw new Error(JSON.stringify(result.error));
-      const output = archiveToolText(result.archive);
+      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path));
       pi.events.emit("ebm:source_archived", { sessionId, provider: "guideline_mcp", path: result.archive.path, kind: "read" });
       return {
         content: [{ type: "text", text: output.text }],

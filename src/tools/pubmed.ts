@@ -393,7 +393,7 @@ export async function readPubMed(input: {
   oaDownloadTimeoutMs?: number;
   resolveHost?: (host: string) => Promise<string[]>;
 } & FetchOptions): Promise<PubMedReadResult> {
-  const identifier = input.identifier.trim();
+  const identifier = input.identifier.trim().replace(/^(?:PMID|PMCID|DOI)\s*:\s*/i, "");
   if (!identifier) return { ok: false, error: { code: "invalid_input", message: "PMID, PMCID, or DOI is required" } };
   const fetcher = input.fetcher ?? defaultNcbiFetch;
   const timeoutMs = input.timeoutMs ?? 30_000;

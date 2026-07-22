@@ -44,8 +44,10 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - `npm run trace:analyze` summarizes end-to-end, turn, first-delta, model, provider, tool, and first-evidence timing in seconds, plus duplicate actions, failures, full-text outcomes, thinking volume, and token/cache usage.
 - Source and report artifacts now use Unicode-preserving semantic filenames with numeric collision suffixes; SHA-256 remains metadata rather than filename content.
 - No dedicated user-upload workflow is planned; MinerU remains the direct document capability.
-- Acute-stroke real E2E baseline completed in 164.51 wall-clock seconds (163.001 traced seconds): 33 turns, 52 tool calls, first evidence at 85.72 seconds, 8 registered evidence records, and one verified report.
-- `npm run check`: 18 test files / 48 tests passing.
+- Acute-stroke real E2E baseline completed in 164.51 wall-clock seconds (163.001 traced seconds): 33 turns, 52 tool calls, and first evidence at 85.72 seconds.
+- After returning a separate workspace-readable archive path, the fixed-case rerun completed in 111.47 wall-clock seconds (109.905 traced seconds): 17 turns, 30 tool calls, first evidence at 40.099 seconds, 4 PubMed searches instead of 13, and 1 shell call instead of 13. Both runs produced verified reports.
+- Archive output now exposes total line bounds, and `pubmed_read` accepts model-natural `PMID:`, `PMCID:`, and `DOI:` prefixes; these address the remaining deterministic errors seen in the second run.
+- `npm run check`: 18 test files / 49 tests passing.
 
 ## Non-negotiable decisions
 
@@ -59,7 +61,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 
 ## Active task
 
-Basic refactor is complete. The first measured E2E run exposed excessive source-location work: 33 turns, including repeated shell calls caused by session-relative archive paths not being directly readable by Pi's workspace-relative `read`. Fix that locality issue before repeating the fixed case; do not add belief state yet.
+Basic refactor is complete. The first measured acquisition-locality fix reduced the same case from 33 to 17 turns and from 163.001 to 109.905 traced seconds without adding research state. Run additional fixed cases before deciding whether further prompt, tool, cancellation, or lazy belief-state changes are justified.
 
 ## Next commands
 

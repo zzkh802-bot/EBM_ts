@@ -2,6 +2,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { archiveToolText, readableArchivePath } from "../src/extensions/archiveOutput.js";
 import { archiveSource, stableArchiveName } from "../src/tools/archive.js";
 
 describe("source archive", () => {
@@ -26,6 +27,18 @@ describe("source archive", () => {
     expect(duplicate.path).toBe(first.path);
     expect(second.path).toBe("sources/read/中国高血压防治指南-2024-2.md");
     expect(await readFile(path.join(sessionDir, first.path), "utf8")).toContain("first revision");
+  });
+
+  it("returns distinct workspace-readable and evidence-relative paths", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
+    const record = await archiveSource({ sessionDir, kind: "read", title: "Stroke guideline", content: "recommendation" });
+    const readable = readableArchivePath("session-1", record.path);
+    const output = archiveToolText(record, readable).text;
+
+    expect(output).toContain(`Evidence source_path: ${record.path}`);
+    expect(output).toContain(`Readable archive path: data/sessions/session-1/${record.path}`);
+    expect(output).toContain(`Archive offsets: 0-${record.bodyLineOffset + record.lines - 1}`);
+    expect(output).toContain(`read with path ${readable}`);
   });
 
   it("normalizes content before hashing, archiving, and returning model-visible text", async () => {

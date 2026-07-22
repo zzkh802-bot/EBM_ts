@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { readPubMed, searchPubMed, type PubMedError } from "../tools/pubmed.js";
-import { archiveDetails, archiveToolText } from "./archiveOutput.js";
+import { archiveDetails, archiveToolText, readableArchivePath } from "./archiveOutput.js";
 import { piSessionDirectory } from "./sessionPath.js";
 
 function toolError(error: PubMedError): Error {
@@ -39,7 +39,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
         ...ncbiOptions(),
       });
       if (!result.ok) throw toolError(result.error);
-      const output = archiveToolText(result.archive);
+      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path));
       pi.events.emit("ebm:source_archived", {
         sessionId,
         provider: "pubmed",
@@ -78,7 +78,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
         ...ncbiOptions(),
       });
       if (!result.ok) throw toolError(result.error);
-      const output = archiveToolText(result.archive);
+      const output = archiveToolText(result.archive, readableArchivePath(sessionId, result.archive.path));
       const warningText = result.warnings.length ? `\n\nWarnings:\n${result.warnings.map((warning) => `- ${warning}`).join("\n")}` : "";
       pi.events.emit("ebm:source_archived", { sessionId, provider: "pubmed", path: result.archive.path, kind: "read", pmid: result.pmid });
       return {

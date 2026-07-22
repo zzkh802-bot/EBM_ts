@@ -57,7 +57,7 @@ describe("PubMed archive adapters", () => {
       new Response(pmcXml, { headers: { "content-type": "application/xml" } }),
     ]);
 
-    const result = await readPubMed({ sessionDir, identifier: "123", fetcher: mock.fetcher, email: "test@example.com" });
+    const result = await readPubMed({ sessionDir, identifier: "PMID: 123", fetcher: mock.fetcher, email: "test@example.com" });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
