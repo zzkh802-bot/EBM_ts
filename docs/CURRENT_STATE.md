@@ -51,7 +51,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - Source/evidence line windows are uniformly one-based to match Pi `read`; archive metadata now uses `bodyLineStart` rather than a zero-based offset.
 - External source normalization decodes numeric/common HTML entities, removes zero-width/control characters, normalizes Unicode spacing, and preserves PubMed mixed inline XML text order. Guideline MCP JSON envelopes are reduced to their semantic title and Markdown content before archive.
 - PubMed search explicitly uses relevance ordering and marks zero-result archives as `Status: no_results`; `pubmed_read` accepts model-natural `PMID:`, `PMCID:`, and `DOI:` prefixes.
-- A dedicated abstract-only real E2E completed in 45.45 wall-clock seconds (43.861 traced): 7 turns, 6 tool calls, 0 errors, one `pubmed_search`, no `pubmed_read`, one `primary_abstract` evidence record, and a verified report. This confirms separate abstract evidence adds no second PubMed network round.
+- A dedicated abstract-only real E2E initially completed in 45.45 wall-clock seconds but used an avoidable shell call to count source lines. After adding evidence-ready abstract paths and exact read windows to `pubmed_search`, the identical workflow reran in 23.96 wall-clock / 22.54 traced seconds: 6 turns, 5 tool calls, 0 errors, no duplicates, one search, one targeted read, no `pubmed_read` or shell, first evidence at 11.305 seconds, one `primary_abstract` record, and a verified report.
 - `evidence_add` accepts either the returned session-relative evidence path or the current session's Pi-readable `data/sessions/<id>/...` path and canonicalizes it; other-session paths remain rejected.
 - `npm run check`: 18 test files / 58 tests passing.
 
