@@ -52,7 +52,7 @@ Use this default sequence:
 2. If MCP returns traceable, official or clearly verified, recent-enough chunks that directly answer the claim, add them as evidence early.
 3. If the guideline is older than about 3 years, the topic is fast-moving, the recommendation is controversial, or the MCP result only gives an indirect/secondary view, treat MCP as preliminary cognition and run targeted PubMed/Web update searches for only the claims that could change the answer.
 4. Do not run broad PubMed searches before MCP for ordinary clinical recommendation questions unless the question is not guideline-answerable, concerns a named trial/article, asks for newest studies, or MCP is unavailable.
-5. In the final report, separate source roles: guidelines/MCP establish current standard and boundaries; PubMed primary or review evidence updates, supports, or challenges that standard; web search is discovery unless the read source is archived and citable.
+5. In the final report, separate source roles in user-facing language: authoritative guidelines establish current standards and boundaries; primary studies and systematic reviews update, support, or challenge that standard; ordinary web/search snippets are discovery only unless the underlying source has been read and is citable. Do not mention internal acquisition routes such as MCP, PubMed tool calls, RAG chunks, archive paths, or evidence IDs in the report body.
 
 ## Guideline acquisition ladder
 

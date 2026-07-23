@@ -11,6 +11,7 @@ coverage/
 data/sessions/
 data/pi-sessions/
 data/pi-agent/
+data/benchmark_reports/
 data/tmp/
 tmp/
 *.log

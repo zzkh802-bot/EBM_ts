@@ -27,6 +27,12 @@ export type ReportRecord = {
   createdAt: string;
 };
 
+function renderReferenceEntry(entry: string): string {
+  const match = /^\[(\d+)\]\s+(.*)$/.exec(entry.trim());
+  if (!match) return entry.trim();
+  return `${match[1]}. [${match[1]}] ${match[2]!.trim()}`;
+}
+
 function renderReferenceSection(references: ReportReference[]): string {
   if (!references.length) return "";
   return [
@@ -34,7 +40,7 @@ function renderReferenceSection(references: ReportReference[]): string {
     "",
     ...[...references]
       .sort((a, b) => a.number - b.number)
-      .map((reference) => `[${reference.number}] ${reference.citation.trim()}`),
+      .map((reference) => `${reference.number}. [${reference.number}] ${reference.citation.trim()}`),
   ].join("\n");
 }
 
@@ -73,7 +79,7 @@ function canonicalizeExistingReferenceSection(content: string): string {
   const body = lines.slice(0, headingIndex).join("\n");
   const entries = splitReferenceEntries(lines.slice(headingIndex + 1).join("\n"));
   if (!entries.length) return content;
-  return normalizeMarkdown(`${body}\n\n## 参考文献\n\n${entries.join("\n")}`);
+  return normalizeMarkdown(`${body}\n\n## 参考文献\n\n${entries.map(renderReferenceEntry).join("\n")}`);
 }
 
 function ensureReferenceSection(content: string, references: ReportReference[]): string {
