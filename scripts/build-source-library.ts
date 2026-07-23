@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { sourceLibraryMetadataFields } from "../src/tools/sourceLibrary.js";
 
 type Frontmatter = {
   kind?: string;
@@ -164,11 +165,14 @@ async function main(): Promise<void> {
     const dir = path.join(libraryDir, librarySlug);
     await mkdir(dir, { recursive: true });
     await writeFile(path.join(dir, "full.md"), `${candidate.content.trim()}\n`, "utf8");
+    const provider = candidate.sourceUrl?.includes("pubmed.ncbi.nlm.nih.gov") || candidate.sourceUrl?.includes("pmc.ncbi.nlm.nih.gov") ? "pubmed" : candidate.sourceUrl?.startsWith("mcp://") ? "guideline_mcp" : "archive";
     await writeFile(path.join(dir, "metadata.json"), `${JSON.stringify({
       title: candidate.title,
       ...(candidate.sourceUrl ? { source_url: candidate.sourceUrl } : {}),
       aliases: candidate.aliases,
+      ...sourceLibraryMetadataFields({ title: candidate.title, ...(candidate.sourceUrl ? { sourceUrl: candidate.sourceUrl } : {}), content: candidate.content, provider }),
       sha256: candidate.sha256,
+      provider,
       imported_from: candidate.sourcePath,
       imported_session: candidate.session,
       imported_at: new Date().toISOString(),

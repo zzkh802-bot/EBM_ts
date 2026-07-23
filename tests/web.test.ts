@@ -5,7 +5,7 @@ import { strToU8, zipSync } from "fflate";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { readWeb, renderSearchCandidatesText, searchWeb } from "../src/tools/web.js";
-import { searchSourceLibrary } from "../src/tools/sourceLibrary.js";
+import { searchSourceLibrary, sourceLibraryMetadataFields } from "../src/tools/sourceLibrary.js";
 
 function mockFetch(responses: Response[]) {
   const calls: Array<{ input: string; init?: RequestInit }> = [];
@@ -19,6 +19,26 @@ function mockFetch(responses: Response[]) {
 }
 
 describe("archived web tools", () => {
+  it("extracts PubMed identifiers and search keywords for source-library metadata", () => {
+    const fields = sourceLibraryMetadataFields({
+      title: "A randomized comparison of high-dose cytarabine alone in acute myeloid leukemia: the JALSG AML201 Study.",
+      sourceUrl: "https://pubmed.ncbi.nlm.nih.gov/21190996/",
+      provider: "pubmed",
+      content: [
+        "PMID: 21190996",
+        "PMCID: PMC1234567",
+        "DOI: 10.1182/blood.example",
+        "Journal: Blood. 2011;117(8):2366-2372.",
+        "Publication types: Randomized Controlled Trial; Clinical Trial",
+      ].join("\n"),
+    });
+
+    expect(fields).toMatchObject({ pmid: "21190996", pmcid: "PMC1234567", doi: "10.1182/blood.example", year: "2011" });
+    expect(fields.publication_types).toContain("Randomized Controlled Trial");
+    expect(fields.keywords.join(" ")).toContain("AML acute myeloid leukemia");
+    expect(fields.keywords.join(" ")).toContain("cytarabine Ara-C");
+  });
+
   it("searches the local source library with Chinese guideline terms", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "ebm-source-library-"));
     const entry = path.join(root, "chinese-aml-2023");

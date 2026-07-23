@@ -11,12 +11,99 @@ export type SourceLibraryCandidate = {
   snippet?: string;
 };
 
+type SourceLibraryMetadata = {
+  title?: unknown;
+  source_url?: unknown;
+  aliases?: unknown;
+  keywords?: unknown;
+  organization?: unknown;
+  year?: unknown;
+  pmid?: unknown;
+  pmcid?: unknown;
+  doi?: unknown;
+  publication_types?: unknown;
+  provider?: unknown;
+  source_status?: unknown;
+};
+
 function tokenize(value: string): string[] {
   return value.normalize("NFKC").toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((token) => token.length >= 2);
 }
 
 function sourceLibrarySlug(value: string): string {
   return stableArchiveName({ kind: "read", title: value, content: value }).replace(/\.md$/, "");
+}
+
+function uniqueStrings(values: Array<string | undefined>): string[] {
+  return [...new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)))];
+}
+
+function markdownField(content: string, field: string): string | undefined {
+  return content.match(new RegExp(`^${field}:\\s*(.+)$`, "mi"))?.[1]?.trim();
+}
+
+function sourceUrlIdentifiers(sourceUrl?: string): { pmid?: string; pmcid?: string; doi?: string } {
+  if (!sourceUrl) return {};
+  const pmid = sourceUrl.match(/pubmed\.ncbi\.nlm\.nih\.gov\/(\d+)/i)?.[1];
+  const pmcid = sourceUrl.match(/pmc\.ncbi\.nlm\.nih\.gov\/articles\/(PMC\d+)/i)?.[1];
+  const doi = sourceUrl.match(/doi\.org\/([^?#]+)/i)?.[1];
+  return { ...(pmid ? { pmid } : {}), ...(pmcid ? { pmcid } : {}), ...(doi ? { doi: decodeURIComponent(doi) } : {}) };
+}
+
+function inferYear(input: { content: string; title?: string; sourceUrl?: string }): string | undefined {
+  const journalLine = markdownField(input.content, "Journal");
+  const candidates = [journalLine, input.title, input.sourceUrl, input.content.slice(0, 3000)].filter(Boolean).join(" ");
+  return candidates.match(/\b(19\d{2}|20\d{2})\b/)?.[1];
+}
+
+function inferPublicationTypes(content: string): string[] {
+  const raw = markdownField(content, "Publication types") ?? markdownField(content, "Publication Types");
+  if (!raw) return [];
+  return uniqueStrings(raw.split(/[,;|]/));
+}
+
+function inferKeywords(input: { title: string; content: string; sourceUrl?: string; provider?: string; sourceStatus?: string }): string[] {
+  const ids = sourceUrlIdentifiers(input.sourceUrl);
+  const fields = [
+    input.title,
+    markdownField(input.content, "PMID"),
+    markdownField(input.content, "PMCID"),
+    markdownField(input.content, "DOI"),
+    markdownField(input.content, "Journal"),
+    markdownField(input.content, "Publication types"),
+    input.provider,
+    input.sourceStatus,
+    ids.pmid,
+    ids.pmcid,
+    ids.doi,
+  ];
+  const titleTokens = tokenize(input.title).filter((token) => token.length >= 3);
+  const controlled = [
+    /acute myeloid leukemia|\baml\b/iu.test(input.title) ? "AML acute myeloid leukemia 急性髓系白血病" : undefined,
+    /cytarabine|ara-?c|阿糖胞苷/iu.test(input.title) ? "cytarabine Ara-C 阿糖胞苷" : undefined,
+    /consolidation|postremission|巩固/iu.test(input.title) ? "consolidation postremission 巩固治疗" : undefined,
+    /random/i.test(input.title) ? "randomized trial RCT 随机对照试验" : undefined,
+    /meta-analysis|systematic review/i.test(input.title) ? "meta-analysis systematic review 荟萃分析 系统综述" : undefined,
+    /guideline|recommendation|指南|推荐/u.test(input.title) ? "guideline recommendation 指南 推荐" : undefined,
+  ];
+  return uniqueStrings([...fields, ...controlled, ...titleTokens]).slice(0, 80);
+}
+
+export function sourceLibraryMetadataFields(input: { title: string; sourceUrl?: string; content: string; provider: string; sourceStatus?: string }) {
+  const ids = sourceUrlIdentifiers(input.sourceUrl);
+  const pmid = markdownField(input.content, "PMID") ?? ids.pmid;
+  const pmcid = markdownField(input.content, "PMCID") ?? ids.pmcid;
+  const doi = markdownField(input.content, "DOI") ?? ids.doi;
+  const year = inferYear(input);
+  const publicationTypes = inferPublicationTypes(input.content);
+  return {
+    ...(pmid ? { pmid } : {}),
+    ...(pmcid ? { pmcid } : {}),
+    ...(doi ? { doi } : {}),
+    ...(year ? { year } : {}),
+    ...(publicationTypes.length ? { publication_types: publicationTypes } : {}),
+    keywords: inferKeywords(input),
+  };
 }
 
 function snippetFor(content: string, tokens: string[]): string | undefined {
@@ -40,11 +127,16 @@ export async function searchSourceLibrary(input: { sourceLibraryDir?: string; qu
     if (!entry.isDirectory()) continue;
     const dir = path.join(input.sourceLibraryDir, entry.name);
     try {
-      const metadata = JSON.parse(await readFile(path.join(dir, "metadata.json"), "utf8")) as { title?: unknown; source_url?: unknown; aliases?: unknown; organization?: unknown; year?: unknown };
+      const metadata = JSON.parse(await readFile(path.join(dir, "metadata.json"), "utf8")) as SourceLibraryMetadata;
       const title = typeof metadata.title === "string" && metadata.title.trim() ? metadata.title.trim() : entry.name;
       const aliases = Array.isArray(metadata.aliases) ? metadata.aliases.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
-      const haystack = [title, ...aliases, metadata.organization, metadata.year].filter((item): item is string | number => typeof item === "string" || typeof item === "number").join(" ").toLowerCase();
-      let score = queryTokens.reduce((sum, token) => sum + (haystack.includes(token) ? 3 : 0), 0);
+      const keywords = Array.isArray(metadata.keywords) ? metadata.keywords.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+      const publicationTypes = Array.isArray(metadata.publication_types) ? metadata.publication_types.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+      const highValueHaystack = [title, ...aliases, ...keywords, ...publicationTypes, metadata.organization, metadata.year, metadata.pmid, metadata.pmcid, metadata.doi, metadata.provider, metadata.source_status]
+        .filter((item): item is string | number => typeof item === "string" || typeof item === "number")
+        .join(" ")
+        .toLowerCase();
+      let score = queryTokens.reduce((sum, token) => sum + (highValueHaystack.includes(token) ? 3 : 0), 0);
       let content = "";
       if (score < queryTokens.length * 3) {
         try {
@@ -127,11 +219,13 @@ export async function upsertSourceLibraryFromArchive(input: {
   for (let suffix = 1; entries.some((entry) => entry.name === slug); suffix += 1) slug = `${baseSlug}-${suffix}`;
   const dir = path.join(input.sourceLibraryDir, slug);
   await mkdir(dir, { recursive: true });
+  const title = input.archive.title || path.basename(input.archive.path, ".md");
   await writeFile(path.join(dir, "full.md"), `${input.archive.content.trim()}\n`, "utf8");
   await writeFile(path.join(dir, "metadata.json"), `${JSON.stringify({
-    title: input.archive.title || path.basename(input.archive.path, ".md"),
+    title,
     ...(input.archive.sourceUrl ? { source_url: input.archive.sourceUrl } : {}),
-    aliases: aliasesFor({ ...(input.archive.title ? { title: input.archive.title } : {}), ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}), archivePath: input.archive.path }),
+    aliases: aliasesFor({ title, ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}), archivePath: input.archive.path }),
+    ...sourceLibraryMetadataFields({ title, ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}), content: input.archive.content, provider: input.provider, ...(input.sourceStatus ? { sourceStatus: input.sourceStatus } : {}) }),
     sha256: input.archive.sha256,
     provider: input.provider,
     ...(input.sourceStatus ? { source_status: input.sourceStatus } : {}),
