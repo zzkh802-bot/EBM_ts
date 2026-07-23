@@ -11,6 +11,20 @@ export type SourceLibraryCandidate = {
   sourceUrl?: string;
   aliases: string[];
   score: number;
+  provider?: string;
+  sourceStatus?: string;
+  importedFrom?: string;
+  importedSession?: string;
+  importedAt?: string;
+  discoveryQueries: string[];
+  accessCount?: number;
+  identifiers: {
+    pmid?: string;
+    pmcid?: string;
+    doi?: string;
+    year?: string;
+    publicationTypes: string[];
+  };
   snippet?: string;
 };
 
@@ -264,6 +278,20 @@ export async function searchSourceLibrary(input: { sourceLibraryDir?: string; qu
         ...(typeof metadata.source_url === "string" && metadata.source_url.trim() ? { sourceUrl: metadata.source_url.trim() } : {}),
         aliases,
         score,
+        ...(typeof metadata.provider === "string" ? { provider: metadata.provider } : {}),
+        ...(typeof metadata.source_status === "string" ? { sourceStatus: metadata.source_status } : {}),
+        ...(typeof (metadata as { imported_from?: unknown }).imported_from === "string" ? { importedFrom: (metadata as { imported_from: string }).imported_from } : {}),
+        ...(typeof (metadata as { imported_session?: unknown }).imported_session === "string" ? { importedSession: (metadata as { imported_session: string }).imported_session } : {}),
+        ...(typeof (metadata as { imported_at?: unknown }).imported_at === "string" ? { importedAt: (metadata as { imported_at: string }).imported_at } : {}),
+        discoveryQueries,
+        ...(typeof (metadata as { access_count?: unknown }).access_count === "number" ? { accessCount: (metadata as { access_count: number }).access_count } : {}),
+        identifiers: {
+          ...(typeof metadata.pmid === "string" ? { pmid: metadata.pmid } : {}),
+          ...(typeof metadata.pmcid === "string" ? { pmcid: metadata.pmcid } : {}),
+          ...(typeof metadata.doi === "string" ? { doi: metadata.doi } : {}),
+          ...(typeof metadata.year === "string" ? { year: metadata.year } : {}),
+          publicationTypes,
+        },
         ...(snippet ? { snippet } : {}),
       });
     } catch {

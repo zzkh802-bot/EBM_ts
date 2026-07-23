@@ -35,14 +35,24 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
         "",
         `Results: ${candidates.length}`,
         "",
-        ...(candidates.length ? candidates.flatMap((candidate, index) => [
+        ...(candidates.length ? ["These are local archived sources with provenance. Prefer reading a relevant local hit before repeating PubMed/web search; re-search only for a specific freshness gap, missing identifier, or conflicting source.", "", ...candidates.flatMap((candidate, index) => [
           `${index + 1}. ${candidate.title}`,
           `   Slug: ${candidate.slug}`,
           ...(candidate.sourceUrl ? [`   Source URL: ${candidate.sourceUrl}`, `   Next: web_read(url=${JSON.stringify(candidate.sourceUrl)}) will reuse the local library copy if source_url matches.`] : []),
+          `   Acquisition route: ${candidate.discoveryQueries.length ? `${candidate.provider ?? "source"}_search(query=${JSON.stringify(candidate.discoveryQueries.at(-1))}) → ${candidate.sourceUrl ? `web_read(url=${JSON.stringify(candidate.sourceUrl)})` : "local archive"}` : `${candidate.provider ?? "unknown"}${candidate.sourceUrl ? ` read(url=${JSON.stringify(candidate.sourceUrl)})` : " local archive"}`}`,
+          `   Provenance: provider=${candidate.provider ?? "unknown"}${candidate.sourceStatus ? `; status=${candidate.sourceStatus}` : ""}${candidate.importedFrom ? `; imported_from=${candidate.importedFrom}` : ""}${candidate.importedAt ? `; imported_at=${candidate.importedAt}` : ""}${candidate.accessCount !== undefined ? `; access_count=${candidate.accessCount}` : ""}`,
+          ...(candidate.identifiers.pmid || candidate.identifiers.pmcid || candidate.identifiers.doi || candidate.identifiers.year || candidate.identifiers.publicationTypes.length ? [`   Identifiers: ${[
+            candidate.identifiers.pmid ? `PMID ${candidate.identifiers.pmid}` : undefined,
+            candidate.identifiers.pmcid ? `PMCID ${candidate.identifiers.pmcid}` : undefined,
+            candidate.identifiers.doi ? `DOI ${candidate.identifiers.doi}` : undefined,
+            candidate.identifiers.year ? `year ${candidate.identifiers.year}` : undefined,
+            candidate.identifiers.publicationTypes.length ? candidate.identifiers.publicationTypes.join("; ") : undefined,
+          ].filter(Boolean).join("; ")}`] : []),
+          ...(candidate.discoveryQueries.length ? [`   Found before by query: ${candidate.discoveryQueries.slice(-2).join(" || ")}`] : []),
           ...(candidate.aliases.length ? [`   Aliases: ${candidate.aliases.join("; ")}`] : []),
           ...(candidate.snippet ? [`   Snippet: ${candidate.snippet}`] : []),
           "",
-        ]) : ["No local library entries matched. Use MCP/PubMed/web search as needed."]),
+        ])] : ["No local library entries matched. Use MCP/PubMed/web search as needed."]),
       ];
       return {
         content: [{ type: "text", text: lines.join("\n") }],
@@ -83,8 +93,11 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
       const output = archiveToolText(result.archive, piReadableSessionPath(ctx.cwd, sessionId, result.archive.path), { compactRead: true });
       const library = result.provider === "library" ? { written: false } : await upsertSourceLibraryFromArchive({ sourceLibraryDir, archive: result.archive, provider: result.provider, sessionId });
       pi.events.emit("ebm:source_archived", { sessionId, provider: result.provider, path: result.archive.path, kind: "read", sourceLibraryPath: library.path, sourceLibraryWritten: library.written });
+      const libraryTrustNote = result.provider === "library"
+        ? "\n\nLocal library provenance: this source was read from the curated local archive using its source_url match. Treat it as an already archived citation-capable source; do not repeat PubMed/web search for the same source unless you need a newer version, a missing identifier, or conflict resolution."
+        : "";
       return {
-        content: [{ type: "text", text: output.text }],
+        content: [{ type: "text", text: `${output.text}${libraryTrustNote}` }],
         details: { provider: result.provider, archive: archiveDetails(result.archive), sourceLibrary: library, truncated: output.truncated },
       };
     },
