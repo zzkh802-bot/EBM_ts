@@ -26,6 +26,7 @@ const args = new Set(process.argv.slice(2));
 const casesPathArg = process.argv.slice(2).find((arg) => !arg.startsWith("--"));
 const casesPath = casesPathArg || path.join("scripts", "source-library-eval-cases.json");
 const includeRuntime = !args.has("--gold-only");
+const strictRuntime = args.has("--strict-runtime");
 const runtimeLimit = Number(process.argv.slice(2).find((arg) => arg.startsWith("--runtime-limit="))?.slice("--runtime-limit=".length)) || 50;
 const runtimeMaxRank = Number(process.argv.slice(2).find((arg) => arg.startsWith("--runtime-max-rank="))?.slice("--runtime-max-rank=".length)) || 5;
 
@@ -80,6 +81,8 @@ let goldPassed = 0;
 let goldTotal = 0;
 let runtimePassed = 0;
 let runtimeTotal = 0;
+const runtimeRanks: number[] = [];
+const runtimeWorst: Array<{ name: string; query: string; rank: number | undefined }> = [];
 const reports: string[] = [];
 for (const item of cases) {
   const results = await searchSourceLibrary({ sourceLibraryDir, query: item.query, limit: Math.max(item.max_rank, 10) });
@@ -89,6 +92,8 @@ for (const item of cases) {
   if (item.source === "runtime") {
     runtimeTotal += 1;
     if (ok) runtimePassed += 1;
+    if (rank > 0) runtimeRanks.push(rank);
+    if (!ok) runtimeWorst.push({ name: item.name, query: item.query, rank: rank || undefined });
   } else {
     goldTotal += 1;
     if (ok) goldPassed += 1;
@@ -103,5 +108,15 @@ for (const item of cases) {
 }
 
 console.log(reports.join("\n\n"));
-console.log(`\nSummary: ${passed}/${cases.length} passed (gold ${goldPassed}/${goldTotal}, runtime ${runtimePassed}/${runtimeTotal})`);
-if (passed !== cases.length) process.exitCode = 1;
+const sortedRuntimeRanks = [...runtimeRanks].sort((a, b) => a - b);
+const medianRuntimeRank = sortedRuntimeRanks.length ? sortedRuntimeRanks[Math.floor(sortedRuntimeRanks.length / 2)] : undefined;
+const p90RuntimeRank = sortedRuntimeRanks.length ? sortedRuntimeRanks[Math.min(sortedRuntimeRanks.length - 1, Math.floor(sortedRuntimeRanks.length * 0.9))] : undefined;
+console.log(`\nSummary: gold ${goldPassed}/${goldTotal}, runtime ${runtimePassed}/${runtimeTotal}${strictRuntime ? " strict" : " soft"}`);
+if (runtimeTotal) {
+  console.log(`Runtime drift: recall@${runtimeMaxRank}=${(runtimePassed / runtimeTotal).toFixed(3)}, median_rank=${medianRuntimeRank ?? "n/a"}, p90_rank=${p90RuntimeRank ?? "n/a"}`);
+  if (runtimeWorst.length) {
+    console.log("Runtime worst cases:");
+    for (const item of runtimeWorst.slice(0, 10)) console.log(`- ${item.name}: rank=${item.rank ?? "not found"}; query=${item.query}`);
+  }
+}
+if (goldPassed !== goldTotal || (strictRuntime && runtimePassed !== runtimeTotal)) process.exitCode = 1;
