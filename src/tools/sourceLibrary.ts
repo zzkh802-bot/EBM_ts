@@ -227,8 +227,17 @@ function discoveryQueryBonus(query: string, discoveryQueries: string[]): number 
 
 function snippetFor(content: string, tokens: string[]): string | undefined {
   const lines = content.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  const found = lines.find((line) => tokens.some((token) => line.toLowerCase().includes(token)));
-  return found?.slice(0, 500);
+  const abstractIndex = lines.findIndex((line) => /^#{1,3}\s+Abstract\b/i.test(line) || /^Abstract:?$/i.test(line));
+  if (abstractIndex >= 0) {
+    const abstract = lines.slice(abstractIndex + 1, abstractIndex + 8).filter((line) => !/^#{1,3}\s+/.test(line)).join(" ").replace(/\s+/g, " ").trim();
+    if (abstract) return abstract.slice(0, 700);
+  }
+  const contentIndex = lines.findIndex((line) => /^Markdown Content:?$/i.test(line));
+  const semanticStart = contentIndex >= 0 ? contentIndex + 1 : 0;
+  const matched = lines.slice(semanticStart).find((line) => tokens.some((token) => line.toLowerCase().includes(token)) && !/^Title:|^URL Source:|^Published Time:/i.test(line));
+  if (matched) return matched.slice(0, 700);
+  const fallback = lines.slice(semanticStart).find((line) => !/^Title:|^URL Source:|^Published Time:|^Number of Pages:/i.test(line));
+  return fallback?.slice(0, 700);
 }
 
 export async function searchSourceLibrary(input: { sourceLibraryDir?: string; query: string; limit?: number }): Promise<SourceLibraryCandidate[]> {
@@ -298,7 +307,17 @@ export async function searchSourceLibrary(input: { sourceLibraryDir?: string; qu
       continue;
     }
   }
-  return candidates.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title)).slice(0, input.limit ?? 10);
+  const top = candidates.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title)).slice(0, input.limit ?? 10);
+  return await Promise.all(top.map(async (candidate) => {
+    if (candidate.snippet) return candidate;
+    try {
+      const content = await readFile(path.join(input.sourceLibraryDir!, candidate.slug, "full.md"), "utf8");
+      const snippet = snippetFor(content, queryTokens);
+      return snippet ? { ...candidate, snippet } : candidate;
+    } catch {
+      return candidate;
+    }
+  }));
 }
 
 async function sourceLibraryEntries(sourceLibraryDir: string) {

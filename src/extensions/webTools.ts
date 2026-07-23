@@ -50,7 +50,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
           ].filter(Boolean).join("; ")}`] : []),
           ...(candidate.discoveryQueries.length ? [`   Found before by query: ${candidate.discoveryQueries.slice(-2).join(" || ")}`] : []),
           ...(candidate.aliases.length ? [`   Aliases: ${candidate.aliases.join("; ")}`] : []),
-          ...(candidate.snippet ? [`   Snippet: ${candidate.snippet}`] : []),
+          ...(candidate.snippet ? [`   Local summary/preview: ${candidate.snippet}`] : []),
           "",
         ])] : ["No local library entries matched. Use MCP/PubMed/web search as needed."]),
       ];
