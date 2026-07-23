@@ -97,6 +97,42 @@ describe("archived web tools", () => {
     expect(results[0]!.sourceUrl).toBe("https://pubmed.ncbi.nlm.nih.gov/21190996/");
   });
 
+  it("extracts weak web-read titles from content and boosts guideline matches", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "ebm-source-library-"));
+    await upsertSourceLibraryFromArchive({
+      sourceLibraryDir: root,
+      provider: "jina",
+      archive: {
+        path: "sources/read/1482027/full.md",
+        sha256: "sha-guideline",
+        chars: 1000,
+        lines: 10,
+        bodyLineStart: 6,
+        title: "full",
+        sourceUrl: "https://rs.yiigle.com/cmaid/1482027",
+        content: "Title: Chinese guidelines for diagnosis and treatment of adult acute myeloid leukemia (not APL) (2023)\n\nMarkdown Content:\n巩固治疗推荐。",
+      },
+    });
+    await upsertSourceLibraryFromArchive({
+      sourceLibraryDir: root,
+      provider: "pubmed",
+      archive: {
+        path: "sources/read/article/full.md",
+        sha256: "sha-article",
+        chars: 1000,
+        lines: 10,
+        bodyLineStart: 6,
+        title: "High-dose cytarabine consolidation in acute myeloid leukemia.",
+        sourceUrl: "https://pubmed.ncbi.nlm.nih.gov/1/",
+        content: "PMID: 1\nAbstract text.",
+      },
+    });
+
+    const results = await searchSourceLibrary({ sourceLibraryDir: root, query: "中国 急性髓系白血病 诊疗指南 2023 巩固治疗", limit: 2 });
+
+    expect(results[0]).toMatchObject({ title: "Chinese guidelines for diagnosis and treatment of adult acute myeloid leukemia (not APL) (2023)", sourceUrl: "https://rs.yiigle.com/cmaid/1482027" });
+  });
+
   it("enforces source-library max entries during automatic upsert", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "ebm-source-library-"));
     const original = process.env.SOURCE_LIBRARY_MAX_ENTRIES;

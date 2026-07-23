@@ -49,6 +49,56 @@ function markdownField(content: string, field: string): string | undefined {
   return content.match(new RegExp(`^${field}:\\s*(.+)$`, "mi"))?.[1]?.trim();
 }
 
+function poorArchiveTitle(title?: string): boolean {
+  if (!title) return true;
+  const normalized = title.trim().toLowerCase();
+  return !normalized
+    || normalized === "full"
+    || normalized === "read-source"
+    || normalized === "markdown content"
+    || /^https?[-:]/.test(normalized)
+    || /\.(?:pdf|html?|aspx?)$/i.test(normalized)
+    || normalized.length < 8;
+}
+
+function titleCandidateScore(title: string): number {
+  const normalized = title.trim().toLowerCase();
+  if (poorArchiveTitle(title)) return -100;
+  let score = Math.min(title.length, 180) / 20;
+  if (/指南|guideline|recommendation|diagnosis|management|treatment/.test(normalized)) score += 20;
+  if (/nccn|eln|中华医学会|chinese guideline|national comprehensive cancer network/.test(normalized)) score += 16;
+  if (/acute myeloid leukemia|\baml\b|急性髓系白血病/.test(normalized)) score += 12;
+  if (/version|版|20\d{2}|19\d{2}/.test(normalized)) score += 8;
+  if (/continue|panel members|table of contents|copyright|url source|published time/.test(normalized)) score -= 30;
+  return score;
+}
+
+function extractedTitleFromContent(content: string): string | undefined {
+  const lines = content.split(/\r?\n/).map((line) => line.trim().replace(/\s+/g, " ")).filter(Boolean).slice(0, 120);
+  const candidates: string[] = [];
+  for (const line of lines) {
+    const title = line.match(/^Title:\s+(.+)$/i)?.[1]?.trim();
+    if (title && !poorArchiveTitle(title)) candidates.push(title);
+    const h1 = line.match(/^#\s+(.+)$/)?.[1]?.trim();
+    if (h1 && !poorArchiveTitle(h1)) candidates.push(h1);
+    if (/(指南|guideline|recommendation|diagnosis and treatment|diagnosis and management|NCCN Clinical Practice Guidelines)/i.test(line) && line.length <= 220) {
+      candidates.push(line.replace(/^Title:\s+/i, "").replace(/^#+\s*/, ""));
+    }
+  }
+  if (lines.some((line) => /NCCN Clinical Practice Guidelines/i.test(line)) && lines.some((line) => /Acute Myeloid Leukemia/i.test(line))) {
+    const version = lines.find((line) => /Version\s+\d/i.test(line))?.replace(/^#\s*/, "").trim();
+    candidates.push(["NCCN Guidelines: Acute Myeloid Leukemia", version].filter(Boolean).join(" "));
+  }
+  return candidates.sort((a, b) => titleCandidateScore(b) - titleCandidateScore(a))[0];
+}
+
+function bestSourceTitle(input: { title?: string; content: string; sourceUrl?: string; fallback: string }): string {
+  const extracted = extractedTitleFromContent(input.content);
+  if (poorArchiveTitle(input.title)) return extracted || input.sourceUrl || input.fallback;
+  if (extracted && titleCandidateScore(extracted) > titleCandidateScore(input.title!) + 10) return extracted;
+  return input.title!.trim();
+}
+
 function sourceUrlIdentifiers(sourceUrl?: string): { pmid?: string; pmcid?: string; doi?: string } {
   if (!sourceUrl) return {};
   const pmid = sourceUrl.match(/pubmed\.ncbi\.nlm\.nih\.gov\/(\d+)/i)?.[1];
@@ -119,6 +169,18 @@ export function sourceLibraryMetadataFields(input: { title: string; sourceUrl?: 
   };
 }
 
+function sourceTypeBonus(query: string, title: string, haystack: string): number {
+  const q = query.toLowerCase();
+  const t = `${title} ${haystack}`.toLowerCase();
+  let bonus = 0;
+  if (/指南|guideline|recommendation|nccn|eln/.test(q) && /指南|guideline|recommendation|nccn|eln|yiigle|cma\./.test(t)) bonus += 36;
+  if (/中国|中华|cma|yiigle/.test(q) && /中国|中华|chinese|yiigle|cma\./.test(t)) bonus += 18;
+  if (/nccn/.test(q) && /nccn/.test(t)) bonus += 50;
+  if (/eln/.test(q) && /eln|european leukemianet/.test(t)) bonus += 30;
+  if (/诊疗指南|治疗指南/.test(q) && /诊断|治疗|diagnosis|management|treatment/.test(t)) bonus += 12;
+  return bonus;
+}
+
 function comparatorBonus(query: string, title: string): number {
   const q = query.toLowerCase();
   const t = title.toLowerCase();
@@ -180,7 +242,10 @@ export async function searchSourceLibrary(input: { sourceLibraryDir?: string; qu
         .filter((item): item is string | number => typeof item === "string" || typeof item === "number")
         .join(" ")
         .toLowerCase();
-      let score = queryTokens.reduce((sum, token) => sum + (highValueHaystack.includes(token) ? 3 : 0), 0) + comparatorBonus(input.query, title) + discoveryQueryBonus(input.query, discoveryQueries);
+      let score = queryTokens.reduce((sum, token) => sum + (highValueHaystack.includes(token) ? 3 : 0), 0)
+        + comparatorBonus(input.query, title)
+        + sourceTypeBonus(input.query, title, highValueHaystack)
+        + discoveryQueryBonus(input.query, discoveryQueries);
       let content = "";
       if (score < queryTokens.length * 3) {
         try {
@@ -302,9 +367,11 @@ export async function upsertSourceLibraryFromArchive(input: {
           await writeFile(fullPath, `${input.archive.content.trim()}\n`, "utf8");
           contentUpdated = true;
         }
+        const existingTitle = typeof metadata.title === "string" ? metadata.title : undefined;
+        const improvedTitle = poorArchiveTitle(existingTitle) ? bestSourceTitle({ ...(input.archive.title ? { title: input.archive.title } : {}), content: input.archive.content, ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}), fallback: path.basename(input.archive.path, ".md") }) : existingTitle!;
         const updatedMetadata = {
           ...metadata,
-          title: typeof metadata.title === "string" && metadata.title.trim() ? metadata.title : input.archive.title || path.basename(input.archive.path, ".md"),
+          title: improvedTitle,
           ...(discoveryQueries.length ? { discovery_queries: discoveryQueries } : {}),
           keywords: uniqueStrings([...existingKeywords, ...incomingKeywords]),
           sha256: contentUpdated ? input.archive.sha256 : metadata.sha256,
@@ -323,12 +390,13 @@ export async function upsertSourceLibraryFromArchive(input: {
 
   await pruneSourceLibrary(input.sourceLibraryDir, sourceLibraryMaxEntries());
   const freshEntries = await sourceLibraryEntries(input.sourceLibraryDir);
-  const baseSlug = sourceLibrarySlug(input.archive.title || input.archive.sourceUrl || input.archive.path || input.archive.sha256.slice(0, 12));
+  const incomingTitle = bestSourceTitle({ ...(input.archive.title ? { title: input.archive.title } : {}), content: input.archive.content, ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}), fallback: path.basename(input.archive.path, ".md") });
+  const baseSlug = sourceLibrarySlug(incomingTitle || input.archive.sourceUrl || input.archive.path || input.archive.sha256.slice(0, 12));
   let slug = baseSlug;
   for (let suffix = 1; freshEntries.some((entry) => entry.name === slug); suffix += 1) slug = `${baseSlug}-${suffix}`;
   const dir = path.join(input.sourceLibraryDir, slug);
   await mkdir(dir, { recursive: true });
-  const title = input.archive.title || path.basename(input.archive.path, ".md");
+  const title = incomingTitle;
   await writeFile(path.join(dir, "full.md"), `${input.archive.content.trim()}\n`, "utf8");
   await writeFile(path.join(dir, "metadata.json"), `${JSON.stringify({
     title,

@@ -1,0 +1,32 @@
+[
+  {
+    "name": "AML direct RCT Chinese comparator query",
+    "query": "首次完全缓解 成人急性髓系白血病 大剂量阿糖胞苷 标准剂量多药联合 巩固治疗 无病生存 总生存 复发 严重不良反应",
+    "expect_any": ["21190996", "JALSG AML201"],
+    "max_rank": 3
+  },
+  {
+    "name": "Chinese AML guideline 2023",
+    "query": "成人急性髓系白血病 非急性早幼粒细胞白血病 中国诊疗指南 2023 巩固治疗",
+    "expect_any": ["1482027", "PMC10630568", "Chinese guidelines for diagnosis and treatment of adult acute myeloid leukemia", "成人急性髓系白血病（非急性早幼粒细胞白血病）中国诊疗指南"],
+    "max_rank": 5
+  },
+  {
+    "name": "NCCN AML guideline",
+    "query": "NCCN AML guideline consolidation high dose cytarabine 2024",
+    "expect_any": ["NCCN", "aml.pdf", "ihemato.com/Detail?id=233"],
+    "max_rank": 3
+  },
+  {
+    "name": "AML cytarabine meta-analysis bilingual",
+    "query": "AML 阿糖胞苷 巩固治疗 荟萃分析 无病生存 总生存",
+    "expect_any": ["25299623", "PMC4192550", "High-dose cytarabine in acute myeloid leukemia treatment: a systematic review and meta-analysis"],
+    "max_rank": 5
+  },
+  {
+    "name": "Stroke thrombolysis Chinese-English",
+    "query": "急性缺血性卒中 rt-PA 阿替普酶 溶栓 血压 禁忌 指南",
+    "expect_any": ["alteplase", "rt-PA", "thrombolysis", "卒中", "stroke"],
+    "max_rank": 10
+  }
+]

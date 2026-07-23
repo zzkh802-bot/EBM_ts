@@ -68,8 +68,37 @@ function parseFrontmatter(markdown: string): { frontmatter: Frontmatter; body: s
   return { frontmatter, body: markdown.slice(end + "\n---\n".length) };
 }
 
+function weakTitle(title?: string): boolean {
+  if (!title) return true;
+  const normalized = title.trim().toLowerCase();
+  return !normalized || normalized === "full" || /\.(?:pdf|html?)$/i.test(normalized) || normalized.length < 8;
+}
+
+function titleScore(title: string): number {
+  let score = Math.min(title.length, 180) / 20;
+  if (/指南|guideline|recommendation|diagnosis|management|treatment/i.test(title)) score += 20;
+  if (/nccn|eln|中华医学会|chinese guideline/i.test(title)) score += 16;
+  if (/acute myeloid leukemia|\baml\b|急性髓系白血病/i.test(title)) score += 12;
+  if (/version|版|20\d{2}|19\d{2}/i.test(title)) score += 8;
+  if (/continue|panel members|table of contents|url source|published time/i.test(title)) score -= 30;
+  return weakTitle(title) ? -100 : score;
+}
+
 function firstTitle(body: string, fallback: string): string {
-  return body.split(/\r?\n/).map((line) => line.match(/^#\s+(.+)$/)?.[1]?.trim()).find(Boolean) || fallback;
+  const lines = body.split(/\r?\n/).map((line) => line.trim().replace(/\s+/g, " ")).filter(Boolean).slice(0, 120);
+  const candidates: string[] = [];
+  for (const line of lines) {
+    const title = line.match(/^Title:\s+(.+)$/i)?.[1]?.trim();
+    if (title && !weakTitle(title)) candidates.push(title);
+    const h1 = line.match(/^#\s+(.+)$/)?.[1]?.trim();
+    if (h1 && !weakTitle(h1)) candidates.push(h1);
+    if (/(指南|guideline|recommendation|diagnosis and treatment|diagnosis and management|NCCN Clinical Practice Guidelines)/i.test(line) && line.length <= 220) candidates.push(line.replace(/^Title:\s+/i, "").replace(/^#+\s*/, ""));
+  }
+  if (lines.some((line) => /NCCN Clinical Practice Guidelines/i.test(line)) && lines.some((line) => /Acute Myeloid Leukemia/i.test(line))) {
+    const version = lines.find((line) => /Version\s+\d/i.test(line))?.replace(/^#\s*/, "").trim();
+    candidates.push(["NCCN Guidelines: Acute Myeloid Leukemia", version].filter(Boolean).join(" "));
+  }
+  return candidates.sort((a, b) => titleScore(b) - titleScore(a))[0] || fallback;
 }
 
 function aliasesFor(candidate: Pick<Candidate, "title" | "sourceUrl" | "slug">): string[] {
