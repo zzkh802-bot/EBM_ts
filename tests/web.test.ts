@@ -6,6 +6,7 @@ import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { readWeb, renderSearchCandidatesText, searchWeb } from "../src/tools/web.js";
 import { searchSourceLibrary, sourceLibraryMetadataFields } from "../src/tools/sourceLibrary.js";
+import { expandSourceLibraryQueryTerms } from "../src/tools/sourceLibraryTerms.js";
 
 function mockFetch(responses: Response[]) {
   const calls: Array<{ input: string; init?: RequestInit }> = [];
@@ -19,6 +20,11 @@ function mockFetch(responses: Response[]) {
 }
 
 describe("archived web tools", () => {
+  it("expands bilingual source-library query terms", () => {
+    expect(expandSourceLibraryQueryTerms("成人急性髓系白血病 大剂量阿糖胞苷 巩固治疗")).toEqual(expect.arrayContaining(["acute myeloid leukemia", "cytarabine", "consolidation"]));
+    expect(expandSourceLibraryQueryTerms("卒中 rt-PA 溶栓")).toEqual(expect.arrayContaining(["stroke", "alteplase", "thrombolysis"]));
+  });
+
   it("extracts PubMed identifiers and search keywords for source-library metadata", () => {
     const fields = sourceLibraryMetadataFields({
       title: "A randomized comparison of high-dose cytarabine alone in acute myeloid leukemia: the JALSG AML201 Study.",
@@ -37,6 +43,21 @@ describe("archived web tools", () => {
     expect(fields.publication_types).toContain("Randomized Controlled Trial");
     expect(fields.keywords.join(" ")).toContain("AML acute myeloid leukemia");
     expect(fields.keywords.join(" ")).toContain("cytarabine Ara-C");
+  });
+
+  it("stores discovery queries and bilingual outcome aliases for source-library metadata", () => {
+    const fields = sourceLibraryMetadataFields({
+      title: "A randomized comparison of standard-dose multiagent chemotherapy versus high-dose cytarabine consolidation in AML.",
+      sourceUrl: "https://pubmed.ncbi.nlm.nih.gov/21190996/",
+      provider: "pubmed",
+      discoveryQuery: "成人急性髓系白血病 大剂量阿糖胞苷 巩固治疗 DFS OS 复发 严重不良反应",
+      content: "PMID: 21190996\nJournal: Blood. 2011;117(8):2366-2372.",
+    });
+
+    expect(fields.discovery_queries).toEqual(["成人急性髓系白血病 大剂量阿糖胞苷 巩固治疗 DFS OS 复发 严重不良反应"]);
+    expect(fields.keywords.join(" ")).toContain("无病生存");
+    expect(fields.keywords.join(" ")).toContain("总生存");
+    expect(fields.keywords.join(" ")).toContain("严重不良反应");
   });
 
   it("searches the local source library with Chinese guideline terms", async () => {

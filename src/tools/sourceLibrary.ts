@@ -1,6 +1,7 @@
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { archiveSource, stableArchiveName, type SourceArchiveRecord } from "./archive.js";
+import { expandSourceLibraryQueryTerms } from "./sourceLibraryTerms.js";
 
 export type SourceLibraryCandidate = {
   slug: string;
@@ -24,10 +25,14 @@ type SourceLibraryMetadata = {
   publication_types?: unknown;
   provider?: unknown;
   source_status?: unknown;
+  discovery_queries?: unknown;
 };
 
 function tokenize(value: string): string[] {
-  return value.normalize("NFKC").toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((token) => token.length >= 2);
+  const normalized = value.normalize("NFKC").toLowerCase();
+  const tokens = normalized.split(/[^\p{L}\p{N}]+/u).filter((token) => token.length >= 2);
+  const expansions = expandSourceLibraryQueryTerms(normalized);
+  return uniqueStrings([...tokens, ...expansions]).filter((token) => token.length >= 2);
 }
 
 function sourceLibrarySlug(value: string): string {
@@ -62,7 +67,7 @@ function inferPublicationTypes(content: string): string[] {
   return uniqueStrings(raw.split(/[,;|]/));
 }
 
-function inferKeywords(input: { title: string; content: string; sourceUrl?: string; provider?: string; sourceStatus?: string }): string[] {
+function inferKeywords(input: { title: string; content: string; sourceUrl?: string; provider?: string; sourceStatus?: string; discoveryQuery?: string }): string[] {
   const ids = sourceUrlIdentifiers(input.sourceUrl);
   const fields = [
     input.title,
@@ -73,6 +78,7 @@ function inferKeywords(input: { title: string; content: string; sourceUrl?: stri
     markdownField(input.content, "Publication types"),
     input.provider,
     input.sourceStatus,
+    input.discoveryQuery,
     ids.pmid,
     ids.pmcid,
     ids.doi,
@@ -81,7 +87,11 @@ function inferKeywords(input: { title: string; content: string; sourceUrl?: stri
   const controlled = [
     /acute myeloid leukemia|\baml\b/iu.test(input.title) ? "AML acute myeloid leukemia 急性髓系白血病" : undefined,
     /cytarabine|ara-?c|阿糖胞苷/iu.test(input.title) ? "cytarabine Ara-C 阿糖胞苷" : undefined,
-    /consolidation|postremission|巩固/iu.test(input.title) ? "consolidation postremission 巩固治疗" : undefined,
+    /consolidation|postremission|巩固/iu.test(input.title) ? "consolidation postremission 巩固治疗 缓解后治疗" : undefined,
+    /disease[- ]free survival|\bdfs\b|relapse[- ]free survival|\brfs\b|无病生存|无复发生存/iu.test(`${input.title} ${input.discoveryQuery ?? ""}`) ? "DFS disease-free survival RFS relapse-free survival 无病生存 无复发生存" : undefined,
+    /overall survival|\bos\b|总生存/iu.test(`${input.title} ${input.discoveryQuery ?? ""}`) ? "OS overall survival 总生存" : undefined,
+    /relapse|recurrence|复发/iu.test(`${input.title} ${input.discoveryQuery ?? ""}`) ? "relapse recurrence 复发" : undefined,
+    /adverse event|toxicity|infection|不良反应|毒性|感染/iu.test(`${input.title} ${input.discoveryQuery ?? ""}`) ? "adverse events toxicity infection safety 严重不良反应 毒性 感染 安全性" : undefined,
     /random/i.test(input.title) ? "randomized trial RCT 随机对照试验" : undefined,
     /meta-analysis|systematic review/i.test(input.title) ? "meta-analysis systematic review 荟萃分析 系统综述" : undefined,
     /guideline|recommendation|指南|推荐/u.test(input.title) ? "guideline recommendation 指南 推荐" : undefined,
@@ -89,7 +99,7 @@ function inferKeywords(input: { title: string; content: string; sourceUrl?: stri
   return uniqueStrings([...fields, ...controlled, ...titleTokens]).slice(0, 80);
 }
 
-export function sourceLibraryMetadataFields(input: { title: string; sourceUrl?: string; content: string; provider: string; sourceStatus?: string }) {
+export function sourceLibraryMetadataFields(input: { title: string; sourceUrl?: string; content: string; provider: string; sourceStatus?: string; discoveryQuery?: string }) {
   const ids = sourceUrlIdentifiers(input.sourceUrl);
   const pmid = markdownField(input.content, "PMID") ?? ids.pmid;
   const pmcid = markdownField(input.content, "PMCID") ?? ids.pmcid;
@@ -103,7 +113,23 @@ export function sourceLibraryMetadataFields(input: { title: string; sourceUrl?: 
     ...(year ? { year } : {}),
     ...(publicationTypes.length ? { publication_types: publicationTypes } : {}),
     keywords: inferKeywords(input),
+    ...(input.discoveryQuery?.trim() ? { discovery_queries: [input.discoveryQuery.trim()] } : {}),
   };
+}
+
+function comparatorBonus(query: string, title: string): number {
+  const q = query.toLowerCase();
+  const t = title.toLowerCase();
+  const wantsHiDac = /high-dose|hidac|大剂量/.test(q);
+  const wantsStandard = /standard-dose|标准剂量/.test(q);
+  const wantsMultiagent = /multiagent|combination|多药/.test(q);
+  let bonus = 0;
+  if (wantsHiDac && /high-dose|hidac/.test(t)) bonus += 4;
+  if (wantsStandard && /standard-dose/.test(t)) bonus += 8;
+  if (wantsMultiagent && /multiagent|combination/.test(t)) bonus += 8;
+  if (wantsHiDac && wantsStandard && wantsMultiagent && /high-dose/.test(t) && /standard-dose/.test(t) && /multiagent/.test(t)) bonus += 16;
+  if ((/versus|相比|比较|对比/.test(q) || (wantsHiDac && wantsStandard)) && /versus|comparison|compared|randomized comparison/.test(t)) bonus += 8;
+  return bonus;
 }
 
 function snippetFor(content: string, tokens: string[]): string | undefined {
@@ -132,11 +158,12 @@ export async function searchSourceLibrary(input: { sourceLibraryDir?: string; qu
       const aliases = Array.isArray(metadata.aliases) ? metadata.aliases.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
       const keywords = Array.isArray(metadata.keywords) ? metadata.keywords.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
       const publicationTypes = Array.isArray(metadata.publication_types) ? metadata.publication_types.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
-      const highValueHaystack = [title, ...aliases, ...keywords, ...publicationTypes, metadata.organization, metadata.year, metadata.pmid, metadata.pmcid, metadata.doi, metadata.provider, metadata.source_status]
+      const discoveryQueries = Array.isArray(metadata.discovery_queries) ? metadata.discovery_queries.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+      const highValueHaystack = [title, ...aliases, ...keywords, ...publicationTypes, ...discoveryQueries, metadata.organization, metadata.year, metadata.pmid, metadata.pmcid, metadata.doi, metadata.provider, metadata.source_status]
         .filter((item): item is string | number => typeof item === "string" || typeof item === "number")
         .join(" ")
         .toLowerCase();
-      let score = queryTokens.reduce((sum, token) => sum + (highValueHaystack.includes(token) ? 3 : 0), 0);
+      let score = queryTokens.reduce((sum, token) => sum + (highValueHaystack.includes(token) ? 3 : 0), 0) + comparatorBonus(input.query, title);
       let content = "";
       if (score < queryTokens.length * 3) {
         try {
@@ -197,6 +224,7 @@ export async function upsertSourceLibraryFromArchive(input: {
   provider: string;
   sessionId?: string;
   sourceStatus?: string;
+  discoveryQuery?: string;
 }): Promise<{ written: boolean; path?: string }> {
   if (!input.sourceLibraryDir) return { written: false };
   if (!input.archive.content.trim()) return { written: false };
@@ -205,8 +233,20 @@ export async function upsertSourceLibraryFromArchive(input: {
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     try {
-      const metadata = JSON.parse(await readFile(path.join(input.sourceLibraryDir, entry.name, "metadata.json"), "utf8")) as { source_url?: unknown; sha256?: unknown };
+      const metadataPath = path.join(input.sourceLibraryDir, entry.name, "metadata.json");
+      const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as SourceLibraryMetadata & { sha256?: unknown };
       if ((input.archive.sourceUrl && metadata.source_url === input.archive.sourceUrl) || metadata.sha256 === input.archive.sha256) {
+        if (input.discoveryQuery?.trim()) {
+          const existingQueries = Array.isArray(metadata.discovery_queries) ? metadata.discovery_queries.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+          if (!existingQueries.includes(input.discoveryQuery.trim())) {
+            const existingKeywords = Array.isArray(metadata.keywords) ? metadata.keywords.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
+            await writeFile(metadataPath, `${JSON.stringify({
+              ...metadata,
+              discovery_queries: [...existingQueries, input.discoveryQuery.trim()],
+              keywords: uniqueStrings([...existingKeywords, ...tokenize(input.discoveryQuery).filter((token) => token.length >= 3)]),
+            }, null, 2)}\n`, "utf8");
+          }
+        }
         return { written: false, path: path.posix.join(input.sourceLibraryDir, entry.name) };
       }
     } catch {
@@ -225,7 +265,7 @@ export async function upsertSourceLibraryFromArchive(input: {
     title,
     ...(input.archive.sourceUrl ? { source_url: input.archive.sourceUrl } : {}),
     aliases: aliasesFor({ title, ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}), archivePath: input.archive.path }),
-    ...sourceLibraryMetadataFields({ title, ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}), content: input.archive.content, provider: input.provider, ...(input.sourceStatus ? { sourceStatus: input.sourceStatus } : {}) }),
+    ...sourceLibraryMetadataFields({ title, ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}), content: input.archive.content, provider: input.provider, ...(input.sourceStatus ? { sourceStatus: input.sourceStatus } : {}), ...(input.discoveryQuery ? { discoveryQuery: input.discoveryQuery } : {}) }),
     sha256: input.archive.sha256,
     provider: input.provider,
     ...(input.sourceStatus ? { source_status: input.sourceStatus } : {}),
