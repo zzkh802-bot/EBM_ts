@@ -1,7 +1,6 @@
 import { mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { readPubMed, searchPubMed, similarPubMed } from "../src/tools/pubmed.js";
 
@@ -93,6 +92,25 @@ describe("PubMed archive adapters", () => {
     expect(result.archive.content).toContain("DOI: 10.1/example");
   });
 
+  it("falls back to PMC HTML when PMC XML omits the article body", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-pubmed-"));
+    const pmcNoBody = `<?xml version="1.0"?><pmc-articleset><article><!--The publisher of this article does not allow downloading of the full text in XML form.--><front /></article></pmc-articleset>`;
+    const pmcHtml = `<!doctype html><main id="main-content"><article><section class="body main-article-body"><section><h2>Abstract</h2><p>HTML abstract text.</p></section><section><h2>Results</h2><p>The PMC HTML full text reports clinically important outcomes.</p><ul><li>Outcome one improved.</li></ul></section></section></article></main>`;
+    const mock = mockFetch([
+      new Response(articleXml, { headers: { "content-type": "application/xml" } }),
+      new Response(pmcNoBody, { headers: { "content-type": "application/xml" } }),
+      new Response(pmcHtml, { headers: { "content-type": "text/html" } }),
+    ]);
+
+    const result = await readPubMed({ sessionDir, identifier: "PMID: 123", fetcher: mock.fetcher, retries: 0 });
+
+    expect(result).toMatchObject({ ok: true, fullText: true, fullTextSource: "pmc" });
+    if (!result.ok) return;
+    expect(result.archive.sourceUrl).toBe("https://pmc.ncbi.nlm.nih.gov/articles/PMC999/");
+    expect(result.archive.content).toContain("Source status: PMC full text (HTML page)");
+    expect(result.archive.content).toContain("The PMC HTML full text reports clinically important outcomes.");
+  });
+
   it("keeps abstract search results when optional similar-article lookup fails", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-pubmed-"));
     const mock = mockFetch([
@@ -105,35 +123,27 @@ describe("PubMed archive adapters", () => {
     if (result.ok) expect(result.warnings[0]).toContain("similar-article lookup failed");
   });
 
-  it("uses an OpenAlex OA PDF and MinerU when PMC full text is unavailable", async () => {
+  it("adds compact PubMed context for abstract-only records", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-pubmed-"));
-    const abstractOnlyXml = articleXml.replace('<ArticleId IdType="pmc">PMC999</ArticleId>', "");
-    const zip = zipSync({ "article/full.md": strToU8("# OA full text\n\nComplete treatment recommendations.") });
+    const xml = articleXml.replace("<PublicationTypeList>", "");
     const mock = mockFetch([
-      new Response(abstractOnlyXml),
-      Response.json({
-        id: "https://openalex.org/W1",
-        locations: [{ is_oa: true, pdf_url: "https://repository.example/article.pdf", source: { display_name: "Repository", type: "repository" } }],
-      }),
-      new Response(new TextEncoder().encode("%PDF-1.7 downloaded OA document"), { headers: { "content-type": "application/pdf" } }),
-      Response.json({ data: { batch_id: "oa-task", file_urls: ["https://upload.example/signed"] } }),
-      new Response(null, { status: 200 }),
-      Response.json({ data: { extract_result: [{ state: "done", full_zip_url: "https://mineru.example/result.zip" }] } }),
-      new Response(zip),
+      new Response(xml, { headers: { "content-type": "application/xml" } }),
+      new Response("PMC unavailable", { status: 503 }),
+      new Response("<html>No article body</html>", { headers: { "content-type": "text/html" } }),
+      Response.json({ linksets: [{ ids: ["123"], linksetdbs: [{ linkname: "pubmed_pubmed", links: ["456"] }] }] }),
+      Response.json({ result: { uids: ["456"], "456": { uid: "456", title: "Similar review", source: "Cochrane", pubdate: "2020" } } }),
+      Response.json({ linksets: [{ ids: ["123"], linksetdbs: [{ linkname: "pubmed_pubmed_citedin", links: ["789"] }] }] }),
+      Response.json({ result: { uids: ["789"], "789": { uid: "789", title: "Citing review", source: "Review Journal", pubdate: "2021" } } }),
     ]);
-    const result = await readPubMed({
-      sessionDir,
-      identifier: "123",
-      fetcher: mock.fetcher,
-      mineruApiToken: "token",
-      mineruBaseUrl: "https://mineru.example/api/v4",
-      resolveHost: async () => ["93.184.216.34"],
-    });
-    expect(result).toMatchObject({ ok: true, fullText: true, fullTextSource: "openalex_mineru" });
-    if (result.ok) {
-      expect(result.archive.sourceUrl).toBe("https://repository.example/article.pdf");
-      expect(result.archive.content).toContain("Complete treatment recommendations.");
-    }
+    const result = await readPubMed({ sessionDir, identifier: "123", fetcher: mock.fetcher, retries: 0, includeContext: true });
+    expect(result).toMatchObject({ ok: true, fullText: false, pmcid: "PMC999" });
+    if (!result.ok) return;
+    expect(result.archive.content).toContain("## PubMed context");
+    expect(result.archive.content).toContain("Navigation/context only");
+    expect(result.archive.content).toContain("Access hint: Free PMC linked (PMC999)");
+    expect(result.archive.content).toContain("Similar review");
+    expect(result.archive.content).toContain("Citing review");
+    expect(result.archive.content).not.toContain("References from PubMed link graph");
   });
 
   it("returns an explicit abstract-only result when no PMCID is available", async () => {

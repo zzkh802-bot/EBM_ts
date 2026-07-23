@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { addEvidence } from "../src/tools/evidence.js";
-import { writeReport } from "../src/tools/report.js";
+import { writeReport, writeReportDraft } from "../src/tools/report.js";
 
 async function fixture() {
   const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-report-"));
@@ -50,8 +50,137 @@ describe("verified Markdown reports", () => {
     const saved = await readFile(path.join(sessionDir, report.path), "utf8");
     expect(saved).toContain("Treatment reduced mortality [1]");
     expect(saved).not.toContain(evidence.id);
-    const metadata = JSON.parse(await readFile(path.join(sessionDir, `${report.path}.metadata.json`), "utf8")) as { references: Array<{ number: number; evidence_id: string }> };
-    expect(metadata.references).toEqual([{ number: 1, citation: "Randomized trial of the intervention.", evidence_id: evidence.id }]);
+    const metadata = JSON.parse(await readFile(path.join(sessionDir, `${report.path}.metadata.json`), "utf8")) as { references: Array<{ number: number; evidence_id: string; evidence_ids: string[] }> };
+    expect(metadata.references).toEqual([{ number: 1, citation: "Randomized trial of the intervention.", evidence_ids: [evidence.id], evidence_id: evidence.id }]);
+  });
+
+  it("deduplicates repeated identical hidden reference mappings", async () => {
+    const { sessionDir, evidence } = await fixture();
+    const report = await writeReport({
+      sessionDir,
+      title: "Duplicate refs report",
+      content: "# Conclusion\n\nTreatment reduced mortality [1].",
+      references: [
+        { number: 1, citation: "Randomized trial of the intervention.", evidenceId: evidence.id },
+        { number: 1, citation: "Randomized trial of the intervention.", evidenceId: evidence.id },
+      ],
+    });
+
+    const saved = await readFile(path.join(sessionDir, report.path), "utf8");
+    expect(saved.match(/^1\. \[1\]/gm)?.length).toBe(1);
+    const metadata = JSON.parse(await readFile(path.join(sessionDir, `${report.path}.metadata.json`), "utf8")) as { references: Array<{ number: number; evidence_id: string; evidence_ids: string[] }> };
+    expect(metadata.references).toEqual([{ number: 1, citation: "Randomized trial of the intervention.", evidence_ids: [evidence.id], evidence_id: evidence.id }]);
+  });
+
+  it("allows one bibliographic reference to map to multiple evidence records", async () => {
+    const { sessionDir, evidence } = await fixture();
+    await writeFile(path.join(sessionDir, "sources", "read", "study2.md"), "second result", "utf8");
+    const evidence2 = await addEvidence({
+      sessionDir,
+      question: "Does treatment reduce mortality?",
+      claim: "Second source supports treatment.",
+      relation: "supports",
+      sourcePath: "sources/read/study2.md",
+      offset: 1,
+      limit: 1,
+    });
+
+    const report = await writeReport({
+      sessionDir,
+      title: "Grouped reference report",
+      content: "# Conclusion\n\nTreatment reduced mortality and adverse outcomes [1].",
+      references: [
+        { number: 1, citation: "Randomized trial of the intervention.", evidenceId: evidence.id },
+        { number: 1, citation: "Randomized trial of the intervention.", evidenceId: evidence2.id },
+      ],
+    });
+
+    const saved = await readFile(path.join(sessionDir, report.path), "utf8");
+    expect(saved.match(/^1\. \[1\]/gm)?.length).toBe(1);
+    const metadata = JSON.parse(await readFile(path.join(sessionDir, `${report.path}.metadata.json`), "utf8")) as { references: Array<{ number: number; evidence_ids: string[]; evidence_id: string }> };
+    const sortedEvidenceIds = [evidence.id, evidence2.id].sort();
+    expect(metadata.references).toEqual([{ number: 1, citation: "Randomized trial of the intervention.", evidence_ids: sortedEvidenceIds, evidence_id: sortedEvidenceIds[0] }]);
+  });
+
+  it("automatically merges different numbers for the same citation", async () => {
+    const { sessionDir, evidence } = await fixture();
+    await writeFile(path.join(sessionDir, "sources", "read", "study2.md"), "second result", "utf8");
+    const evidence2 = await addEvidence({
+      sessionDir,
+      question: "Does treatment reduce mortality?",
+      claim: "Second source supports treatment.",
+      relation: "supports",
+      sourcePath: "sources/read/study2.md",
+      offset: 1,
+      limit: 1,
+    });
+
+    const report = await writeReport({
+      sessionDir,
+      title: "Auto merged citation report",
+      content: "# Conclusion\n\nTreatment reduced mortality [1] and adverse outcomes [2].",
+      references: [
+        { number: 1, citation: "Randomized trial of the intervention.", evidenceId: evidence.id },
+        { number: 2, citation: "Randomized trial of the intervention.", evidenceId: evidence2.id },
+      ],
+    });
+
+    const saved = await readFile(path.join(sessionDir, report.path), "utf8");
+    expect(saved).toContain("Treatment reduced mortality [1] and adverse outcomes [1].");
+    expect(saved.match(/^1\. \[1\]/gm)).toHaveLength(1);
+    expect(saved).not.toMatch(/^2\. \[2\]/m);
+    const metadata = JSON.parse(await readFile(path.join(sessionDir, `${report.path}.metadata.json`), "utf8")) as { references: Array<{ number: number; evidence_ids: string[] }> };
+    expect(metadata.references).toEqual([{ number: 1, citation: "Randomized trial of the intervention.", evidence_ids: [evidence.id, evidence2.id].sort(), evidence_id: [evidence.id, evidence2.id].sort()[0] }]);
+  });
+
+  it("rejects duplicate reference numbers with conflicting citations", async () => {
+    const { sessionDir, evidence } = await fixture();
+    await writeFile(path.join(sessionDir, "sources", "read", "study2.md"), "second result", "utf8");
+    const evidence2 = await addEvidence({
+      sessionDir,
+      question: "Does treatment reduce mortality?",
+      claim: "Second source supports treatment.",
+      relation: "supports",
+      sourcePath: "sources/read/study2.md",
+      offset: 1,
+      limit: 1,
+    });
+    await expect(writeReport({
+      sessionDir,
+      title: "Conflicting duplicate refs report",
+      content: "# Conclusion\n\nTreatment reduced mortality [1].",
+      references: [
+        { number: 1, citation: "Randomized trial of the intervention.", evidenceId: evidence.id },
+        { number: 1, citation: "Another source.", evidenceId: evidence2.id },
+      ],
+    })).rejects.toThrow(/duplicate reference number 1 has conflicting citations/);
+  });
+
+  it("requires provided references to be cited in the report body", async () => {
+    const { sessionDir, evidence } = await fixture();
+    await expect(writeReport({
+      sessionDir,
+      title: "Source list report",
+      content: "# Conclusion\n\nTreatment appears beneficial based on the verified evidence source list below.",
+      references: [{ number: 1, citation: "Randomized trial of the intervention.", evidenceId: evidence.id }],
+    })).rejects.toThrow(/no numbered citations/);
+  });
+
+  it("saves unverified Markdown drafts with attempted references but no JSON sidecar", async () => {
+    const { sessionDir, evidence } = await fixture();
+    const draft = await writeReportDraft({
+      sessionDir,
+      title: "Draft report",
+      content: "# Conclusion\n\nTreatment appears beneficial.",
+      references: [{ number: 1, citation: "Randomized trial of the intervention.", evidenceId: evidence.id }],
+    }, "report body has no numbered citations");
+
+    expect(draft.path).toMatch(/reports\/drafts\/draft-report\.draft\.md$/);
+    const saved = await readFile(path.join(sessionDir, draft.path), "utf8");
+    expect(saved).toContain("## 参考文献");
+    expect(saved).toContain("Draft preview only");
+    expect(saved).toContain("1. [1] Randomized trial of the intervention.");
+    await expect(readFile(path.join(sessionDir, `${draft.path}.metadata.json`), "utf8")).rejects.toThrow();
   });
 
   it("auto-appends a reference section for hidden evidence mappings", async () => {

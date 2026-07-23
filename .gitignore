@@ -12,6 +12,8 @@ data/sessions/
 data/pi-sessions/
 data/pi-agent/
 data/benchmark_reports/
+data/source_library/guidelines/*
+!data/source_library/guidelines/README.md
 data/tmp/
 tmp/
 *.log

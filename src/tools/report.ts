@@ -11,6 +11,13 @@ export type ReportReference = {
   evidenceId: string;
 };
 
+type NormalizedReportReference = {
+  number: number;
+  citation: string;
+  evidenceIds: string[];
+  sourceNumbers: number[];
+};
+
 export type ReportWriteInput = {
   sessionDir: string;
   title: string;
@@ -27,13 +34,21 @@ export type ReportRecord = {
   createdAt: string;
 };
 
+export type ReportDraftRecord = {
+  path: string;
+  title: string;
+  sha256: string;
+  createdAt: string;
+  error: string;
+};
+
 function renderReferenceEntry(entry: string): string {
   const match = /^\[(\d+)\]\s+(.*)$/.exec(entry.trim());
   if (!match) return entry.trim();
   return `${match[1]}. [${match[1]}] ${match[2]!.trim()}`;
 }
 
-function renderReferenceSection(references: ReportReference[]): string {
+function renderReferenceSection(references: Array<{ number: number; citation: string }>): string {
   if (!references.length) return "";
   return [
     "## 参考文献",
@@ -82,12 +97,75 @@ function canonicalizeExistingReferenceSection(content: string): string {
   return normalizeMarkdown(`${body}\n\n## 参考文献\n\n${entries.map(renderReferenceEntry).join("\n")}`);
 }
 
-function ensureReferenceSection(content: string, references: ReportReference[]): string {
-  if (!references.length) return canonicalizeExistingReferenceSection(content);
+function reportBodyBeforeReferences(content: string): string {
   const lines = content.split(/\r?\n/);
   const headingIndex = lines.findIndex((line) => !!referenceHeadingMatch(line));
-  const body = headingIndex >= 0 ? lines.slice(0, headingIndex).join("\n") : content;
+  return headingIndex >= 0 ? lines.slice(0, headingIndex).join("\n") : content;
+}
+
+function ensureReferenceSection(content: string, references: Array<{ number: number; citation: string }>): string {
+  if (!references.length) return canonicalizeExistingReferenceSection(content);
+  const body = reportBodyBeforeReferences(content);
   return normalizeMarkdown(`${body}\n\n${renderReferenceSection(references)}`);
+}
+
+function normalizeReferenceText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeReferences(references: ReportReference[]): NormalizedReportReference[] {
+  const byNumber = new Map<number, { number: number; citation: string; evidenceIds: string[] }>();
+  for (const reference of references) {
+    const citation = reference.citation.trim();
+    const existing = byNumber.get(reference.number);
+    if (!existing) {
+      byNumber.set(reference.number, { number: reference.number, citation, evidenceIds: [reference.evidenceId] });
+      continue;
+    }
+    if (normalizeReferenceText(existing.citation) !== normalizeReferenceText(citation)) {
+      throw new Error(`duplicate reference number ${reference.number} has conflicting citations`);
+    }
+    if (!existing.evidenceIds.includes(reference.evidenceId)) existing.evidenceIds.push(reference.evidenceId);
+  }
+
+  const byCitation = new Map<string, NormalizedReportReference>();
+  for (const reference of byNumber.values()) {
+    const key = normalizeReferenceText(reference.citation);
+    const existing = byCitation.get(key);
+    if (!existing) {
+      byCitation.set(key, {
+        number: reference.number,
+        citation: reference.citation,
+        evidenceIds: [...reference.evidenceIds],
+        sourceNumbers: [reference.number],
+      });
+      continue;
+    }
+    existing.number = Math.min(existing.number, reference.number);
+    existing.sourceNumbers.push(reference.number);
+    for (const evidenceId of reference.evidenceIds) {
+      if (!existing.evidenceIds.includes(evidenceId)) existing.evidenceIds.push(evidenceId);
+    }
+  }
+  return [...byCitation.values()]
+    .map((reference) => ({ ...reference, evidenceIds: [...reference.evidenceIds].sort(), sourceNumbers: [...new Set(reference.sourceNumbers)].sort((a, b) => a - b) }))
+    .sort((a, b) => a.number - b.number);
+}
+
+function remapBodyCitationNumbers(content: string, references: NormalizedReportReference[]): string {
+  if (!references.length) return content;
+  const mapping = new Map<number, number>();
+  for (const reference of references) {
+    for (const number of reference.sourceNumbers) mapping.set(number, reference.number);
+  }
+  const body = reportBodyBeforeReferences(content);
+  const suffix = content.slice(body.length);
+  const remappedBody = body.replace(/\[(\d+(?:\s*,\s*\d+)*)\]/g, (_match, group: string) => {
+    const numbers = group.split(/\s*,\s*/).map(Number).map((number) => mapping.get(number) ?? number);
+    const unique = [...new Set(numbers)].sort((a, b) => a - b);
+    return `[${unique.join(",")}]`;
+  });
+  return `${remappedBody}${suffix}`;
 }
 
 function slug(value: string): string {
@@ -99,14 +177,49 @@ function slug(value: string): string {
   return Array.from(result).slice(0, 96).join("").replace(/-$/g, "") || "report";
 }
 
+export async function writeReportDraft(input: ReportWriteInput, error: string): Promise<ReportDraftRecord> {
+  const title = input.title.trim() || "report draft";
+  let draftReferences: Array<{ number: number; citation: string }> = input.references ?? [];
+  if (input.references?.length) {
+    try {
+      draftReferences = normalizeReferences(input.references);
+    } catch {
+      draftReferences = input.references;
+    }
+  }
+  const content = (draftReferences.length
+    ? ensureReferenceSection(normalizeMarkdown(input.content), draftReferences).replace(
+      "## 参考文献\n\n",
+      "## 参考文献\n\n<!-- Draft preview only: report_finalize/report_write will regenerate this section from the references parameter. Edit the references parameter, not only this preview, when changing citations. -->\n\n",
+    )
+    : normalizeMarkdown(input.content));
+  const sha256 = createHash("sha256").update(`${title}\n${content}`).digest("hex");
+  const createdAt = formatBeijingTimestamp();
+  const outDir = path.join(input.sessionDir, "reports", "drafts");
+  const baseName = slug(title);
+  await mkdir(outDir, { recursive: true });
+  for (let suffix = 1; ; suffix += 1) {
+    const name = `${baseName}${suffix === 1 ? "" : `-${suffix}`}.draft.md`;
+    const rel = path.posix.join("reports", "drafts", name);
+    const abs = path.join(outDir, name);
+    try {
+      await writeFile(abs, `${content}\n`, { encoding: "utf8", flag: "wx" });
+      return { path: rel, title, sha256, createdAt, error };
+    } catch (writeError) {
+      if (!(writeError instanceof Error && "code" in writeError && writeError.code === "EEXIST")) throw writeError;
+    }
+  }
+}
+
 export async function writeReport(input: ReportWriteInput): Promise<ReportRecord> {
   const title = input.title.trim();
   if (!title) throw new Error("report title is required");
-  const references = input.references ?? [];
-  const content = ensureReferenceSection(normalizeMarkdown(input.content), references);
+  const references = normalizeReferences(input.references ?? []);
+  const normalizedContent = normalizeMarkdown(input.content);
+  const content = ensureReferenceSection(remapBodyCitationNumbers(normalizedContent, references), references);
   if (!content.trim()) throw new Error("report content is required");
   const evidenceIds = references.length
-    ? [...new Set(references.map((reference) => reference.evidenceId))].sort()
+    ? [...new Set(references.flatMap((reference) => reference.evidenceIds))].sort()
     : [...new Set(content.match(/ev_[a-f0-9]{16}/g) ?? [])].sort();
   if (!evidenceIds.length && !input.allowNoEvidence) {
     throw new Error("report has no evidence references; set allowNoEvidence only for an explicit evidence-gap report");
@@ -118,11 +231,18 @@ export async function writeReport(input: ReportWriteInput): Promise<ReportRecord
       if (numbers.has(reference.number)) throw new Error(`duplicate reference number: ${reference.number}`);
       numbers.add(reference.number);
       if (!reference.citation.trim()) throw new Error(`reference ${reference.number} citation is required`);
-      if (!/^ev_[a-f0-9]{16}$/.test(reference.evidenceId)) throw new Error(`reference ${reference.number} has invalid evidence id`);
+      for (const evidenceId of reference.evidenceIds) {
+        if (!/^ev_[a-f0-9]{16}$/.test(evidenceId)) throw new Error(`reference ${reference.number} has invalid evidence id`);
+      }
     }
-    const citedNumbers = new Set(Array.from(content.matchAll(/\[(\d+(?:\s*,\s*\d+)*)\]/g)).flatMap((match) => match[1]!.split(/\s*,\s*/).map(Number)));
+    const body = reportBodyBeforeReferences(content);
+    const citedNumbers = new Set(Array.from(body.matchAll(/\[(\d+(?:\s*,\s*\d+)*)\]/g)).flatMap((match) => match[1]!.split(/\s*,\s*/).map(Number)));
+    if (!citedNumbers.size) throw new Error("report body has no numbered citations for the provided references");
     for (const cited of citedNumbers) {
       if (!numbers.has(cited)) throw new Error(`body citation [${cited}] has no matching reference entry`);
+    }
+    for (const number of numbers) {
+      if (!citedNumbers.has(number)) throw new Error(`reference [${number}] is not cited in the report body`);
     }
   }
   for (const evidenceId of evidenceIds) {
@@ -142,7 +262,12 @@ export async function writeReport(input: ReportWriteInput): Promise<ReportRecord
     sha256,
     evidence_status: evidenceIds.length ? "verified" : "gap",
     evidence_ids: evidenceIds,
-    references: references.map((reference) => ({ number: reference.number, citation: reference.citation, evidence_id: reference.evidenceId })),
+    references: references.map((reference) => ({
+      number: reference.number,
+      citation: reference.citation,
+      evidence_ids: reference.evidenceIds,
+      evidence_id: reference.evidenceIds[0],
+    })),
   };
   await mkdir(outDir, { recursive: true });
   const archived = `${content}\n`;

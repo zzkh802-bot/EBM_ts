@@ -249,7 +249,7 @@ async function runCase(runId: string, caseDef: CaseDef, outDir: string, timeoutM
   const stdout = createWriteStream(stdoutPath, { flags: "w" });
   const stderr = createWriteStream(stderrPath, { flags: "w" });
   const started = Date.now();
-  const child = spawn("/usr/bin/time", ["-f", "WALL_SECONDS=%e", "bash", "scripts/ebm.sh", "--print", "--name", name, finalPrompt(caseDef.query)], {
+  const child = spawn("bash", ["scripts/ebm.sh", "--print", "--name", name, finalPrompt(caseDef.query)], {
     cwd: process.cwd(),
     stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env },
@@ -262,10 +262,12 @@ async function runCase(runId: string, caseDef: CaseDef, outDir: string, timeoutM
   }, timeoutMs);
   const code = await new Promise<number | null>((resolve) => child.on("close", resolve));
   clearTimeout(timer);
+  const elapsedMs = Date.now() - started;
+  stderr.write(`WALL_SECONDS=${(elapsedMs / 1000).toFixed(2)}\n`);
   stdout.end();
   stderr.end();
   if (code !== 0) throw new Error(`${caseDef.id}: command failed with exit code ${code}; see ${stderrPath}`);
-  await writeFile(path.join(outDir, "logs", `${caseDef.id}.runner.json`), JSON.stringify({ caseId: caseDef.id, name, elapsedMs: Date.now() - started }, null, 2));
+  await writeFile(path.join(outDir, "logs", `${caseDef.id}.runner.json`), JSON.stringify({ caseId: caseDef.id, name, elapsedMs }, null, 2));
 }
 
 async function writeManifest(outDir: string, rows: Array<{ caseId: string; query: string; sessionDir: string; report: string; warnings: string[] }>): Promise<void> {

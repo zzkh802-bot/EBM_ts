@@ -1,6 +1,8 @@
+import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { readWeb, renderSearchCandidatesText, searchWeb, type WebToolError } from "../tools/web.js";
+import { searchSourceLibrary } from "../tools/sourceLibrary.js";
 import { archiveDetails, archiveToolText } from "./archiveOutput.js";
 import { piReadableSessionPath, piSessionDirectory } from "./sessionPath.js";
 
@@ -8,14 +10,57 @@ function toolError(error: WebToolError): Error {
   return new Error(JSON.stringify(error));
 }
 
+function positiveEnvInt(name: string, fallback: number): number {
+  const value = Number(process.env[name] ?? "");
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events">): void {
+  pi.registerTool({
+    name: "source_library_search",
+    label: "Search Local Source Library",
+    description: "Search the local curated source library (for example data/source_library/guidelines) without network access. Use to supplement guideline MCP when known local guidelines or parsed full texts may exist.",
+    promptSnippet: "Search local curated guidelines/source cache before web fallbacks",
+    promptGuidelines: ["Use Chinese queries for Chinese guideline/library content; use source_url from a hit with web_read to archive the full local source into the current session."],
+    parameters: Type.Object({
+      query: Type.String({ minLength: 2 }),
+      max_results: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
+    }),
+    async execute(_toolCallId, params, _signal, onUpdate, ctx) {
+      onUpdate?.({ content: [{ type: "text", text: "Searching local source library…" }], details: {} });
+      const sourceLibraryDir = process.env.SOURCE_LIBRARY_DIR || "data/source_library/guidelines";
+      const candidates = await searchSourceLibrary({ sourceLibraryDir, query: params.query, limit: params.max_results ?? 10 });
+      const lines = [
+        `# Local source library search: ${params.query}`,
+        "",
+        `Results: ${candidates.length}`,
+        "",
+        ...(candidates.length ? candidates.flatMap((candidate, index) => [
+          `${index + 1}. ${candidate.title}`,
+          `   Slug: ${candidate.slug}`,
+          ...(candidate.sourceUrl ? [`   Source URL: ${candidate.sourceUrl}`, `   Next: web_read(url=${JSON.stringify(candidate.sourceUrl)}) will reuse the local library copy if source_url matches.`] : []),
+          ...(candidate.aliases.length ? [`   Aliases: ${candidate.aliases.join("; ")}`] : []),
+          ...(candidate.snippet ? [`   Snippet: ${candidate.snippet}`] : []),
+          "",
+        ]) : ["No local library entries matched. Use MCP/PubMed/web search as needed."]),
+      ];
+      return {
+        content: [{ type: "text", text: lines.join("\n") }],
+        details: { provider: "source_library", resultCount: candidates.length, candidates, sourceLibraryDir, sessionWorkspace: ["data", "sessions", path.basename(piSessionDirectory(ctx.cwd, ctx.sessionManager.getSessionId()))].join("/") },
+      };
+    },
+  });
+
   pi.registerTool({
     name: "web_read",
     label: "Read Web Source",
     description: "Read documents through MinerU Premium or web pages through Jina with Firecrawl fallback, then normalize and archive before exposure.",
     promptSnippet: "Read and archive a public web source with stable citation offsets",
     promptGuidelines: ["Use the returned archive path and absolute offsets when creating evidence."],
-    parameters: Type.Object({ url: Type.String({ description: "Public HTTP(S) URL" }) }),
+    parameters: Type.Object({
+      url: Type.String({ description: "Public HTTP(S) URL" }),
+      pdf_pages: Type.Optional(Type.String({ description: "Optional focused PDF page range such as 1-5. Use only when the relevant pages are known; max 25 pages." })),
+    }),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       onUpdate?.({ content: [{ type: "text", text: "Reading and archiving URL…" }], details: {} });
       const sessionId = ctx.sessionManager.getSessionId();
@@ -26,6 +71,11 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
         ...(process.env.FIRECRAWL_API_KEY ? { firecrawlApiKey: process.env.FIRECRAWL_API_KEY } : {}),
         ...(process.env.MINERU_API_TOKEN ? { mineruApiToken: process.env.MINERU_API_TOKEN } : {}),
         ...(process.env.MINERU_V4_BASE_URL ? { mineruBaseUrl: process.env.MINERU_V4_BASE_URL } : {}),
+        timeoutMs: positiveEnvInt("WEB_READ_REQUEST_TIMEOUT_MS", 30_000),
+        totalTimeoutMs: positiveEnvInt("WEB_READ_TOTAL_TIMEOUT_MS", 45_000),
+        maxPdfPagesForMineru: positiveEnvInt("PDF_MAX_PAGES_FOR_WEB_READ", 50),
+        ...(params.pdf_pages ? { pdfPages: params.pdf_pages } : {}),
+        sourceLibraryDir: process.env.SOURCE_LIBRARY_DIR || "data/source_library/guidelines",
         ...(signal ? { signal } : {}),
       });
       if (!result.ok) throw toolError(result.error);

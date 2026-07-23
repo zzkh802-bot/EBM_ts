@@ -1,8 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import { Agent, fetch as undiciFetch } from "undici";
 import { archiveSource, type SourceArchiveRecord } from "./archive.js";
-import { parseDocumentBytes, type MineruResource } from "./mineru.js";
-import { downloadOpenAccessPdf, resolveOpenAlexPdf } from "./openAlex.js";
 
 const ncbiDispatcher = new Agent({ connect: { family: 4 } });
 const defaultNcbiFetch = ((input: Parameters<typeof fetch>[0], init?: RequestInit) =>
@@ -33,7 +31,7 @@ export type PubMedReadResult =
       pmid: string;
       pmcid?: string;
       fullText: boolean;
-      fullTextSource: "pmc" | "openalex_mineru" | "abstract_only";
+      fullTextSource: "pmc" | "abstract_only";
       archive: SourceArchiveRecord;
       warnings: string[];
     }
@@ -47,16 +45,33 @@ type FetchOptions = {
   retries?: number;
   signal?: AbortSignal;
   totalTimeoutMs?: number;
+  includeContext?: boolean;
 };
+
+type PubMedCommentLink = { refType: string; pmid?: string; citation?: string; note?: string };
 
 type ParsedArticle = {
   pmid: string;
   title: string;
+  authors: string[];
   journal?: string;
   pmcid?: string;
   doi?: string;
   abstractParts: string[];
+  publicationTypes: string[];
+  commentLinks: PubMedCommentLink[];
 };
+
+type PubMedLinkedSummary = { pmid: string; title: string; journal?: string; pubdate?: string };
+
+type PubMedContext = {
+  similar: PubMedLinkedSummary[];
+  citedBy: PubMedLinkedSummary[];
+};
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function fetchTimed(fetcher: typeof fetch, url: URL, timeoutMs: number, retries: number, signal?: AbortSignal): Promise<Response> {
   let lastError: unknown;
@@ -142,13 +157,31 @@ function parsePubmedArticles(xml: string): ParsedArticle[] {
       const label = part && typeof part === "object" && typeof part["@_Label"] === "string" ? part["@_Label"] : undefined;
       return label && value ? `**${label}:** ${value}` : value;
     }).filter(Boolean);
+    const authors = asArray(articleData.AuthorList?.Author).map((author: any) => {
+      const collective = textOf(author?.CollectiveName).trim();
+      if (collective) return collective;
+      const foreName = textOf(author?.ForeName).trim();
+      const lastName = textOf(author?.LastName).trim();
+      return [foreName, lastName].filter(Boolean).join(" ");
+    }).filter(Boolean);
+    const publicationTypes = asArray(articleData.PublicationTypeList?.PublicationType).map((item) => textOf(item).trim()).filter(Boolean);
+    const commentLinks = asArray(articleData.CommentsCorrectionsList?.CommentsCorrections).map((item: any): PubMedCommentLink | undefined => {
+      const refType = typeof item?.["@_RefType"] === "string" ? item["@_RefType"] : "linked record";
+      const linkedPmid = textOf(item?.PMID).trim();
+      const citation = textOf(item?.RefSource).trim();
+      const note = textOf(item?.Note).trim();
+      return linkedPmid || citation || note ? { refType, ...(linkedPmid ? { pmid: linkedPmid } : {}), ...(citation ? { citation } : {}), ...(note ? { note } : {}) } : undefined;
+    }).filter((item): item is PubMedCommentLink => !!item);
     return {
       pmid,
       title: textOf(articleData.ArticleTitle).trim() || `PubMed ${pmid}`,
+      authors,
       ...(textOf(articleData.Journal?.Title).trim() ? { journal: textOf(articleData.Journal.Title).trim() } : {}),
       ...(pmcid ? { pmcid } : {}),
       ...(doi ? { doi } : {}),
       abstractParts,
+      publicationTypes,
+      commentLinks,
     };
   }).filter((article) => /^\d+$/.test(article.pmid));
 }
@@ -172,6 +205,63 @@ async function fetchPubmedArticles(
   return parsePubmedArticles(await response.text());
 }
 
+async function fetchLinkedPubmed(
+  pmids: string[],
+  linkname: string,
+  fetcher: typeof fetch,
+  timeoutMs: number,
+  retries: number,
+  options: FetchOptions,
+  limit: number,
+): Promise<{ pmids: string[]; summaries: Record<string, any>; items: PubMedLinkedSummary[] }> {
+  if (!pmids.length || limit <= 0) return { pmids: [], summaries: {}, items: [] };
+  const linkUrl = new URL(`${EUTILS}/elink.fcgi`);
+  linkUrl.searchParams.set("dbfrom", "pubmed");
+  linkUrl.searchParams.set("db", "pubmed");
+  linkUrl.searchParams.set("id", pmids.join(","));
+  linkUrl.searchParams.set("linkname", linkname);
+  linkUrl.searchParams.set("retmode", "json");
+  addNcbiIdentity(linkUrl, options);
+  const response = await fetchTimed(fetcher, linkUrl, timeoutMs, retries, options.signal);
+  const failure = await requireOk(response);
+  if (failure) throw new Error(failure.message);
+  const payload = await response.json() as { linksets?: Array<{ linksetdbs?: Array<{ links?: unknown }> }> };
+  const original = new Set(pmids);
+  const linked: string[] = [];
+  for (const linkset of payload.linksets ?? []) {
+    for (const database of linkset.linksetdbs ?? []) {
+      for (const id of Array.isArray(database.links) ? database.links : []) {
+        const value = String(id);
+        if (/^\d+$/.test(value) && !original.has(value) && !linked.includes(value)) linked.push(value);
+        if (linked.length >= limit) break;
+      }
+      if (linked.length >= limit) break;
+    }
+    if (linked.length >= limit) break;
+  }
+  if (!linked.length) return { pmids: [], summaries: {}, items: [] };
+  const summaryUrl = new URL(`${EUTILS}/esummary.fcgi`);
+  summaryUrl.searchParams.set("db", "pubmed");
+  summaryUrl.searchParams.set("retmode", "json");
+  summaryUrl.searchParams.set("id", linked.join(","));
+  addNcbiIdentity(summaryUrl, options);
+  const summaryResponse = await fetchTimed(fetcher, summaryUrl, timeoutMs, retries, options.signal);
+  const summaryFailure = await requireOk(summaryResponse);
+  if (summaryFailure) throw new Error(summaryFailure.message);
+  const summaryPayload = await summaryResponse.json() as { result?: Record<string, any> };
+  const summaries = summaryPayload.result ?? {};
+  const items = linked.map((pmid) => {
+    const item = summaries[pmid] ?? {};
+    return {
+      pmid,
+      title: typeof item.title === "string" && item.title.trim() ? item.title.trim() : `PMID ${pmid}`,
+      ...(typeof item.source === "string" && item.source.trim() ? { journal: item.source.trim() } : {}),
+      ...(typeof item.pubdate === "string" && item.pubdate.trim() ? { pubdate: item.pubdate.trim() } : {}),
+    };
+  });
+  return { pmids: linked, summaries, items };
+}
+
 async function fetchRelated(
   pmids: string[],
   fetcher: typeof fetch,
@@ -180,42 +270,7 @@ async function fetchRelated(
   options: FetchOptions,
   limit: number,
 ): Promise<{ pmids: string[]; summaries: Record<string, any> }> {
-  if (!pmids.length || limit <= 0) return { pmids: [], summaries: {} };
-  const linkUrl = new URL(`${EUTILS}/elink.fcgi`);
-  linkUrl.searchParams.set("dbfrom", "pubmed");
-  linkUrl.searchParams.set("db", "pubmed");
-  linkUrl.searchParams.set("id", pmids.join(","));
-  linkUrl.searchParams.set("linkname", "pubmed_pubmed");
-  linkUrl.searchParams.set("retmode", "json");
-  addNcbiIdentity(linkUrl, options);
-  const response = await fetchTimed(fetcher, linkUrl, timeoutMs, retries, options.signal);
-  const failure = await requireOk(response);
-  if (failure) throw new Error(failure.message);
-  const payload = await response.json() as { linksets?: Array<{ linksetdbs?: Array<{ links?: unknown }> }> };
-  const original = new Set(pmids);
-  const related: string[] = [];
-  for (const linkset of payload.linksets ?? []) {
-    for (const database of linkset.linksetdbs ?? []) {
-      for (const id of Array.isArray(database.links) ? database.links : []) {
-        const value = String(id);
-        if (/^\d+$/.test(value) && !original.has(value) && !related.includes(value)) related.push(value);
-        if (related.length >= limit) break;
-      }
-      if (related.length >= limit) break;
-    }
-    if (related.length >= limit) break;
-  }
-  if (!related.length) return { pmids: [], summaries: {} };
-  const summaryUrl = new URL(`${EUTILS}/esummary.fcgi`);
-  summaryUrl.searchParams.set("db", "pubmed");
-  summaryUrl.searchParams.set("retmode", "json");
-  summaryUrl.searchParams.set("id", related.join(","));
-  addNcbiIdentity(summaryUrl, options);
-  const summaryResponse = await fetchTimed(fetcher, summaryUrl, timeoutMs, retries, options.signal);
-  const summaryFailure = await requireOk(summaryResponse);
-  if (summaryFailure) throw new Error(summaryFailure.message);
-  const summaryPayload = await summaryResponse.json() as { result?: Record<string, any> };
-  return { pmids: related, summaries: summaryPayload.result ?? {} };
+  return fetchLinkedPubmed(pmids, "pubmed_pubmed", fetcher, timeoutMs, retries, options, limit);
 }
 
 function renderSearch(
@@ -266,6 +321,7 @@ function renderSearch(
     if (abstractSource) lines.push(`Citation-capable abstract source: ${abstractSource}`, "Evidence provenance: primary_abstract");
     if (article?.pmcid) lines.push(`PMCID: ${article.pmcid}`);
     if (article?.doi) lines.push(`DOI: ${article.doi}`);
+    if (article?.authors.length) lines.push(`Authors: ${article.authors.slice(0, 12).join(", ")}${article.authors.length > 12 ? ", et al." : ""}`);
     if (article?.journal) lines.push(`Journal: ${article.journal}`);
     lines.push("", "#### Abstract", "", ...(article?.abstractParts.length ? article.abstractParts : ["No abstract available from PubMed."]), "");
   });
@@ -420,14 +476,19 @@ function renderFullText(article: ParsedArticle, pmcXml: string): string {
   if (!root?.body) throw new Error("PMC response has no article body");
   const body = collectPmcSections(root.body);
   if (!body.some((line) => line && !line.startsWith("#"))) throw new Error("PMC article body has no readable paragraphs");
+  return renderPubmedFullTextMarkdown(article, body, "PMC full text");
+}
+
+function renderPubmedFullTextMarkdown(article: ParsedArticle, body: string[], sourceStatus: string): string {
   return [
     `# ${article.title}`,
     "",
     `PMID: ${article.pmid}`,
     ...(article.pmcid ? [`PMCID: ${article.pmcid}`] : []),
     ...(article.doi ? [`DOI: ${article.doi}`] : []),
+    ...(article.authors.length ? [`Authors: ${article.authors.slice(0, 12).join(", ")}${article.authors.length > 12 ? ", et al." : ""}`] : []),
     ...(article.journal ? [`Journal: ${article.journal}`] : []),
-    "Source status: PMC full text",
+    `Source status: ${sourceStatus}`,
     "",
     "## Abstract",
     "",
@@ -439,29 +500,108 @@ function renderFullText(article: ParsedArticle, pmcXml: string): string {
   ].join("\n");
 }
 
-function renderOpenAlexFullText(article: ParsedArticle, markdown: string, sourceName?: string): string {
-  return [
-    `# ${article.title}`,
-    "",
-    `PMID: ${article.pmid}`,
-    ...(article.doi ? [`DOI: ${article.doi}`] : []),
-    ...(article.journal ? [`Journal: ${article.journal}`] : []),
-    "Source status: OA full text discovered through OpenAlex and parsed by MinerU",
-    ...(sourceName ? [`OA location: ${sourceName}`] : []),
-    "",
-    "## Full Text",
-    "",
-    markdown,
-  ].join("\n");
+function decodeHtml(text: string): string {
+  return text
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
 }
 
-function renderAbstractOnly(article: ParsedArticle): string {
+function stripHtml(fragment: string): string {
+  return decodeHtml(fragment.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+}
+
+function extractBalancedSection(html: string, startIndex: number): string | undefined {
+  const tag = /<\/?section\b[^>]*>/gi;
+  tag.lastIndex = startIndex;
+  let depth = 0;
+  let contentStart = -1;
+  for (;;) {
+    const match = tag.exec(html);
+    if (!match) return undefined;
+    const isClose = match[0].startsWith("</");
+    if (!isClose) {
+      depth += 1;
+      if (contentStart < 0) contentStart = tag.lastIndex;
+    } else {
+      depth -= 1;
+      if (depth === 0 && contentStart >= 0) return html.slice(contentStart, match.index);
+    }
+  }
+}
+
+function htmlBodyToMarkdown(fragment: string): string[] {
+  const cleaned = fragment
+    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, "")
+    .replace(/<sup\b[^>]*class="[^"]*reference[^"]*"[\s\S]*?<\/sup>/gi, "")
+    .replace(/<table\b[\s\S]*?<\/table>/gi, (table) => `\n\n${stripHtml(table)}\n\n`)
+    .replace(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi, (_, text) => `\n\n## ${stripHtml(text)}\n\n`)
+    .replace(/<h3\b[^>]*>([\s\S]*?)<\/h3>/gi, (_, text) => `\n\n### ${stripHtml(text)}\n\n`)
+    .replace(/<h4\b[^>]*>([\s\S]*?)<\/h4>/gi, (_, text) => `\n\n#### ${stripHtml(text)}\n\n`)
+    .replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, (_, text) => `\n\n${stripHtml(text)}\n\n`)
+    .replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, (_, text) => `\n- ${stripHtml(text)}`)
+    .replace(/<br\s*\/?\s*>/gi, "\n");
+  return decodeHtml(cleaned.replace(/<[^>]+>/g, " "))
+    .replace(/[ \t\f\v]+/g, " ")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .split(/\n{2,}/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 20 || /^#{2,4}\s/.test(line));
+}
+
+function renderPmcHtmlFullText(article: ParsedArticle, html: string): string {
+  const marker = '<section class="body main-article-body"';
+  const start = html.indexOf(marker);
+  if (start < 0) throw new Error("PMC HTML response has no main article body");
+  const bodySection = extractBalancedSection(html, start);
+  if (!bodySection) throw new Error("PMC HTML article body is not balanced");
+  const body = htmlBodyToMarkdown(bodySection);
+  if (!body.some((line) => line && !line.startsWith("#"))) throw new Error("PMC HTML article body has no readable paragraphs");
+  return renderPubmedFullTextMarkdown(article, body, "PMC full text (HTML page)");
+}
+
+function renderLinkedItems(items: PubMedLinkedSummary[]): string[] {
+  return items.map((item) => {
+    const meta = [item.journal ? `Journal: ${item.journal}` : undefined, item.pubdate ? `Date: ${item.pubdate}` : undefined].filter(Boolean).join("; ");
+    return `- PMID ${item.pmid}: ${item.title}${meta ? ` (${meta})` : ""}`;
+  });
+}
+
+function renderPubMedContext(article: ParsedArticle, context?: PubMedContext, warnings: string[] = []): string[] {
+  const lines = [
+    "## PubMed context",
+    "",
+    "Navigation/context only. Linked records below are not citation evidence unless separately read and archived.",
+    "",
+    `Access hint: ${article.pmcid ? `Free PMC linked (${article.pmcid})` : "No PMCID linked"}`,
+    ...(article.doi ? [`DOI: ${article.doi}`] : []),
+    ...(article.publicationTypes.length ? [`Publication types: ${article.publicationTypes.join("; ")}`] : []),
+    ...(warnings.length ? [`Retrieval notes: ${warnings.join(" | ")}`] : []),
+    "",
+  ];
+  if (article.commentLinks.length) {
+    lines.push("### Comments / updates", ...article.commentLinks.slice(0, 5).map((item) => `- ${item.refType}${item.pmid ? ` PMID ${item.pmid}` : ""}${item.citation ? `: ${item.citation}` : ""}${item.note ? ` (${item.note})` : ""}`), "");
+  }
+  if (context?.similar.length) lines.push("### Similar articles (top 5)", ...renderLinkedItems(context.similar.slice(0, 5)), "");
+  if (context?.citedBy.length) lines.push("### Cited by (sample)", ...renderLinkedItems(context.citedBy.slice(0, 3)), "");
+  return lines;
+}
+
+function renderAbstractOnly(article: ParsedArticle, context?: PubMedContext, warnings: string[] = []): string {
   return [
     `# ${article.title}`,
     "",
     `PMID: ${article.pmid}`,
     ...(article.pmcid ? [`PMCID: ${article.pmcid}`] : []),
     ...(article.doi ? [`DOI: ${article.doi}`] : []),
+    ...(article.authors.length ? [`Authors: ${article.authors.slice(0, 12).join(", ")}${article.authors.length > 12 ? ", et al." : ""}`] : []),
     ...(article.journal ? [`Journal: ${article.journal}`] : []),
     "Source status: PubMed abstract only; full text unavailable",
     "",
@@ -469,17 +609,13 @@ function renderAbstractOnly(article: ParsedArticle): string {
     "",
     ...(article.abstractParts.length ? article.abstractParts : ["No abstract available from PubMed."]),
     "",
+    ...renderPubMedContext(article, context, warnings),
   ].join("\n");
 }
 
 export async function readPubMed(input: {
   sessionDir: string;
   identifier: string;
-  mineruApiToken?: string;
-  mineruBaseUrl?: string;
-  openAlexTimeoutMs?: number;
-  oaDownloadTimeoutMs?: number;
-  resolveHost?: (host: string) => Promise<string[]>;
 } & FetchOptions): Promise<PubMedReadResult> {
   const identifier = input.identifier.trim().replace(/^(?:PMID|PMCID|DOI)\s*:\s*/i, "");
   if (!identifier) return { ok: false, error: { code: "invalid_input", message: "PMID, PMCID, or DOI is required" } };
@@ -498,9 +634,8 @@ export async function readPubMed(input: {
 
     let content = renderAbstractOnly(article);
     let fullText = false;
-    let fullTextSource: "pmc" | "openalex_mineru" | "abstract_only" = "abstract_only";
+    let fullTextSource: "pmc" | "abstract_only" = "abstract_only";
     let sourceUrl = `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`;
-    let parsedMineruResources: MineruResource[] | undefined;
     const warnings: string[] = [];
     if (article.pmcid) {
       const pmcUrl = new URL(`${EUTILS}/efetch.fcgi`);
@@ -517,49 +652,42 @@ export async function readPubMed(input: {
         fullTextSource = "pmc";
         sourceUrl = `https://pmc.ncbi.nlm.nih.gov/articles/${article.pmcid}/`;
       } catch (error) {
-        warnings.push(`PMC full text retrieval failed: ${error instanceof Error ? error.message : String(error)}`);
+        try {
+          const htmlUrl = `https://pmc.ncbi.nlm.nih.gov/articles/${article.pmcid}/`;
+          const htmlResponse = await fetcher(htmlUrl, {
+            signal: operationSignal,
+            headers: { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120 Safari/537.36" },
+          });
+          const htmlFailure = await requireOk(htmlResponse);
+          if (htmlFailure) throw new Error(htmlFailure.message);
+          content = renderPmcHtmlFullText(article, await htmlResponse.text());
+          fullText = true;
+          fullTextSource = "pmc";
+          sourceUrl = htmlUrl;
+          warnings.push(`PMC XML full text unavailable (${error instanceof Error ? error.message : String(error)}); used PMC HTML page.`);
+        } catch (htmlError) {
+          warnings.push(`PMC full text retrieval failed: ${error instanceof Error ? error.message : String(error)}; PMC HTML fallback failed: ${htmlError instanceof Error ? htmlError.message : String(htmlError)}`);
+        }
       }
     }
 
-    if (!fullText && input.mineruApiToken) {
-      try {
-        const oa = await resolveOpenAlexPdf({
-          pmid,
-          fetcher,
-          ...(input.openAlexTimeoutMs === undefined ? {} : { timeoutMs: input.openAlexTimeoutMs }),
-          signal: operationSignal,
-        });
-        if (oa) {
-          const downloaded = await downloadOpenAccessPdf({
-            url: oa.pdfUrl,
-            fetcher,
-            ...(input.resolveHost ? { resolveHost: input.resolveHost } : {}),
-            ...(input.oaDownloadTimeoutMs === undefined ? {} : { timeoutMs: input.oaDownloadTimeoutMs }),
-            signal: operationSignal,
-          });
-          const parsed = await parseDocumentBytes({
-            bytes: downloaded.bytes,
-            fileName: `pubmed-${pmid}.pdf`,
-            apiToken: input.mineruApiToken,
-            fetcher,
-            ...(input.mineruBaseUrl ? { baseUrl: input.mineruBaseUrl } : {}),
-            requestTimeoutMs: 25_000,
-            signal: operationSignal,
-          });
-          content = renderOpenAlexFullText(article, parsed.content, oa.sourceName);
-          parsedMineruResources = parsed.resources;
-          fullText = true;
-          fullTextSource = "openalex_mineru";
-          sourceUrl = downloaded.finalUrl;
-        } else {
-          warnings.push("OpenAlex did not provide a direct OA PDF for this PMID.");
-        }
-      } catch (error) {
-        warnings.push(`Bounded OpenAlex/MinerU fallback failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }
     if (!fullText && !article.pmcid) {
       warnings.push("No PMCID is linked to this PubMed record; only the abstract is archived.");
+    }
+    if (!fullText) {
+      let context: PubMedContext | undefined;
+      if (input.includeContext === true) {
+        try {
+          const contextTimeoutMs = Math.min(timeoutMs, 10_000);
+          const similar = await fetchLinkedPubmed([pmid], "pubmed_pubmed", fetcher, contextTimeoutMs, 0, options, 5);
+          if (!options.apiKey) await sleep(400);
+          const citedBy = await fetchLinkedPubmed([pmid], "pubmed_pubmed_citedin", fetcher, contextTimeoutMs, 0, options, 3);
+          context = { similar: similar.items, citedBy: citedBy.items };
+        } catch (error) {
+          warnings.push(`PubMed context link lookup failed: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      content = renderAbstractOnly(article, context, warnings);
     }
     return {
       ok: true,
@@ -574,7 +702,6 @@ export async function readPubMed(input: {
         sourceUrl,
         title: article.title,
         content,
-        ...(fullTextSource === "openalex_mineru" && parsedMineruResources ? { resources: parsedMineruResources } : {}),
       }),
     };
   } catch (error) {

@@ -97,10 +97,10 @@ function renderRetrieveCards(title: string, items: GuidelineRetrieveItem[], read
 export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "events">): void {
   const endpoint = process.env.GUIDELINE_MCP_URL?.trim();
   if (!endpoint) return;
-  const timeout = Number(process.env.GUIDELINE_MCP_TIMEOUT_MS ?? 120_000);
+  const timeout = Number(process.env.GUIDELINE_MCP_TIMEOUT_MS ?? 45_000);
   const client = new GuidelineMcpClient({
     endpoint,
-    timeoutMs: Number.isFinite(timeout) && timeout > 0 ? timeout : 120_000,
+    timeoutMs: Number.isFinite(timeout) && timeout > 0 ? timeout : 45_000,
   });
 
   pi.registerTool({

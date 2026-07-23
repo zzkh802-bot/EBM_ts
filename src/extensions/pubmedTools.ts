@@ -29,8 +29,28 @@ function pmidFromAbstract(content: string): string {
   return content.match(/^PMID:\s*(\d+)$/m)?.[1] ?? "unknown";
 }
 
-export function renderAbstractNavigation(sessionDirectoryName: string, archives: Array<{ path: string; title?: string; content: string; bodyLineStart: number }>): string {
-  if (!archives.length) return "No complete PubMed abstracts were archived as citation-capable sources.";
+export function renderAbstractNavigation(
+  sessionDirectoryName: string,
+  archives: Array<{ path: string; title?: string; content: string; bodyLineStart: number }>,
+  options: { searchArchivePath?: string; pmids?: string[] } = {},
+): string {
+  if (!archives.length) {
+    const lines = ["No complete PubMed abstracts were archived as citation-capable sources.", ""];
+    if (options.pmids?.length) {
+      lines.push(`PubMed returned ${options.pmids.length} PMID(s): ${options.pmids.join(", ")}.`, "These records may lack abstracts or only have metadata in the search snapshot.", "Call `pubmed_read(identifier=\"PMID: ...\")` for any decision-relevant PMID before using it as evidence.", "");
+    } else {
+      lines.push(
+        "PubMed returned no PMID results for this query.",
+        "Search strategy hint: avoid long natural-language comparator queries. Retry once with a compact English keyword ladder: known PMID/DOI → exact title phrase → first author + distinctive title words → 3-7 key terms such as disease + intervention + study type. Remove words such as versus, compared with, standard-dose multi-agent unless they are exact title terms.",
+        "",
+      );
+    }
+    if (options.searchArchivePath) {
+      const readablePath = ["data", "sessions", sessionDirectoryName, options.searchArchivePath].join("/");
+      lines.push(`Readable search snapshot: ${readablePath}`, "This search snapshot is discovery history only and is not citation-capable evidence.");
+    }
+    return lines.join("\n");
+  }
   const lines = ["PubMed abstract results:", ""];
   archives.forEach((archive, index) => {
     const readablePath = ["data", "sessions", sessionDirectoryName, archive.path].join("/");
@@ -94,7 +114,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
       return {
         content: [{
           type: "text",
-          text: renderAbstractNavigation(path.basename(sessionDir), result.abstractArchives),
+          text: renderAbstractNavigation(path.basename(sessionDir), result.abstractArchives, { searchArchivePath: result.archive.path, pmids: result.pmids }),
         }],
         details: {
           pmids: result.pmids,
@@ -157,7 +177,10 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
     label: "Read PubMed",
     description: "Resolve a PMID, PMCID, or DOI and fetch PMC full text when available; return an explicit abstract-only partial result otherwise.",
     promptSnippet: "Acquire full text for one PubMed record, preferring PMC",
-    parameters: Type.Object({ identifier: Type.String({ minLength: 1, description: "PMID, PMCID, or DOI" }) }),
+    parameters: Type.Object({
+      identifier: Type.String({ minLength: 1, description: "PMID, PMCID, or DOI" }),
+      include_context: Type.Optional(Type.Boolean({ default: false, description: "For abstract-only records, also fetch compact Similar articles and Cited by hints. Slower; use for exploration, not routine evidence reads." })),
+    }),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       onUpdate?.({ content: [{ type: "text", text: "Reading and archiving PubMed record…" }], details: {} });
       const sessionId = ctx.sessionManager.getSessionId();
@@ -165,8 +188,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
       const result = await readPubMed({
         sessionDir,
         identifier: params.identifier,
-        ...(process.env.MINERU_API_TOKEN ? { mineruApiToken: process.env.MINERU_API_TOKEN } : {}),
-        ...(process.env.MINERU_V4_BASE_URL ? { mineruBaseUrl: process.env.MINERU_V4_BASE_URL } : {}),
+        ...(params.include_context === undefined ? {} : { includeContext: params.include_context }),
         ...ncbiOptions(),
         ...(signal ? { signal } : {}),
       });

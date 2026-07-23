@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -24,6 +24,15 @@ describe("EBM Pi extension tools", () => {
     expect(output).not.toContain("Evidence source_path:");
     expect(output).not.toContain("Source map");
     expect(output).not.toContain("Read any archive window");
+  });
+
+  it("returns search snapshot guidance when PubMed search finds no citation-capable abstracts", () => {
+    const output = renderAbstractNavigation("session-1", [], { searchArchivePath: "sources/search/query.md", pmids: ["1", "2"] });
+    expect(output).toContain("No complete PubMed abstracts were archived");
+    expect(output).toContain("PubMed returned 2 PMID(s): 1, 2");
+    expect(output).toContain("pubmed_read");
+    expect(output).toContain("Readable search snapshot: data/sessions/session-1/sources/search/query.md");
+    expect(output).toContain("discovery history only");
   });
 
   it("renders guideline MCP reads from informative sections instead of front matter", () => {
@@ -120,6 +129,73 @@ describe("EBM Pi extension tools", () => {
     expect(report.details).toMatchObject({ readablePath: `${workspace}/reports/mortality-report.md`, sessionWorkspace: workspace });
   });
 
+  it("saves a failed report draft and finalizes it after local edit", async () => {
+    const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
+    const events: Array<[string, unknown]> = [];
+    registerEbmTools({
+      registerTool: (tool: { name: string; execute: (...args: any[]) => Promise<any> }) => tools.set(tool.name, tool),
+      on: () => undefined,
+      events: { emit: (name: string, payload: unknown) => events.push([name, payload]) },
+    } as never);
+
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "ebm-pi-tools-"));
+    const sessionId = "session-1";
+    const sessionDir = await initializePiSessionDirectory(cwd, sessionId, { sessionName: "Draft finalize", firstPrompt: "Does it work?" });
+    await mkdir(path.join(sessionDir, "sources", "read"), { recursive: true });
+    await writeFile(path.join(sessionDir, "sources", "read", "study.md"), "mortality improved\nadverse events improved", "utf8");
+    const ctx = { cwd, sessionManager: { getSessionId: () => sessionId } };
+    const ev1 = await tools.get("evidence_add")!.execute("call-1", {
+      question: "Does it work?",
+      claim: "Mortality improved.",
+      relation: "supports",
+      source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
+      offset: 1,
+      limit: 1,
+    }, undefined, undefined, ctx);
+    const ev2 = await tools.get("evidence_add")!.execute("call-2", {
+      question: "Does it work?",
+      claim: "Adverse events improved.",
+      relation: "supports",
+      source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
+      offset: 2,
+      limit: 1,
+    }, undefined, undefined, ctx);
+
+    const failed = await tools.get("report_write")!.execute("call-3", {
+      title: "Draft finalize report",
+      markdown: "# Conclusion\n\nTreatment works but citation is missing.",
+      references: [
+        { number: 1, citation: "Study citation.", evidence_id: ev1.details.evidenceId },
+        { number: 1, citation: "Study citation.", evidence_id: ev2.details.evidenceId },
+      ],
+    }, undefined, undefined, ctx);
+    expect(failed.content[0].text).toContain("Report verification failed");
+    expect(failed.details.verified).toBe(false);
+    expect(failed.details.draft.path).toBe("reports/drafts/draft-finalize-report.draft.md");
+
+    const draftAbs = path.join(sessionDir, failed.details.draft.path);
+    const draft = await readFile(draftAbs, "utf8");
+    expect(draft).toContain("Draft preview only");
+    await writeFile(draftAbs, draft.replace("Treatment works but citation is missing.", "Treatment works for mortality and adverse events [1]."), "utf8");
+
+    const finalized = await tools.get("report_finalize")!.execute("call-4", {
+      draft_path: failed.details.draft.path,
+      title: "Draft finalize report",
+      references: [
+        { number: 1, citation: "Study citation.", evidence_id: ev1.details.evidenceId },
+        { number: 1, citation: "Study citation.", evidence_id: ev2.details.evidenceId },
+      ],
+    }, undefined, undefined, ctx);
+
+    expect(finalized.content[0].text).toContain("Final report written");
+    const finalMd = await readFile(path.join(sessionDir, finalized.details.path), "utf8");
+    expect(finalMd).not.toContain("Draft preview only");
+    expect(finalMd.match(/^1\. \[1\]/gm)).toHaveLength(1);
+    const metadata = JSON.parse(await readFile(path.join(sessionDir, `${finalized.details.path}.metadata.json`), "utf8")) as { references: Array<{ evidence_ids: string[] }> };
+    expect(metadata.references[0]!.evidence_ids).toEqual([ev1.details.evidenceId, ev2.details.evidenceId].sort());
+    expect(events.map(([name]) => name)).toEqual(["ebm:evidence_added", "ebm:evidence_added", "ebm:report_written"]);
+  });
+
   it("registers evidence tools and emits a domain event after evidence is archived", async () => {
     const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
     const handlers = new Map<string, (...args: any[]) => unknown>();
@@ -141,11 +217,13 @@ describe("EBM Pi extension tools", () => {
       "pubmed_read",
       "pubmed_search",
       "pubmed_similar",
+      "report_finalize",
       "report_write",
       "research_frame_init",
       "research_frame_read",
       "research_frame_scratchpad_append",
       "research_frame_update",
+      "source_library_search",
       "web_read",
       "web_search",
     ]);

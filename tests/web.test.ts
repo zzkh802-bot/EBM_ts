@@ -1,9 +1,11 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { strToU8, zipSync } from "fflate";
+import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { readWeb, renderSearchCandidatesText, searchWeb } from "../src/tools/web.js";
+import { searchSourceLibrary } from "../src/tools/sourceLibrary.js";
 
 function mockFetch(responses: Response[]) {
   const calls: Array<{ input: string; init?: RequestInit }> = [];
@@ -17,6 +19,22 @@ function mockFetch(responses: Response[]) {
 }
 
 describe("archived web tools", () => {
+  it("searches the local source library with Chinese guideline terms", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "ebm-source-library-"));
+    const entry = path.join(root, "chinese-aml-2023");
+    await mkdir(entry, { recursive: true });
+    await writeFile(path.join(entry, "metadata.json"), JSON.stringify({
+      title: "成人急性髓系白血病（非急性早幼粒细胞白血病）中国诊疗指南（2023年版）",
+      source_url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC10630568/",
+      aliases: ["中国 AML 指南 2023", "急性髓系白血病 巩固治疗"],
+    }), "utf8");
+    await writeFile(path.join(entry, "full.md"), "# 指南\n\n巩固治疗推荐大剂量阿糖胞苷。", "utf8");
+
+    const results = await searchSourceLibrary({ sourceLibraryDir: root, query: "急性髓系白血病 巩固治疗 大剂量阿糖胞苷" });
+
+    expect(results[0]).toMatchObject({ slug: "chinese-aml-2023", sourceUrl: "https://pmc.ncbi.nlm.nih.gov/articles/PMC10630568/" });
+  });
+
   it("reads through Jina and returns archived absolute line offsets", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
     const mock = mockFetch([new Response("Title\r\n\r\n" + "clinical evidence ".repeat(80), { status: 200 })]);
@@ -70,6 +88,80 @@ describe("archived web tools", () => {
     expect(result).toMatchObject({ ok: true, provider: "mineru" });
     expect(mock.calls[0]).toMatchObject({ input: "https://example.org/download?id=123", init: { method: "HEAD" } });
     expect(mock.calls[1]!.input).toBe("https://mineru.net/api/v4/extract/task");
+  });
+
+  it("stops without fallback for PDFs above the page preflight limit", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
+    const twoPagePdf = new TextEncoder().encode("%PDF-1.7\n1 0 obj << /Type /Page >> endobj\n2 0 obj << /Type /Page >> endobj");
+    const mock = mockFetch([
+      new Response(twoPagePdf, { headers: { "content-type": "application/pdf", "content-length": String(twoPagePdf.byteLength) } }),
+    ]);
+
+    const result = await readWeb({
+      sessionDir,
+      url: "https://publisher.example/large.pdf",
+      fetcher: mock.fetcher,
+      mineruApiToken: "token",
+      firecrawlApiKey: "test-key",
+      maxPdfPagesForMineru: 1,
+      resolveHost: async () => ["93.184.216.34"],
+    });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "pdf_too_large" } });
+    if (!result.ok) expect(result.error.message).toContain("navigation preview only");
+    expect(mock.calls.map((call) => call.input)).toEqual(["https://publisher.example/large.pdf"]);
+  });
+
+  it("uses an internal source library before network readers", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
+    const libraryDir = await mkdtemp(path.join(os.tmpdir(), "ebm-library-"));
+    await mkdir(path.join(libraryDir, "kdigo-2024-ckd"), { recursive: true });
+    await writeFile(path.join(libraryDir, "kdigo-2024-ckd", "metadata.json"), JSON.stringify({
+      title: "KDIGO 2024 CKD Guideline",
+      source_url: "https://kdigo.org/wp-content/uploads/2024/03/KDIGO-2024-CKD-Guideline.pdf",
+    }));
+    await writeFile(path.join(libraryDir, "kdigo-2024-ckd", "full.md"), "# KDIGO 2024 CKD Guideline\n\nCached recommendation.");
+    const mock = mockFetch([]);
+
+    const result = await readWeb({
+      sessionDir,
+      url: "https://kdigo.org/wp-content/uploads/2024/03/KDIGO-2024-CKD-Guideline.pdf",
+      fetcher: mock.fetcher,
+      sourceLibraryDir: libraryDir,
+    });
+
+    expect(result).toMatchObject({ ok: true, provider: "library" });
+    expect(mock.calls).toHaveLength(0);
+  });
+
+  it("extracts a focused PDF page range with pdf-lib before MinerU upload", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
+    const sourcePdf = await PDFDocument.create();
+    sourcePdf.addPage([200, 200]);
+    sourcePdf.addPage([200, 200]);
+    const pdfBytes = await sourcePdf.save();
+    const parsedArchive = zipSync({ "result/full.md": strToU8("# Focused pages\n\nPage range evidence.") });
+    const mock = mockFetch([
+      new Response(Buffer.from(pdfBytes), { headers: { "content-type": "application/pdf", "content-length": String(pdfBytes.byteLength) } }),
+      Response.json({ data: { batch_id: "batch-1", file_urls: ["https://upload.example/signed"] } }),
+      new Response(null, { status: 200 }),
+      Response.json({ data: { extract_result: [{ state: "done", full_zip_url: "https://cdn.example/result.zip" }] } }),
+      new Response(parsedArchive),
+    ]);
+
+    const result = await readWeb({
+      sessionDir,
+      url: "https://publisher.example/long-guideline.pdf",
+      fetcher: mock.fetcher,
+      mineruApiToken: "token",
+      maxPdfPagesForMineru: 1,
+      pdfPages: "1-1",
+      resolveHost: async () => ["93.184.216.34"],
+    });
+
+    expect(result).toMatchObject({ ok: true, provider: "mineru" });
+    const uploadRequest = JSON.parse(String(mock.calls[1]!.init?.body)) as { files: Array<{ name: string }> };
+    expect(uploadRequest.files[0]!.name).toBe("pages-1-1-long-guideline.pdf");
   });
 
   it("downloads and uploads a PDF when Premium URL parsing cannot fetch it", async () => {
