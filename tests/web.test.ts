@@ -1,11 +1,11 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { strToU8, zipSync } from "fflate";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { readWeb, renderSearchCandidatesText, searchWeb } from "../src/tools/web.js";
-import { searchSourceLibrary, sourceLibraryMetadataFields } from "../src/tools/sourceLibrary.js";
+import { searchSourceLibrary, sourceLibraryMetadataFields, upsertSourceLibraryFromArchive } from "../src/tools/sourceLibrary.js";
 import { expandSourceLibraryQueryTerms } from "../src/tools/sourceLibraryTerms.js";
 
 function mockFetch(responses: Response[]) {
@@ -58,6 +58,76 @@ describe("archived web tools", () => {
     expect(fields.keywords.join(" ")).toContain("无病生存");
     expect(fields.keywords.join(" ")).toContain("总生存");
     expect(fields.keywords.join(" ")).toContain("严重不良反应");
+  });
+
+  it("uses discovery queries to improve source-library ranking", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "ebm-source-library-"));
+    await upsertSourceLibraryFromArchive({
+      sourceLibraryDir: root,
+      provider: "pubmed",
+      discoveryQuery: "成人急性髓系白血病 大剂量阿糖胞苷 标准剂量多药联合 巩固治疗 DFS OS",
+      archive: {
+        path: "sources/read/jalsg/full.md",
+        sha256: "sha-jalsg",
+        chars: 1000,
+        lines: 10,
+        bodyLineStart: 6,
+        title: "A randomized comparison of standard-dose multiagent chemotherapy versus high-dose cytarabine alone in AML.",
+        sourceUrl: "https://pubmed.ncbi.nlm.nih.gov/21190996/",
+        content: "PMID: 21190996\nPublication types: Randomized Controlled Trial\nAbstract text.",
+      },
+    });
+    await upsertSourceLibraryFromArchive({
+      sourceLibraryDir: root,
+      provider: "pubmed",
+      archive: {
+        path: "sources/read/other/full.md",
+        sha256: "sha-other",
+        chars: 1000,
+        lines: 10,
+        bodyLineStart: 6,
+        title: "High-dose cytarabine consolidation in acute myeloid leukemia.",
+        sourceUrl: "https://pubmed.ncbi.nlm.nih.gov/999/",
+        content: "PMID: 999\nAbstract text.",
+      },
+    });
+
+    const results = await searchSourceLibrary({ sourceLibraryDir: root, query: "成人急性髓系白血病 大剂量阿糖胞苷 标准剂量多药联合 巩固治疗 DFS OS", limit: 2 });
+
+    expect(results[0]!.sourceUrl).toBe("https://pubmed.ncbi.nlm.nih.gov/21190996/");
+  });
+
+  it("enforces source-library max entries during automatic upsert", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "ebm-source-library-"));
+    const original = process.env.SOURCE_LIBRARY_MAX_ENTRIES;
+    process.env.SOURCE_LIBRARY_MAX_ENTRIES = "2";
+    try {
+      const upsertStudy = async (index: number) => upsertSourceLibraryFromArchive({
+        sourceLibraryDir: root,
+        provider: "pubmed",
+        archive: {
+          path: `sources/read/${index}/full.md`,
+          sha256: `sha-${index}`,
+          chars: 1000,
+          lines: 10,
+          bodyLineStart: 6,
+          title: `Study ${index}`,
+          sourceUrl: `https://pubmed.ncbi.nlm.nih.gov/${index}/`,
+          content: `PMID: ${index}\nAbstract text ${index}.`,
+        },
+      });
+      await upsertStudy(1);
+      await upsertStudy(2);
+      await upsertStudy(1);
+      await upsertStudy(3);
+      const dirs = (await readdir(root, { withFileTypes: true })).filter((entry) => entry.isDirectory());
+      expect(dirs).toHaveLength(2);
+      const remaining = await Promise.all(dirs.map(async (entry) => JSON.parse(await readFile(path.join(root, entry.name, "metadata.json"), "utf8")) as { source_url: string }));
+      expect(remaining.map((item) => item.source_url).sort()).toEqual(["https://pubmed.ncbi.nlm.nih.gov/1/", "https://pubmed.ncbi.nlm.nih.gov/3/"].sort());
+    } finally {
+      if (original === undefined) delete process.env.SOURCE_LIBRARY_MAX_ENTRIES;
+      else process.env.SOURCE_LIBRARY_MAX_ENTRIES = original;
+    }
   });
 
   it("searches the local source library with Chinese guideline terms", async () => {
