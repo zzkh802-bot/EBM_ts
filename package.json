@@ -12,6 +12,7 @@
     "trace:analyze": "tsx scripts/analyze-trace.ts --markdown",
     "test:watch": "vitest",
     "ebm": "bash scripts/ebm.sh",
+    "source-library:build": "tsx scripts/build-source-library.ts",
     "lint:boundaries": "tsx scripts/check-boundaries.ts",
     "check": "npm run typecheck && npm run test && npm run lint:boundaries"
   },
