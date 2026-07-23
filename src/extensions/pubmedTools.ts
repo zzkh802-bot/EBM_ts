@@ -106,7 +106,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
         resultCount: result.pmids.length,
       });
       const sourceLibraryDir = process.env.SOURCE_LIBRARY_DIR || "data/source_library/guidelines";
-      const sourceLibraryWrites = await Promise.all(result.abstractArchives.map((archive) => upsertSourceLibraryFromArchive({ sourceLibraryDir, archive, provider: "pubmed", sessionId, sourceStatus: "primary_abstract" })));
+      const sourceLibraryWrites = await Promise.all(result.abstractArchives.map((archive) => upsertSourceLibraryFromArchive({ sourceLibraryDir, archive, provider: "pubmed", sessionId, sourceStatus: "primary_abstract", discoveryQuery: params.query })));
       result.abstractArchives.forEach((archive, index) => pi.events.emit("ebm:source_archived", {
         sessionId,
         provider: "pubmed",
@@ -158,7 +158,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
       if (!result.ok) throw toolError(result.error);
       pi.events.emit("ebm:source_archived", { sessionId, provider: "pubmed", path: result.archive.path, kind: "search", resultCount: result.relatedPmids.length });
       const sourceLibraryDir = process.env.SOURCE_LIBRARY_DIR || "data/source_library/guidelines";
-      const sourceLibraryWrites = await Promise.all(result.abstractArchives.map((archive) => upsertSourceLibraryFromArchive({ sourceLibraryDir, archive, provider: "pubmed", sessionId, sourceStatus: "primary_abstract" })));
+      const sourceLibraryWrites = await Promise.all(result.abstractArchives.map((archive) => upsertSourceLibraryFromArchive({ sourceLibraryDir, archive, provider: "pubmed", sessionId, sourceStatus: "primary_abstract", discoveryQuery: `similar to PMID ${params.pmid}` })));
       result.abstractArchives.forEach((archive, index) => pi.events.emit("ebm:source_archived", {
         sessionId,
         provider: "pubmed",
