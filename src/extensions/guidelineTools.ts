@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { GuidelineMcpClient, readGuideline, retrieveGuidelines, searchGuidelines, type GuidelineRetrieveItem, type GuidelineSearchItem } from "../tools/guidelineMcp.js";
+import { upsertSourceLibraryFromArchive } from "../tools/sourceLibrary.js";
 import { archiveDetails } from "./archiveOutput.js";
 import { piReadableSessionPath, piSessionDirectory } from "./sessionPath.js";
 
@@ -194,10 +195,12 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
       });
       if (!result.ok) throw new Error(JSON.stringify(result.error));
       const readablePath = piReadableSessionPath(ctx.cwd, sessionId, result.archive.path);
-      pi.events.emit("ebm:source_archived", { sessionId, provider: "guideline_mcp", path: result.archive.path, kind: "read" });
+      const sourceLibraryDir = process.env.SOURCE_LIBRARY_DIR || "data/source_library/guidelines";
+      const library = await upsertSourceLibraryFromArchive({ sourceLibraryDir, archive: result.archive, provider: "guideline_mcp", sessionId });
+      pi.events.emit("ebm:source_archived", { sessionId, provider: "guideline_mcp", path: result.archive.path, kind: "read", sourceLibraryPath: library.path, sourceLibraryWritten: library.written });
       return {
         content: [{ type: "text", text: renderGuidelineReadText(readablePath, result.archive) }],
-        details: { archive: archiveDetails(result.archive), truncated: false },
+        details: { archive: archiveDetails(result.archive), sourceLibrary: library, truncated: false },
       };
     },
   });

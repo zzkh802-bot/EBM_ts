@@ -2,7 +2,7 @@ import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { readWeb, renderSearchCandidatesText, searchWeb, type WebToolError } from "../tools/web.js";
-import { searchSourceLibrary } from "../tools/sourceLibrary.js";
+import { searchSourceLibrary, upsertSourceLibraryFromArchive } from "../tools/sourceLibrary.js";
 import { archiveDetails, archiveToolText } from "./archiveOutput.js";
 import { piReadableSessionPath, piSessionDirectory } from "./sessionPath.js";
 
@@ -64,6 +64,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       onUpdate?.({ content: [{ type: "text", text: "Reading and archiving URL…" }], details: {} });
       const sessionId = ctx.sessionManager.getSessionId();
+      const sourceLibraryDir = process.env.SOURCE_LIBRARY_DIR || "data/source_library/guidelines";
       const result = await readWeb({
         sessionDir: piSessionDirectory(ctx.cwd, sessionId),
         url: params.url,
@@ -75,15 +76,16 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
         totalTimeoutMs: positiveEnvInt("WEB_READ_TOTAL_TIMEOUT_MS", 45_000),
         maxPdfPagesForMineru: positiveEnvInt("PDF_MAX_PAGES_FOR_WEB_READ", 50),
         ...(params.pdf_pages ? { pdfPages: params.pdf_pages } : {}),
-        sourceLibraryDir: process.env.SOURCE_LIBRARY_DIR || "data/source_library/guidelines",
+        sourceLibraryDir,
         ...(signal ? { signal } : {}),
       });
       if (!result.ok) throw toolError(result.error);
       const output = archiveToolText(result.archive, piReadableSessionPath(ctx.cwd, sessionId, result.archive.path), { compactRead: true });
-      pi.events.emit("ebm:source_archived", { sessionId, provider: result.provider, path: result.archive.path, kind: "read" });
+      const library = result.provider === "library" ? { written: false } : await upsertSourceLibraryFromArchive({ sourceLibraryDir, archive: result.archive, provider: result.provider, sessionId });
+      pi.events.emit("ebm:source_archived", { sessionId, provider: result.provider, path: result.archive.path, kind: "read", sourceLibraryPath: library.path, sourceLibraryWritten: library.written });
       return {
         content: [{ type: "text", text: output.text }],
-        details: { provider: result.provider, archive: archiveDetails(result.archive), truncated: output.truncated },
+        details: { provider: result.provider, archive: archiveDetails(result.archive), sourceLibrary: library, truncated: output.truncated },
       };
     },
   });

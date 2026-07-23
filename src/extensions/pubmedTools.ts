@@ -2,6 +2,7 @@ import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { readPubMed, searchPubMed, similarPubMed, type PubMedError } from "../tools/pubmed.js";
+import { upsertSourceLibraryFromArchive } from "../tools/sourceLibrary.js";
 import { archiveDetails, archiveToolText } from "./archiveOutput.js";
 import { piReadableSessionPath, piSessionDirectory } from "./sessionPath.js";
 
@@ -104,12 +105,16 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
         kind: "search",
         resultCount: result.pmids.length,
       });
-      result.abstractArchives.forEach((archive) => pi.events.emit("ebm:source_archived", {
+      const sourceLibraryDir = process.env.SOURCE_LIBRARY_DIR || "data/source_library/guidelines";
+      const sourceLibraryWrites = await Promise.all(result.abstractArchives.map((archive) => upsertSourceLibraryFromArchive({ sourceLibraryDir, archive, provider: "pubmed", sessionId, sourceStatus: "primary_abstract" })));
+      result.abstractArchives.forEach((archive, index) => pi.events.emit("ebm:source_archived", {
         sessionId,
         provider: "pubmed",
         path: archive.path,
         kind: "read",
         sourceStatus: "primary_abstract",
+        sourceLibraryPath: sourceLibraryWrites[index]?.path,
+        sourceLibraryWritten: sourceLibraryWrites[index]?.written,
       }));
       return {
         content: [{
@@ -121,6 +126,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
           relatedPmids: result.relatedPmids,
           abstractCount: result.abstractCount,
           abstractArchives: result.abstractArchives.map(archiveDetails),
+          sourceLibrary: sourceLibraryWrites,
           warnings: result.warnings,
           archive: archiveDetails(result.archive),
           truncated: false,
@@ -151,12 +157,16 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
       });
       if (!result.ok) throw toolError(result.error);
       pi.events.emit("ebm:source_archived", { sessionId, provider: "pubmed", path: result.archive.path, kind: "search", resultCount: result.relatedPmids.length });
-      result.abstractArchives.forEach((archive) => pi.events.emit("ebm:source_archived", {
+      const sourceLibraryDir = process.env.SOURCE_LIBRARY_DIR || "data/source_library/guidelines";
+      const sourceLibraryWrites = await Promise.all(result.abstractArchives.map((archive) => upsertSourceLibraryFromArchive({ sourceLibraryDir, archive, provider: "pubmed", sessionId, sourceStatus: "primary_abstract" })));
+      result.abstractArchives.forEach((archive, index) => pi.events.emit("ebm:source_archived", {
         sessionId,
         provider: "pubmed",
         path: archive.path,
         kind: "read",
         sourceStatus: "primary_abstract",
+        sourceLibraryPath: sourceLibraryWrites[index]?.path,
+        sourceLibraryWritten: sourceLibraryWrites[index]?.written,
       }));
       return {
         content: [{ type: "text", text: renderAbstractNavigation(path.basename(sessionDir), result.abstractArchives) }],
@@ -164,6 +174,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
           seedPmid: result.seedPmid,
           relatedPmids: result.relatedPmids,
           abstractArchives: result.abstractArchives.map(archiveDetails),
+          sourceLibrary: sourceLibraryWrites,
           archive: archiveDetails(result.archive),
           warnings: result.warnings,
           truncated: false,
@@ -194,8 +205,10 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
       });
       if (!result.ok) throw toolError(result.error);
       const output = archiveToolText(result.archive, piReadableSessionPath(ctx.cwd, sessionId, result.archive.path), { compactRead: true });
+      const sourceLibraryDir = process.env.SOURCE_LIBRARY_DIR || "data/source_library/guidelines";
+      const library = await upsertSourceLibraryFromArchive({ sourceLibraryDir, archive: result.archive, provider: "pubmed", sessionId, sourceStatus: result.fullText ? result.fullTextSource : "abstract_only" });
       const warningText = result.warnings.length ? `\n\nWarnings:\n${result.warnings.map((warning) => `- ${warning}`).join("\n")}` : "";
-      pi.events.emit("ebm:source_archived", { sessionId, provider: "pubmed", path: result.archive.path, kind: "read", pmid: result.pmid });
+      pi.events.emit("ebm:source_archived", { sessionId, provider: "pubmed", path: result.archive.path, kind: "read", pmid: result.pmid, sourceLibraryPath: library.path, sourceLibraryWritten: library.written });
       return {
         content: [{ type: "text", text: `${output.text}${warningText}` }],
         details: {
@@ -205,6 +218,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
           fullTextSource: result.fullTextSource,
           warnings: result.warnings,
           archive: archiveDetails(result.archive),
+          sourceLibrary: library,
           truncated: output.truncated,
         },
       };
