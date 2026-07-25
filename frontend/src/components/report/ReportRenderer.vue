@@ -29,7 +29,7 @@ const sectionKind = (title: string): SectionKind => {
   if (/证据状态|完成思考|引用核验|检索状态|获益.?风险量化/.test(clean)) return 'status'
   if (/可靠性|证据信度|可信度/.test(clean)) return 'reliability'
   if (/安全|风险|禁忌|红旗|不良反应|出血|死亡|感染|并发症|毒性|自杀|自伤/.test(clean)) return 'safety'
-  if (/行动|下一步|管理|个体化决策|临床建议|治疗建议|处理建议/.test(clean)) return 'action'
+  if (/行动|下一步|管理|决策路径|临床决策|个体化决策|临床建议|治疗建议|处理建议/.test(clean)) return 'action'
   return ''
 }
 const sectionLabel = (kind: SectionKind) => ({

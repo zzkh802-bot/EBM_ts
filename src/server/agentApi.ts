@@ -557,6 +557,7 @@ export function buildAgentPrompt(input: AgentRunInput): string {
     modeInstruction[input.researchMode],
     audienceInstruction,
     "研究模式和用户类型只改变内容的深度、范围和专业程度，不改变前端布局。所有报告使用稳定的语义结构，并按需包含：临床问题与决策、主要疗效结局、关键安全结局、管理策略、结论与建议、参考文献。重大出血、死亡、感染、禁忌等关键安全结局必须使用独立的二级或三级标题，不得埋在长段落中。不要为了凑模板输出没有内容的章节。",
+    "本轮必须生成可供前端渲染的正式循证报告：在最终回复前调用 report_write；若 report_write 只保存了 draft，则修复后调用 report_finalize。不得只在聊天消息中输出摘要而跳过正式报告文件。最终聊天消息可以简短，但正式报告必须包含本模式要求的完整内容。",
     input.deepThink ? "额外检查安全红旗、证据冲突和跨学科影响。" : "",
     retrievalInstruction,
     `本轮最大工具迭代预算为 ${input.maxIterations}（提示性约束）。`,

@@ -41,6 +41,8 @@ describe("DP循医 TypeScript agent API", () => {
       expect(prompt).toContain("研究模式和用户类型只改变内容的深度")
       expect(prompt).toContain("关键安全结局")
       expect(prompt).toContain("必须使用独立的二级或三级标题")
+      expect(prompt).toContain("在最终回复前调用 report_write")
+      expect(prompt).toContain("不得只在聊天消息中输出摘要")
     }
     expect(instant).toContain("最少必要")
     expect(expert).toContain("指南推荐等级")
