@@ -16,4 +16,5 @@ data/source_library/guidelines/*
 !data/source_library/guidelines/README.md
 data/tmp/
 tmp/
+reports/
 *.log
