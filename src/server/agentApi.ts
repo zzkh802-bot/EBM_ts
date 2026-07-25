@@ -538,14 +538,14 @@ async function projectEnv(rootDir: string): Promise<Record<string, string>> {
   }
 }
 
-function buildAgentPrompt(input: AgentRunInput): string {
+export function buildAgentPrompt(input: AgentRunInput): string {
   const modeInstruction: Record<ResearchMode, string> = {
-    instant: "以临床结论、安全边界和最少必要的可追溯证据为重点，避免不必要的扩展检索。",
-    expert: "按 PICO 分解问题，解释指南、研究、效应量、适用性、冲突与不确定性。",
+    instant: "只保留临床决策所需的关键疗效、安全结局、适用边界和简短建议，以最少必要的可追溯证据支持结论，避免不必要的扩展检索。",
+    expert: "完整呈现 PICO、指南推荐等级、研究设计、效应量、适用性、证据冲突、不确定性和详细安全边界。",
     literature: "以文献/指南阅读、证据摘录和引用可核验性为重点。",
   };
   const audienceInstruction = input.audienceMode === "public"
-    ? "使用清晰中文面向普通用户，不给个体化处方，明确何时应就医。"
+    ? "使用清晰中文面向普通用户，不给个体化处方；省略 PICO、GRADE、检索方法和不必要的统计术语，保留通俗的获益、风险、行动建议及何时应就医。"
     : "使用面向临床人员的中文，保留 PICO、证据等级、效应量和适用边界。";
   const retrievalInstruction = input.retrievalPolicy === "mcp_only"
     ? "本轮是隔离的 MCP-only 集成测试：只使用 guideline_mcp_search、guideline_mcp_retrieve、guideline_mcp_read 及证据/报告工具；禁止 PubMed、公共网页和本地来源库检索。若指南证据不足，明确报告证据缺口，不得改用其他检索来源。最终面向用户的报告不得出现 MCP、RAG、工具调用、内部文件路径或内部 evidence ID。"
@@ -556,6 +556,7 @@ function buildAgentPrompt(input: AgentRunInput): string {
     "你是 DP循医的 TypeScript 后端 Agent。请输出中文、可追溯且不过度断言的循证回答。",
     modeInstruction[input.researchMode],
     audienceInstruction,
+    "研究模式和用户类型只改变内容的深度、范围和专业程度，不改变前端布局。所有报告使用稳定的语义结构，并按需包含：临床问题与决策、主要疗效结局、关键安全结局、管理策略、结论与建议、参考文献。重大出血、死亡、感染、禁忌等关键安全结局必须使用独立的二级或三级标题，不得埋在长段落中。不要为了凑模板输出没有内容的章节。",
     input.deepThink ? "额外检查安全红旗、证据冲突和跨学科影响。" : "",
     retrievalInstruction,
     `本轮最大工具迭代预算为 ${input.maxIterations}（提示性约束）。`,

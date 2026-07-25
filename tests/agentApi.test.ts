@@ -1,6 +1,6 @@
 import { once } from "node:events";
 import { describe, expect, it } from "vitest";
-import { createAgentApiServer, type AgentExecutor } from "../src/server/agentApi.js";
+import { buildAgentPrompt, createAgentApiServer, type AgentExecutor, type AgentRunInput } from "../src/server/agentApi.js";
 
 async function startApi(executor: AgentExecutor) {
   const api = createAgentApiServer({ executor });
@@ -21,6 +21,32 @@ async function eventually<T>(read: () => Promise<T>, predicate: (value: T) => bo
 }
 
 describe("DP循医 TypeScript agent API", () => {
+  const promptInput = (overrides: Partial<AgentRunInput> = {}): AgentRunInput => ({
+    question: "测试临床问题",
+    researchMode: "instant",
+    audienceMode: "clinician",
+    deepThink: false,
+    searchEnabled: true,
+    retrievalPolicy: "all",
+    maxIterations: 5,
+    requestTimeoutSeconds: 300,
+    ...overrides,
+  });
+
+  it("keeps report structure stable while modes change content depth", () => {
+    const instant = buildAgentPrompt(promptInput());
+    const expert = buildAgentPrompt(promptInput({ researchMode: "expert" }));
+    const publicPrompt = buildAgentPrompt(promptInput({ audienceMode: "public" }));
+    for (const prompt of [instant, expert, publicPrompt]) {
+      expect(prompt).toContain("研究模式和用户类型只改变内容的深度")
+      expect(prompt).toContain("关键安全结局")
+      expect(prompt).toContain("必须使用独立的二级或三级标题")
+    }
+    expect(instant).toContain("最少必要")
+    expect(expert).toContain("指南推荐等级")
+    expect(publicPrompt).toContain("省略 PICO、GRADE")
+  });
+
   it("creates an async run and exposes the completed normalized response", async () => {
     let receivedInput: Parameters<AgentExecutor>[0] | undefined;
     const executor: AgentExecutor = async (input, hooks) => {

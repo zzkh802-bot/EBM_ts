@@ -25,11 +25,11 @@ const displayedReferences = computed(() => Object.fromEntries(Object.entries(ref
 type SectionKind = 'authority' | 'status' | 'reliability' | 'safety' | 'action' | ''
 const sectionKind = (title: string): SectionKind => {
   const clean = title.replace(/\s+/g, '')
-  if (/权威建议|临床底线|核心结论|结论摘要/.test(clean)) return 'authority'
+  if (/权威建议|临床底线|核心结论|结论摘要|综合判断|结论与建议/.test(clean)) return 'authority'
   if (/证据状态|完成思考|引用核验|检索状态|获益.?风险量化/.test(clean)) return 'status'
   if (/可靠性|证据信度|可信度/.test(clean)) return 'reliability'
-  if (/安全|禁忌|红旗|不良反应|风险提示/.test(clean)) return 'safety'
-  if (/行动|下一步|管理.*要点|治疗建议|处理建议/.test(clean)) return 'action'
+  if (/安全|风险|禁忌|红旗|不良反应|出血|死亡|感染|并发症|毒性|自杀|自伤/.test(clean)) return 'safety'
+  if (/行动|下一步|管理|个体化决策|临床建议|治疗建议|处理建议/.test(clean)) return 'action'
   return ''
 }
 const sectionLabel = (kind: SectionKind) => ({
@@ -41,17 +41,35 @@ const sectionPreview = (nodes: ReportNode[]) => {
   return text.length > 72 ? `${text.slice(0, 72)}…` : text
 }
 const sections = computed(() => {
-  const result: Array<{ heading?: Extract<ReportNode, { type: 'heading' }>; nodes: ReportNode[]; open: boolean; kind: SectionKind }> = [{ nodes: [], open: true, kind: '' }]
-  for (const node of nodes.value) {
-    if (node.type === 'heading' && node.level === 2) {
+  type Section = {
+    heading?: Extract<ReportNode, { type: 'heading' }>
+    nodes: ReportNode[]
+    open: boolean
+    kind: SectionKind
+    group?: boolean
+  }
+  const result: Section[] = [{ nodes: [], open: true, kind: '' }]
+  const hasLevelThreeChild = (headingIndex: number) => {
+    for (let index = headingIndex + 1; index < nodes.value.length; index += 1) {
+      const candidate = nodes.value[index]
+      if (candidate.type !== 'heading') continue
+      if (candidate.level <= 2) return false
+      if (candidate.level === 3) return true
+    }
+    return false
+  }
+  nodes.value.forEach((node, index) => {
+    if (node.type === 'heading' && (node.level === 2 || node.level === 3)) {
+      const group = node.level === 2 && hasLevelThreeChild(index)
       result.push({
         heading: node,
         nodes: [],
-        open: props.researchMode === 'expert' || /结论|建议|风险|安全|警示|摘要|要点|适用人群/.test(node.title),
+        open: false,
         kind: sectionKind(node.title),
+        group,
       })
     } else result[result.length - 1].nodes.push(node)
-  }
+  })
   return result.filter((section) => section.heading || section.nodes.length)
 })
 const referenceEntries = computed(() => Object.values(displayedReferences.value).sort((a, b) => Number(a.number) - Number(b.number)))
@@ -64,7 +82,11 @@ const referenceMeta = (reference: Reference) => reference.pmid
   <div class="evidence-report" :class="[`report-audience-${audience}`, `report-mode-${researchMode}`]">
     <div class="report-markdown">
       <template v-for="(section, index) in sections" :key="index">
-        <section v-if="section.heading && section.kind" class="report-section-card" :class="section.kind">
+        <section v-if="section.heading && section.group" class="report-section-group">
+          <ReportNodeView :node="section.heading" :references="displayedReferences" @citation="emit('citation', $event)" />
+          <ReportNodeView v-for="(node, nodeIndex) in section.nodes" :key="nodeIndex" :node="node" :references="displayedReferences" @citation="emit('citation', $event)" />
+        </section>
+        <section v-else-if="section.heading && section.kind" class="report-section-card" :class="section.kind">
           <div class="section-card-title">
             <span class="section-symbol">{{ sectionLabel(section.kind) }}</span>
             <strong><InlineContent :nodes="section.heading.children" :references="displayedReferences" @citation="emit('citation', $event)" /></strong>

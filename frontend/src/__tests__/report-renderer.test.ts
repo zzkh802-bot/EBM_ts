@@ -10,7 +10,17 @@ describe('报告清晰渲染', () => {
 专业检索方法和 GRADE 证据分级。
 
 ## 详细证据分析
+循证分析前言。
+
+### 主要疗效结局
 效应量、亚组分析及统计学细节。
+
+### 重大出血风险
+重大出血没有显著增加。
+
+| 结局 | 效应量 |
+| --- | --- |
+| 缓解 | RR 1.25 |
 
 ## 血压管理三要点
 1. **治疗前**
@@ -29,19 +39,23 @@ describe('报告清晰渲染', () => {
     expect(wrapper.find('.reference-card').text()).toContain('PMID: 25106063')
   })
 
-  it('Instant 保留完整报告但默认折叠专业细节', () => {
-    const wrapper = mount(ReportRenderer, { props: { markdown, audience: 'clinician', researchMode: 'instant' } })
-    const detailSections = wrapper.findAll('details.report-fold')
-    expect(wrapper.text()).toContain('专业检索方法')
-    expect(detailSections.length).toBeGreaterThan(0)
-    expect(detailSections.some((section) => !section.attributes('open'))).toBe(true)
+  it('Instant 与 Expert 使用相同的前端展示策略', () => {
+    const instant = mount(ReportRenderer, { props: { markdown, audience: 'clinician', researchMode: 'instant' } })
+    const expert = mount(ReportRenderer, { props: { markdown, audience: 'clinician', researchMode: 'expert' } })
+    const instantSections = instant.findAll('details.report-fold')
+    const expertSections = expert.findAll('details.report-fold')
+    expect(instantSections).toHaveLength(expertSections.length)
+    expect(instantSections.map((section) => section.attributes('open')))
+      .toEqual(expertSections.map((section) => section.attributes('open')))
+    expect(instantSections.every((section) => section.attributes('open') === undefined)).toBe(true)
   })
 
-  it('Expert 默认展开完整专业细节', () => {
-    const wrapper = mount(ReportRenderer, { props: { markdown, audience: 'clinician', researchMode: 'expert' } })
-    const detailSections = wrapper.findAll('details.report-fold')
-    expect(wrapper.text()).toContain('效应量、亚组分析')
-    expect(detailSections.every((section) => section.attributes('open') !== undefined)).toBe(true)
+  it('把 H3 疗效与安全结局拆成独立区块并保留表格', () => {
+    const wrapper = mount(ReportRenderer, { props: { markdown, audience: 'clinician' } })
+    expect(wrapper.find('.report-section-group').text()).toContain('详细证据分析')
+    expect(wrapper.findAll('details.report-fold').some((section) => section.text().includes('主要疗效结局'))).toBe(true)
+    expect(wrapper.find('.report-section-card.safety').text()).toContain('重大出血风险')
+    expect(wrapper.find('.report-section-card.safety table').text()).toContain('RR 1.25')
   })
 
   it('普通用户版略去过度专业的段落', () => {
