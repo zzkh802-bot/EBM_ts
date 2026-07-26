@@ -1,0 +1,523 @@
+{
+  "selection": {
+    "rank": 1,
+    "case_id": "ENV13-CARD-001",
+    "department": "心血管内科",
+    "question_type": "treatment",
+    "title": "房颤卒中预防与抗凝选择",
+    "summary": "口服抗凝药相较阿司匹林或无抗凝治疗的卒中、大出血和死亡获益风险",
+    "question": "在伴脑卒中高危因素的非瓣膜性心房颤动患者中，口服抗凝药相比阿司匹林或无抗凝治疗，对脑卒中、系统性栓塞、大出血和死亡的获益与风险如何？",
+    "metrics": {
+      "quality_score": 100,
+      "duration_sec": 109.64,
+      "mcp_tool_calls": 12,
+      "evidence_add_calls": 8,
+      "citation_count": 26,
+      "policy_isolated": true,
+      "full_report_returned": true,
+      "internal_route_leak": false
+    },
+    "run_id": "cec571d1-bc65-4729-8084-baaeda38e365",
+    "source_set": "integration_environment_13",
+    "retrieval_policy": "mcp_only"
+  },
+  "benchmark_result": {
+    "case_id": "ENV13-CARD-001",
+    "case_source_set": "integration_environment_13",
+    "question": "在伴脑卒中高危因素的非瓣膜性心房颤动患者中，口服抗凝药相比阿司匹林或无抗凝治疗，对脑卒中、系统性栓塞、大出血和死亡的获益与风险如何？",
+    "attempt": 1,
+    "run_id": "cec571d1-bc65-4729-8084-baaeda38e365",
+    "status": "succeeded",
+    "started_at": "2026-07-25T17:42:00.728Z",
+    "completed_at": "2026-07-25T17:43:50.368Z",
+    "duration_sec": 109.64,
+    "retrieval_policy": "mcp_only",
+    "policy_isolated": true,
+    "tool_names": [
+      "guideline_mcp_search",
+      "guideline_mcp_read",
+      "guideline_mcp_retrieve",
+      "evidence_add",
+      "report_write",
+      "read",
+      "edit"
+    ],
+    "forbidden_tools": [],
+    "mcp_tool_calls": 12,
+    "evidence_add_calls": 8,
+    "report_write_calls": 1,
+    "answer_chars": 2410,
+    "full_report_returned": true,
+    "error": null
+  },
+  "api_response": {
+    "contract_version": "dp-xunyi-agent/v2",
+    "run_id": "cec571d1-bc65-4729-8084-baaeda38e365",
+    "status": "succeeded",
+    "created_at": "2026-07-25T17:42:00.730Z",
+    "started_at": "2026-07-25T17:42:00.730Z",
+    "completed_at": "2026-07-25T17:43:48.875Z",
+    "session_id": "019f9a5e-a488-7f30-9810-e0aa49489eb3",
+    "message": "报告已完成并写入：`reports/非瓣膜性房颤伴卒中高危因素-口服抗凝药-vs-阿司匹林-无抗凝治疗的获益与风险评估.md`\n\n---\n\n**临床回答要点：**\n\n**结论：在CHA₂DS₂‑VASc ≥2的NVAF高危患者中，OAC显著降低缺血性卒中和系统性栓塞，获益远超大出血风险；阿司匹林不应用于房颤卒中预防。**\n\n| 对比维度 | 效应量 | 证据来源 |\n|---|---|---|\n| **华法林 vs 无治疗** | 卒中↓ **64–66%**（OR 0.34） | SIGN荟萃分析 |\n| **华法林 vs 阿司匹林（>75岁）** | 卒中↓ **52%**（RR 0.48），大出血相似 | BAFTA试验 |\n| **阿哌沙班 vs 阿司匹林** | 卒中/栓塞↓ **55%**（HR 0.45），大出血无差异 | AVERROES试验 |\n| **DOACs vs 华法林** | 卒中/颅内出血/全因死亡更低或相当 | 四大III期试验+真实世界数据 |\n| **阿司匹林单药 vs 安慰剂** | 卒中降低**未达统计学意义**（OR 0.70, 95% CI 0.47–1.07） | SIGN荟萃分析 |\n\n**三个关键安全边界：**\n1. 阿司匹林不是OAC的\"安全替代品\"——老年患者中其出血风险与获益均不优于OAC\n2. 高龄/卒中史不构成抗凝禁忌——这些患者缺血风险最高，抗凝绝对获益最大\n3. HAS‑BLED评分用于管理可纠正的出血因素，而非拒绝抗凝\n\n**存在的证据缺口：** MCP指南库可检索到ESC 2024、NICE、SIGN、BC DOAC指南等高质量官方指南。如需对特定DOAC（达比加群、利伐沙班、艾多沙班、阿哌沙班）做头对头比较的具体效应量数值（如RE-LY、ROCKET-AF、ENGAGE AF、ARISTOTLE试验的详细数据），建议补充PubMed/MEDLINE检索。",
+    "agent_answer": "报告已完成并写入：`reports/非瓣膜性房颤伴卒中高危因素-口服抗凝药-vs-阿司匹林-无抗凝治疗的获益与风险评估.md`\n\n---\n\n**临床回答要点：**\n\n**结论：在CHA₂DS₂‑VASc ≥2的NVAF高危患者中，OAC显著降低缺血性卒中和系统性栓塞，获益远超大出血风险；阿司匹林不应用于房颤卒中预防。**\n\n| 对比维度 | 效应量 | 证据来源 |\n|---|---|---|\n| **华法林 vs 无治疗** | 卒中↓ **64–66%**（OR 0.34） | SIGN荟萃分析 |\n| **华法林 vs 阿司匹林（>75岁）** | 卒中↓ **52%**（RR 0.48），大出血相似 | BAFTA试验 |\n| **阿哌沙班 vs 阿司匹林** | 卒中/栓塞↓ **55%**（HR 0.45），大出血无差异 | AVERROES试验 |\n| **DOACs vs 华法林** | 卒中/颅内出血/全因死亡更低或相当 | 四大III期试验+真实世界数据 |\n| **阿司匹林单药 vs 安慰剂** | 卒中降低**未达统计学意义**（OR 0.70, 95% CI 0.47–1.07） | SIGN荟萃分析 |\n\n**三个关键安全边界：**\n1. 阿司匹林不是OAC的\"安全替代品\"——老年患者中其出血风险与获益均不优于OAC\n2. 高龄/卒中史不构成抗凝禁忌——这些患者缺血风险最高，抗凝绝对获益最大\n3. HAS‑BLED评分用于管理可纠正的出血因素，而非拒绝抗凝\n\n**存在的证据缺口：** MCP指南库可检索到ESC 2024、NICE、SIGN、BC DOAC指南等高质量官方指南。如需对特定DOAC（达比加群、利伐沙班、艾多沙班、阿哌沙班）做头对头比较的具体效应量数值（如RE-LY、ROCKET-AF、ENGAGE AF、ARISTOTLE试验的详细数据），建议补充PubMed/MEDLINE检索。",
+    "patient_summary": "报告已完成并写入：`reports/非瓣膜性房颤伴卒中高危因素-口服抗凝药-vs-阿司匹林-无抗凝治疗的获益与风险评估.md`\n\n---\n\n**临床回答要点：**\n\n**结论：在CHA₂DS₂‑VASc ≥2的NVAF高危患者中，OAC显著降低缺血性卒中和系统性栓塞，获益远超大出血风险；阿司匹林不应用于房颤卒中预防。**\n\n| 对比维度 | 效应量 | 证据来源 |\n|---|---|---|\n| **华法林 vs 无治疗** | 卒中↓ **64–66%**（OR 0.34） | SIGN荟萃分析 |\n| **华法林 vs 阿司匹林（>75岁）** | 卒中↓ **52%**（RR 0.48），大出血相似 | BAFTA试验 |\n| **阿哌沙班 vs 阿司匹林** | 卒中/栓塞↓ **55%**（HR 0.45），大出血无差异 | AVERROES试验 |\n| **DOACs vs 华法林** | 卒中/颅内出血/全因死亡更低或相当 | 四大III期试验+真实世界数据 |\n| **阿司匹林单药 vs 安慰剂** | 卒中降低**未达统计学意义**（OR 0.70, 95% CI 0.47–1.07） | SIGN荟萃分析 |\n\n**三个关键安全边界：**\n1. 阿司匹林不是OAC的\"安全替代品\"——老年患者中其出血风险与获益均不优于OAC\n2. 高龄/卒中史不构成抗凝禁忌——这些患者缺血风险最高，抗凝绝对获益最大\n3. HAS‑BLED评分用于管理可纠正的出血因素，而非拒绝抗凝\n\n**存在的证据缺口：** MCP指南库可检索到ESC 2024、NICE、SIGN、BC DOAC指南等高质量官方指南。如需对特定DOAC（达比加群、利伐沙班、艾多沙班、阿哌沙班）做头对头比较的具体效应量数值（如RE-LY、ROCKET-AF、ENGAGE AF、ARISTOTLE试验的详细数据），建议补充PubMed/MEDLINE检索。",
+    "report_markdown": "## 临床问题\n\n在伴脑卒中高危因素（CHA₂DS₂‑VASc ≥2）的非瓣膜性心房颤动（NVAF）患者中，口服抗凝药（OAC，包括直接口服抗凝药[DOACs]和华法林）相比阿司匹林或无抗凝治疗，对缺血性卒中、系统性栓塞、大出血和死亡事件的获益与风险如何？\n\n## 核心结论\n\n**在CHA₂DS₂‑VASc ≥2的NVAF高危患者中，口服抗凝药（OAC）显著降低缺血性卒中和系统性栓塞风险，获益远超大出血风险；阿司匹林不应用于房颤卒中预防，因其疗效不确切且风险/获益比不利于患者。**\n\n临床决策路径如下：\n\n1. **启动抗凝的阈值**：CHA₂DS₂‑VASc ≥2（男性）/ ≥3（女性）应启动长期OAC（ⅠA类推荐）[1]；CHA₂DS₂‑VASc =1（男性）/ =2（女性）应考虑OAC（Ⅱa B类推荐）[1]。\n2. **首选药物**：DOACs（直接口服抗凝药）为大多数NVAF患者的一线治疗（强推荐，高质量证据）[2]，其疗效非劣于或优于华法林，且颅内出血风险和全因死亡率更低[2]。\n3. **阿司匹林的定位**：不应用于房颤卒中预防的单药治疗[1,3]；即使是联合氯吡格雷的双联抗血小板治疗，疗效仍不及华法林[1]。\n\n## 关键效应量\n\n### OAC vs 无抗凝治疗（安慰剂/对照）\n\n- **剂量调整华法林**（INR 2.0–3.0）：降低卒中风险约 **64–66%**（OR 0.34, 95% CI 0.23–0.52）[4]\n- **未经治疗的房颤**：缺血性卒中风险增加约 **5倍**，五分之一的卒中与房颤相关[5]\n\n### OAC vs 阿司匹林\n\n- **华法林 vs 阿司匹林（>75岁，BAFTA试验）**：卒中风险 **RR 0.48**（95% CI 0.28–0.80），绝对年风险降低 **2%**（需治疗年数[NNT]约50），颅外大出血率相似（华法林1.4%/年 vs 阿司匹林1.6%/年）[6]\n- **阿哌沙班 vs 阿司匹林（AVERROES试验）**：卒中或系统性栓塞风险 **HR 0.45**（95% CI 0.32–0.62），大出血无显著差异[1]\n- **剂量调整VKA vs 抗血小板药**：荟萃分析显示VKA降低卒中风险约 **32%**（OR 0.68, 95% CI 0.54–0.85）[4]\n- **阿司匹林单药 vs 安慰剂**：在NVAF中**未显著降低**卒中风险（OR 0.70, 95% CI 0.47–1.07）[4]\n\n### DOACs vs 华法林\n\n- 作为一类药物，DOACs在降低卒中、颅内出血和全因死亡率方面优于或非劣于华法林，大出血总体相当[2]\n- DOACs的颅内出血风险低于华法林，且在近300万患者-年的真实世界观察中呈现一致的安全性优势[7]\n\n## 安全边界\n\n1. **出血风险**：OAC的大出血年发生率约1–3%，但颅内出血（最致命并发症）在DOACs中显著低于华法林[2,7]。阿司匹林并非\"更安全的替代方案\"，尤其在老年患者中，其出血风险和获益均不优于OAC[6,7]。\n2. **不应因年龄/卒中史拒绝抗凝**：高龄和既往卒中史既是出血风险因素，也是缺血事件最强的预测因素，这些患者恰恰从抗凝中获益最大，不应视为抗凝的绝对禁忌[7]。\n3. **出血风险评估工具**（如HAS‑BLED）**不应**用于决定是否给予CHA₂DS₂‑VASc ≥2的患者抗凝，而应用于识别和管理可纠正的出血风险因素[3]。\n4. **联合抗血小板药增加出血**：OAC联合阿司匹林（无明确冠脉指征时）增加出血事件，且无卒中或死亡方面的额外获益[1]。\n\n## 适用边界\n\n- 本结论适用于非瓣膜性房颤（不含风湿性二尖瓣狭窄或机械瓣置换）患者，不涵盖合并急性冠脉综合征/PCI术后（需联合抗血小板治疗）的特殊情境。\n- 本报告主要依据2024年ESC指南、NICE质量标准、加拿大DOAC指南及SIGN证据总结。结论与2024年ESC、2023年ACCP、2021年AHA/ASA等主流国际指南一致。\n\n\n## 参考文献\n\n1. [1] 2024 ESC Guidelines for the Management of Atrial Fibrillation. Eur Heart J 2024;45:3314–3414.\n2. [2] BC Guidelines & Protocols Advisory Committee. Direct Oral Anticoagulants (DOACs): Following Indications. Revised January 2024.\n3. [3] NICE Quality Standard QS93. Atrial Fibrillation. 2015 (updated 2025).\n4. [4] Scottish Intercollegiate Guidelines Network (SIGN) - Atrial Fibrillation: Prophylaxis of Systemic Embolism. Evidence tables.\n5. [5] 2024 ESC Guidelines – Section 6.1: Initiating Oral Anticoagulation.\n6. [6] BAFTA Trial (Mant et al., Lancet 2007); cited in SIGN guideline evidence tables.\n7. [7] ESC/TRIP 2023 guideline update - evidence synthesis on DOACs vs VKA.",
+    "agent_trace": [
+      {
+        "kind": "run.queued",
+        "label": "任务已创建",
+        "detail": "等待 Pi Agent 进程启动",
+        "timestamp": "2026-07-25T17:42:00.730Z"
+      },
+      {
+        "kind": "run.started",
+        "label": "任务已启动",
+        "detail": "instant 模式",
+        "timestamp": "2026-07-25T17:42:00.730Z"
+      },
+      {
+        "kind": "pi.session",
+        "label": "Pi 会话已创建",
+        "detail": "019f9a5e-a488-7f30-9810-e0aa49489eb3",
+        "timestamp": "2026-07-25T17:42:02.174Z"
+      },
+      {
+        "kind": "agent.started",
+        "label": "Pi Agent 已启动",
+        "timestamp": "2026-07-25T17:42:02.188Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-25T17:42:05.630Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-25T17:42:07.853Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-25T17:42:10.927Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-25T17:42:10.929Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-25T17:42:11.295Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-25T17:42:12.772Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-25T17:42:14.644Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-25T17:42:15.035Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-25T17:42:17.707Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-25T17:42:17.708Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-25T17:42:21.117Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-25T17:42:22.644Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-25T17:42:24.906Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-25T17:42:24.906Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-25T17:42:29.788Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-25T17:42:34.384Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-25T17:42:37.010Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-25T17:42:37.010Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-25T17:42:42.995Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-25T17:42:43.474Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-25T17:42:46.386Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-25T17:42:46.387Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-25T17:42:49.858Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-25T17:42:57.698Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.678Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.680Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.681Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.681Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.682Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.682Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.683Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.683Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.687Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.688Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.690Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.691Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.692Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.694Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.695Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-25T17:43:16.696Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：report_write",
+        "timestamp": "2026-07-25T17:43:36.745Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：report_write",
+        "timestamp": "2026-07-25T17:43:36.757Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-25T17:43:38.851Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-25T17:43:38.854Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：edit",
+        "timestamp": "2026-07-25T17:43:42.567Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：edit",
+        "timestamp": "2026-07-25T17:43:42.572Z"
+      },
+      {
+        "kind": "run.completed",
+        "label": "任务完成",
+        "detail": "已收到 Pi Agent 最终回答",
+        "timestamp": "2026-07-25T17:43:48.875Z"
+      }
+    ],
+    "tools": [
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "report_write",
+        "status": "running"
+      },
+      {
+        "name": "report_write",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "edit",
+        "status": "running"
+      },
+      {
+        "name": "edit",
+        "status": "completed"
+      }
+    ],
+    "summary": {
+      "research_mode": "instant",
+      "audience_mode": "clinician",
+      "deep_think": false,
+      "search_enabled": true,
+      "retrieval_policy": "mcp_only",
+      "max_iterations": 8,
+      "max_iterations_is_advisory": true,
+      "request_timeout_seconds": 300
+    }
+  }
+}

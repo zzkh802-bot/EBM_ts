@@ -1,0 +1,542 @@
+{
+  "selection": {
+    "rank": 2,
+    "case_id": "ENV13-HEME-001",
+    "department": "血液内科",
+    "question_type": "treatment",
+    "title": "AML 巩固治疗剂量选择",
+    "summary": "大剂量阿糖胞苷相较标准剂量多药方案的生存、复发和严重毒性",
+    "question": "在首次完全缓解的成人急性髓系白血病患者中，大剂量阿糖胞苷巩固治疗相比标准剂量多药联合巩固化疗，对无病生存、总生存、复发和严重不良反应的影响如何？",
+    "metrics": {
+      "quality_score": 100,
+      "duration_sec": 93.13,
+      "mcp_tool_calls": 6,
+      "evidence_add_calls": 6,
+      "citation_count": 12,
+      "policy_isolated": true,
+      "full_report_returned": true,
+      "internal_route_leak": false
+    },
+    "run_id": "be9b304b-0b7b-4966-b53b-66d221f2f8b6",
+    "source_set": "integration_environment_13",
+    "retrieval_policy": "mcp_only"
+  },
+  "benchmark_result": {
+    "case_id": "ENV13-HEME-001",
+    "case_source_set": "integration_environment_13",
+    "question": "在首次完全缓解的成人急性髓系白血病患者中，大剂量阿糖胞苷巩固治疗相比标准剂量多药联合巩固化疗，对无病生存、总生存、复发和严重不良反应的影响如何？",
+    "attempt": 1,
+    "run_id": "be9b304b-0b7b-4966-b53b-66d221f2f8b6",
+    "status": "succeeded",
+    "started_at": "2026-07-25T17:50:17.895Z",
+    "completed_at": "2026-07-25T17:51:51.025Z",
+    "duration_sec": 93.13,
+    "retrieval_policy": "mcp_only",
+    "policy_isolated": true,
+    "tool_names": [
+      "guideline_mcp_search",
+      "guideline_mcp_read",
+      "read",
+      "guideline_mcp_retrieve",
+      "research_frame_init",
+      "evidence_add",
+      "research_frame_scratchpad_append",
+      "report_write"
+    ],
+    "forbidden_tools": [],
+    "mcp_tool_calls": 6,
+    "evidence_add_calls": 6,
+    "report_write_calls": 1,
+    "answer_chars": 2784,
+    "full_report_returned": true,
+    "error": null
+  },
+  "api_response": {
+    "contract_version": "dp-xunyi-agent/v2",
+    "run_id": "be9b304b-0b7b-4966-b53b-66d221f2f8b6",
+    "status": "succeeded",
+    "created_at": "2026-07-25T17:50:17.897Z",
+    "started_at": "2026-07-25T17:50:17.897Z",
+    "completed_at": "2026-07-25T17:51:50.693Z",
+    "session_id": "019f9a66-3a98-74ce-abe5-6401b2fde9f1",
+    "message": "报告已完成并验证通过。以下是完整的循证回答摘要：\n\n---\n\n## 循证回答摘要\n\n**问题：** CR1期成人AML，大剂量阿糖胞苷（HDAC）巩固 **vs** 标准剂量多药联合巩固化疗？\n\n### 核心结论\n\n**中国2023版AML指南不将两者视为二选一的竞争方案，而是按遗传学危险度分层分别推荐：**\n\n| 危险度 | 首推巩固策略 | HDAC角色 | 标准剂量多药联合角色 |\n|--------|-------------|----------|-------------------|\n| **预后良好组** | HDAC 3 g/m² q12h×6次，3-4疗程（**证据等级1a**） | **标准首选** | 作为备选，需≥6疗程（等级2b） |\n| **预后中等组** | 移植优先；无条件选HDAC/中剂量Ara-C（等级1a） | 可选用 | 可选用 |\n| **预后不良组** | 尽早移植；移植前桥接选HDAC（等级1a） | 桥接用 | 桥接用 |\n\n### 关键疗效差异（间接比较）\n\n- **疗程效率**：HDAC 3-4个疗程即达巩固目的；标准剂量多药联合需≥6个疗程\n- **OS影响**：国际前瞻性研究显示，中剂量（1.5 g/m²）与高剂量（3 g/m²）Ara-C巩固的5年OS无显著差异\n- **DFS/复发**：CALGB系列研究确立了HDAC在年轻良好预后患者中的DFS优势（此为中国指南1a推荐的依据）\n\n### 安全性差异化监控要点\n\n- **HDAC特有的**：小脑毒性（剂量依赖性）、角膜毒性、肾毒性 → 监测神经系统和肾功能\n- **标准剂量多药**：蒽环类累积心脏毒性（DNR≤550 mg/m², IDA≤290 mg/m²）→ 监测心功能\n- **血液学毒性**：HDAC 3 g/m²的中性粒细胞减少时间和输血需求高于1.5 g/m²\n\n### 证据缺口\n\n目前缺乏HDAC单药巩固 **vs** 标准剂量多药联合巩固的头对头RCT数据。现有推荐均基于各自队列研究和间接比较，临床决策需结合MRD动态监测和患者个体耐受性做个体化权衡。\n\n---\n\n完整报告已保存至：`reports/大剂量阿糖胞苷巩固治疗对比标准剂量多药联合化疗在cr1期成人急性髓系白血病中的疗效与安全性-基于中国指南的循证分析.md`（6条可追溯指南证据，1a–2b级，来源：中华医学会血液学分会2023版和2021版AML诊疗指南 + EBMT国际专家共识）。",
+    "agent_answer": "报告已完成并验证通过。以下是完整的循证回答摘要：\n\n---\n\n## 循证回答摘要\n\n**问题：** CR1期成人AML，大剂量阿糖胞苷（HDAC）巩固 **vs** 标准剂量多药联合巩固化疗？\n\n### 核心结论\n\n**中国2023版AML指南不将两者视为二选一的竞争方案，而是按遗传学危险度分层分别推荐：**\n\n| 危险度 | 首推巩固策略 | HDAC角色 | 标准剂量多药联合角色 |\n|--------|-------------|----------|-------------------|\n| **预后良好组** | HDAC 3 g/m² q12h×6次，3-4疗程（**证据等级1a**） | **标准首选** | 作为备选，需≥6疗程（等级2b） |\n| **预后中等组** | 移植优先；无条件选HDAC/中剂量Ara-C（等级1a） | 可选用 | 可选用 |\n| **预后不良组** | 尽早移植；移植前桥接选HDAC（等级1a） | 桥接用 | 桥接用 |\n\n### 关键疗效差异（间接比较）\n\n- **疗程效率**：HDAC 3-4个疗程即达巩固目的；标准剂量多药联合需≥6个疗程\n- **OS影响**：国际前瞻性研究显示，中剂量（1.5 g/m²）与高剂量（3 g/m²）Ara-C巩固的5年OS无显著差异\n- **DFS/复发**：CALGB系列研究确立了HDAC在年轻良好预后患者中的DFS优势（此为中国指南1a推荐的依据）\n\n### 安全性差异化监控要点\n\n- **HDAC特有的**：小脑毒性（剂量依赖性）、角膜毒性、肾毒性 → 监测神经系统和肾功能\n- **标准剂量多药**：蒽环类累积心脏毒性（DNR≤550 mg/m², IDA≤290 mg/m²）→ 监测心功能\n- **血液学毒性**：HDAC 3 g/m²的中性粒细胞减少时间和输血需求高于1.5 g/m²\n\n### 证据缺口\n\n目前缺乏HDAC单药巩固 **vs** 标准剂量多药联合巩固的头对头RCT数据。现有推荐均基于各自队列研究和间接比较，临床决策需结合MRD动态监测和患者个体耐受性做个体化权衡。\n\n---\n\n完整报告已保存至：`reports/大剂量阿糖胞苷巩固治疗对比标准剂量多药联合化疗在cr1期成人急性髓系白血病中的疗效与安全性-基于中国指南的循证分析.md`（6条可追溯指南证据，1a–2b级，来源：中华医学会血液学分会2023版和2021版AML诊疗指南 + EBMT国际专家共识）。",
+    "patient_summary": "报告已完成并验证通过。以下是完整的循证回答摘要：\n\n---\n\n## 循证回答摘要\n\n**问题：** CR1期成人AML，大剂量阿糖胞苷（HDAC）巩固 **vs** 标准剂量多药联合巩固化疗？\n\n### 核心结论\n\n**中国2023版AML指南不将两者视为二选一的竞争方案，而是按遗传学危险度分层分别推荐：**\n\n| 危险度 | 首推巩固策略 | HDAC角色 | 标准剂量多药联合角色 |\n|--------|-------------|----------|-------------------|\n| **预后良好组** | HDAC 3 g/m² q12h×6次，3-4疗程（**证据等级1a**） | **标准首选** | 作为备选，需≥6疗程（等级2b） |\n| **预后中等组** | 移植优先；无条件选HDAC/中剂量Ara-C（等级1a） | 可选用 | 可选用 |\n| **预后不良组** | 尽早移植；移植前桥接选HDAC（等级1a） | 桥接用 | 桥接用 |\n\n### 关键疗效差异（间接比较）\n\n- **疗程效率**：HDAC 3-4个疗程即达巩固目的；标准剂量多药联合需≥6个疗程\n- **OS影响**：国际前瞻性研究显示，中剂量（1.5 g/m²）与高剂量（3 g/m²）Ara-C巩固的5年OS无显著差异\n- **DFS/复发**：CALGB系列研究确立了HDAC在年轻良好预后患者中的DFS优势（此为中国指南1a推荐的依据）\n\n### 安全性差异化监控要点\n\n- **HDAC特有的**：小脑毒性（剂量依赖性）、角膜毒性、肾毒性 → 监测神经系统和肾功能\n- **标准剂量多药**：蒽环类累积心脏毒性（DNR≤550 mg/m², IDA≤290 mg/m²）→ 监测心功能\n- **血液学毒性**：HDAC 3 g/m²的中性粒细胞减少时间和输血需求高于1.5 g/m²\n\n### 证据缺口\n\n目前缺乏HDAC单药巩固 **vs** 标准剂量多药联合巩固的头对头RCT数据。现有推荐均基于各自队列研究和间接比较，临床决策需结合MRD动态监测和患者个体耐受性做个体化权衡。\n\n---\n\n完整报告已保存至：`reports/大剂量阿糖胞苷巩固治疗对比标准剂量多药联合化疗在cr1期成人急性髓系白血病中的疗效与安全性-基于中国指南的循证分析.md`（6条可追溯指南证据，1a–2b级，来源：中华医学会血液学分会2023版和2021版AML诊疗指南 + EBMT国际专家共识）。",
+    "report_markdown": "# 大剂量阿糖胞苷巩固治疗对比标准剂量多药联合化疗在CR1期成人急性髓系白血病中的疗效与安全性\n\n## 临床问题\n\n**PICO框架：**\n- **患者（P）：** 首次完全缓解（CR1）的成人急性髓系白血病（AML）患者（非APL）\n- **干预（I）：** 大剂量阿糖胞苷（HDAC，≥1.5 g/m²）单药或多个疗程巩固化疗\n- **对照（C）：** 标准剂量阿糖胞苷（100–200 mg/m²）联合蒽环类/高三尖杉酯碱/鬼臼类等多药联合巩固化疗\n- **结局（O）：** 无病生存（DFS）、总生存（OS）、复发率、严重不良反应（≥3级血液学毒性及非血液学毒性）\n\n## 核心结论\n\n**当前中国指南未对上述两种策略做头对头推荐，而是按遗传学危险度分层分别给出各自适宜场景。在预后良好组中，大剂量阿糖胞苷（3 g/m²）多疗程单药巩固是被优先推荐的标准方案（证据等级1a）；标准剂量多药联合巩固则在总疗程数更多（≥6个疗程）的前提下作为备选（证据等级2b）。国际证据提示中剂量阿糖胞苷（1.5 g/m²）与高剂量（3\ng/m²）在5年总生存方面无显著差异，但高剂量组血液学毒性（中性粒细胞减少时间、输血需求）显著增加。**\n\n## 指南推荐：按危险度分层的巩固策略\n\n### 1. 预后良好组\n\n2023版《中国成人急性髓系白血病（非APL）诊疗指南》推荐的首选方案为：\n\n> **多疗程的大剂量Ara-C：3 g/m²，每12小时一次，共6个剂量，3–4个疗程，单药应用（证据等级1a）**[1]。\n\n替代方案包括：\n- **中大剂量Ara-C（1–2 g/m²）联合方案**：与蒽环/蒽醌类、氟达拉滨等联合，2–3个疗程后行标准剂量化疗，总缓解后化疗周期≥4个疗程（证据等级1b）[1]。\n- **标准剂量化疗**：Ara-C联合蒽环/蒽醌类、HHT、鬼臼类等，总缓解后化疗周期≥6个疗程，或标准剂量巩固3–4个疗程后行自体造血干细胞移植（证据等级2b）[1]。\n\n**比较**：HDAC单药巩固的优势在于较短的总疗程（3–4个周期）即能获得充分的抗白血病效应；标准剂量多药联合则需要≥6个疗程才能达到相当的疗效深度。2021版指南对此尚仅有弱推荐（证据等级2b–2a）[2]，2023版将HDAC升级为1a级推荐。\n\n### 2. 预后中等组\n\n首选异基因造血干细胞移植，寻找供者期间行1–2个疗程的中大剂量Ara-C为基础的化疗。无条件/不愿移植者，可选择多疗程中大剂量Ara-C单药（3 g/m²或1–2 g/m²，3–4个疗程，证据等级1a）[1]。\n\n### 3. 预后不良组\n\n尽早行异基因造血干细胞移植；无条件移植者予中大剂量Ara-C（1.5–3 g/m²，3–4个疗程，证据等级1a）[1]。\n\n## HDAC vs 标准剂量多药联合：间接比较与适用边界\n\n中国指南本身未开展两种策略的直接对比。两者的循证基础分别来自不同的关键研究：\n\n| 维度 | 大剂量Ara-C巩固 | 标准剂量多药联合巩固 |\n|------|----------------|---------------------|\n| **代表研究** | CALGB 8525/9222（Mayer et al., 1994）等 | 中日友好医院/Li et al. HAA方案研究等 |\n| **推荐人群** | 预后良好组首选；中高危组可选用 | 所有危险度组均可，但需更多疗程 |\n| **总疗程数** | 3–4个疗程 | ≥6个疗程（标准剂量）或≥4个疗程（联合方案） |\n| **证据等级** | 1a | 1b–2b |\n| **适用条件** | 肾功能正常（肌酐清除率≥70 ml/min） | 无特殊限制 |\n\n## 安全性比较\n\n2023版指南未专门列出HDAC与标准剂量方案的不良反应对比表格，但需特别关注的差异包括：\n\n- **血液学毒性**：HDAC方案导致更长时间的骨髓抑制。国际前瞻性研究显示，相比中剂量（1.5 g/m²），高剂量（3 g/m²）Ara-C巩固的中性粒细胞减少时间延长、输血需求增高，而5年总生存无显著差异[3]。\n- **非血液学毒性**：HDAC特有的小脑毒性（剂量依赖性，多见于3 g/m²、累积剂量>36 g/m²、年龄>60岁或肾功能不全者）需重点监测。\n- **心脏毒性**：标准剂量多药联合方案中的蒽环类累积剂量需严格控制（DNR ≤550 mg/m²，IDA ≤290 mg/m²）[1]。\n\n## 国际视角的补充\n\n欧洲血液与骨髓移植学会（EBMT）视角文章指出，巩固治疗中阿糖胞苷剂量可从3 g/m²减至1.5 g/m²。前瞻性研究显示，中剂量与高剂量Ara-C联合蒽环类巩固在5年总生存方面无统计学差异，而高剂量组血液学毒性更重[3]。这一观点提示国际学界已开始反思对所有患者统一使用3 g/m²的必要性，但中国2023版指南仍将3 g/m²作为预后良好组的推荐剂量。\n\n## 结论与临床建议\n\n1. **预后良好组**（inv(16)/t(16;16)、t(8;21)、NPM1突变/低FLT3-ITD等）：大剂量Ara-C（3 g/m² q12h × 6次，3–4疗程）单药巩固是首选方案（证据等级1a），耐受性良好的年轻患者优先选用。若患者肾功能不全或对肾毒性有顾虑，可退而选择中大剂量（1–2 g/m²）联合方案或标准剂量多药联合≥6疗程。\n2. **预后中等组**：移植为优先选项；无条件移植者可参照良好组使用中大剂量Ara-C巩固。\n3. **预后不良组**：尽早移植；移植前桥接可选用中大剂量Ara-C或标准剂量方案。\n4. **安全性监控要点**：HDAC方案需监测小脑毒性、角膜毒性、肾功能；标准剂量多药方案需监测蒽环累积心脏毒性。\n5. **证据缺口**：目前缺乏直接在CR1期成人AML中比较HDAC单药巩固 vs 标准剂量多药联合巩固的头对头随机对照试验。现有推荐基于各自队列/间接比较，临床判断需个体化整合危险度分层、MRD动态监测和患者耐受性。\n\n\n## 参考文献\n\n1. [1] 中华医学会血液学分会白血病淋巴瘤学组. 成人急性髓系白血病(非急性早幼粒细胞白血病)中国诊疗指南(2023年版)[J]. 中华血液学杂志, 2023.\n2. [2] 中华医学会血液学分会白血病淋巴瘤学组. 中国成人急性髓系白血病(非急性早幼粒细胞白血病)诊疗指南(2021年版)[J]. 中华血液学杂志, 2021.\n3. [3] PERSPECTIVE: Acute myeloid leukemia management — EBMT expert consensus. 2021.",
+    "agent_trace": [
+      {
+        "kind": "run.queued",
+        "label": "任务已创建",
+        "detail": "等待 Pi Agent 进程启动",
+        "timestamp": "2026-07-25T17:50:17.897Z"
+      },
+      {
+        "kind": "run.started",
+        "label": "任务已启动",
+        "detail": "instant 模式",
+        "timestamp": "2026-07-25T17:50:17.897Z"
+      },
+      {
+        "kind": "pi.session",
+        "label": "Pi 会话已创建",
+        "detail": "019f9a66-3a98-74ce-abe5-6401b2fde9f1",
+        "timestamp": "2026-07-25T17:50:19.346Z"
+      },
+      {
+        "kind": "agent.started",
+        "label": "Pi Agent 已启动",
+        "timestamp": "2026-07-25T17:50:19.360Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-25T17:50:22.133Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-25T17:50:22.138Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-25T17:50:24.844Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-25T17:50:27.038Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-25T17:50:30.264Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-25T17:50:30.265Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-25T17:50:30.726Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-25T17:50:30.994Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-25T17:50:32.732Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-25T17:50:32.734Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-25T17:50:32.737Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-25T17:50:32.737Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-25T17:50:34.874Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-25T17:50:34.875Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-25T17:50:38.320Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-25T17:50:41.800Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-25T17:50:43.865Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-25T17:50:43.867Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-25T17:50:45.444Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-25T17:50:45.446Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-25T17:50:50.791Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-25T17:50:50.793Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-25T17:50:52.582Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-25T17:50:52.583Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-25T17:50:52.585Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-25T17:50:52.585Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：research_frame_init",
+        "timestamp": "2026-07-25T17:51:00.117Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：research_frame_init",
+        "timestamp": "2026-07-25T17:51:00.120Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-25T17:51:08.681Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-25T17:51:08.684Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-25T17:51:08.684Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-25T17:51:08.685Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-25T17:51:08.686Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-25T17:51:08.689Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-25T17:51:08.691Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-25T17:51:08.693Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-25T17:51:08.694Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-25T17:51:08.695Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-25T17:51:10.889Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-25T17:51:10.891Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-25T17:51:12.460Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-25T17:51:12.461Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-25T17:51:15.211Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-25T17:51:15.213Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：research_frame_scratchpad_append",
+        "timestamp": "2026-07-25T17:51:19.464Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：research_frame_scratchpad_append",
+        "timestamp": "2026-07-25T17:51:19.466Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：report_write",
+        "timestamp": "2026-07-25T17:51:42.890Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：report_write",
+        "timestamp": "2026-07-25T17:51:42.899Z"
+      },
+      {
+        "kind": "run.completed",
+        "label": "任务完成",
+        "detail": "已收到 Pi Agent 最终回答",
+        "timestamp": "2026-07-25T17:51:50.693Z"
+      }
+    ],
+    "tools": [
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "research_frame_init",
+        "status": "running"
+      },
+      {
+        "name": "research_frame_init",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "research_frame_scratchpad_append",
+        "status": "running"
+      },
+      {
+        "name": "research_frame_scratchpad_append",
+        "status": "completed"
+      },
+      {
+        "name": "report_write",
+        "status": "running"
+      },
+      {
+        "name": "report_write",
+        "status": "completed"
+      }
+    ],
+    "summary": {
+      "research_mode": "instant",
+      "audience_mode": "clinician",
+      "deep_think": false,
+      "search_enabled": true,
+      "retrieval_policy": "mcp_only",
+      "max_iterations": 8,
+      "max_iterations_is_advisory": true,
+      "request_timeout_seconds": 300
+    }
+  }
+}
