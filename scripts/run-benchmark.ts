@@ -39,6 +39,8 @@ type Args = {
   runId?: string;
   only?: Set<string>;
   timeoutMs: number;
+  provider?: string;
+  model?: string;
 };
 
 function parseArgs(): Args {
@@ -62,6 +64,14 @@ function parseArgs(): Args {
       const value = args[++i];
       if (!value) throw new Error("--timeout-ms requires a value");
       parsed.timeoutMs = Number(value);
+    } else if (arg === "--provider") {
+      const value = args[++i];
+      if (!value) throw new Error("--provider requires a value");
+      parsed.provider = value;
+    } else if (arg === "--model") {
+      const value = args[++i];
+      if (!value) throw new Error("--model requires a value");
+      parsed.model = value;
     }
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -242,14 +252,18 @@ async function runTraceAnalyze(tracePath: string, outputPath: string): Promise<v
   await writeFile(outputPath, stdout);
 }
 
-async function runCase(runId: string, caseDef: CaseDef, outDir: string, timeoutMs: number): Promise<void> {
+async function runCase(runId: string, caseDef: CaseDef, outDir: string, timeoutMs: number, options: Pick<Args, "provider" | "model">): Promise<void> {
   const name = `BENCH-${runId}-${caseDef.id}`;
   const stdoutPath = path.join(outDir, "logs", `${caseDef.id}.stdout.log`);
   const stderrPath = path.join(outDir, "logs", `${caseDef.id}.stderr.log`);
   const stdout = createWriteStream(stdoutPath, { flags: "w" });
   const stderr = createWriteStream(stderrPath, { flags: "w" });
   const started = Date.now();
-  const child = spawn("bash", ["scripts/ebm.sh", "--print", "--name", name, finalPrompt(caseDef.query)], {
+  const cliArgs = ["scripts/ebm.sh", "--print", "--name", name];
+  if (options.provider) cliArgs.push("--provider", options.provider);
+  if (options.model) cliArgs.push("--model", options.model);
+  cliArgs.push(finalPrompt(caseDef.query));
+  const child = spawn("bash", cliArgs, {
     cwd: process.cwd(),
     stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env },
@@ -345,7 +359,7 @@ async function main(): Promise<void> {
       continue;
     }
     console.log(`\nRUN ${caseDef.id}`);
-    await runCase(runId, caseDef, outDir, args.timeoutMs);
+    await runCase(runId, caseDef, outDir, args.timeoutMs, args);
     console.log(`VALIDATE ${caseDef.id}`);
     const validated = await validateCase(runId, caseDef, outDir);
     if (validated.warnings.length) console.warn(`WARN ${caseDef.id}: ${validated.warnings.join("; ")}`);
