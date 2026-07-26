@@ -42,6 +42,7 @@ src/tools/              archive, web, MinerU, PubMed, MCP, evidence, and report 
 docs/                   specs, ADRs, acceptance criteria, and persistent development state
 vendor/pi-coding-agent/ project-pinned Pi package without node_modules
 tests/                  Vitest unit, integration-boundary, and vertical-flow tests
+frontend/               Vue 3 + Vite + TypeScript web application
 ```
 
 ## Developer demo: interactive TUI
@@ -49,13 +50,32 @@ tests/                  Vitest unit, integration-boundary, and vertical-flow tes
 Requirements: Git, Node.js 24+, a DeepSeek API key, and a terminal.
 
 ```bash
-git clone https://github.com/V-rand/EBM_ts.git
+git clone https://github.com/zzkh802-bot/EBM_ts.git
 cd EBM_ts
 npm install
 cp .env.example .env
 # Edit .env and set DEEPSEEK_API_KEY
 npm run ebm
 ```
+
+## Web application and V2 API
+
+Start the TypeScript Agent API from the repository root:
+
+```bash
+npm install
+npm run api
+```
+
+Start the Vue frontend in a second terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The production deployment keeps the public frontend and V1 compatibility route behind Nginx while the V2 Agent API runs on an internal loopback port. Deployment credentials and API keys are intentionally not stored in this repository.
 
 `npm run ebm` is the single launcher. It loads the ignored local `.env` and launches Pi's interactive TUI.
 

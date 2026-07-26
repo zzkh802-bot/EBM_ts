@@ -1,0 +1,542 @@
+{
+  "selection": {
+    "rank": 5,
+    "case_id": "MCP-D03-C01",
+    "department": "感染内科",
+    "question_type": "treatment",
+    "title": "社区获得性肺炎经验治疗",
+    "summary": "指南一致的经验性抗菌药物对临床治愈、死亡和不良事件的影响",
+    "question": "在社区获得性肺炎住院患者中，经验性抗菌药物选择相较于延迟或非指南治疗对clinical cure、mortality、adverse events的疗效和安全性证据如何？",
+    "metrics": {
+      "quality_score": 100,
+      "duration_sec": 89.023,
+      "mcp_tool_calls": 9,
+      "evidence_add_calls": 5,
+      "citation_count": 17,
+      "policy_isolated": true,
+      "full_report_returned": true,
+      "internal_route_leak": false
+    },
+    "run_id": "bbb31ed5-e781-4266-9246-2e8b1888008f",
+    "source_set": "academic_200",
+    "retrieval_policy": "mcp_only"
+  },
+  "benchmark_result": {
+    "case_id": "MCP-D03-C01",
+    "case_source_set": "academic_200",
+    "question": "在社区获得性肺炎住院患者中，经验性抗菌药物选择相较于延迟或非指南治疗对clinical cure、mortality、adverse events的疗效和安全性证据如何？",
+    "attempt": 1,
+    "run_id": "bbb31ed5-e781-4266-9246-2e8b1888008f",
+    "status": "succeeded",
+    "started_at": "2026-07-24T18:44:02.663Z",
+    "completed_at": "2026-07-24T18:45:31.686Z",
+    "duration_sec": 89.023,
+    "retrieval_policy": "mcp_only",
+    "policy_isolated": true,
+    "tool_names": [
+      "research_frame_init",
+      "guideline_mcp_search",
+      "guideline_mcp_retrieve",
+      "guideline_mcp_read",
+      "read",
+      "research_frame_scratchpad_append",
+      "evidence_add",
+      "report_write"
+    ],
+    "forbidden_tools": [],
+    "mcp_tool_calls": 9,
+    "evidence_add_calls": 5,
+    "report_write_calls": 1,
+    "answer_chars": 3742,
+    "full_report_returned": true,
+    "error": null
+  },
+  "api_response": {
+    "contract_version": "dp-xunyi-agent/v2",
+    "run_id": "bbb31ed5-e781-4266-9246-2e8b1888008f",
+    "status": "succeeded",
+    "created_at": "2026-07-24T18:44:02.665Z",
+    "started_at": "2026-07-24T18:44:02.665Z",
+    "completed_at": "2026-07-24T18:45:30.829Z",
+    "session_id": "019f9571-17f1-72ac-b6a5-2c025357b728",
+    "message": "报告已生成并完成验证。以下为临床结论摘要：\n\n---\n\n## 报告摘要\n\n**问题**：住院CAP患者经验性抗菌选择——指南一致性治疗 vs 延迟/非指南治疗\n\n### 核心结论\n\n| 结论 | 证据等级 |\n|------|----------|\n| 非重症住院CAP：推荐**β-内酰胺+大环内酯**联合或**呼吸喹诺酮**单药 | IDSA/ATS 2019 **强推荐/高质量证据** |\n| 重症住院CAP：推荐**β-内酰胺+大环内酯**或**β-内酰胺+呼吸喹诺酮**联合 | IDSA/ATS 2019 **强推荐/中-低质量证据** |\n| 中国地区因大环内酯类耐药率>90%，**不宜单用大环内酯类** | 中国2024指南 **II级证据/A级推荐** |\n| 依从指南与住院老年CAP死亡率降低相关（观察性研究） | 中等质量观察性证据 |\n| 延迟启动抗菌治疗不应等待PCT结果 | IDSA/ATS 2019 **强推荐/中等质量证据** |\n\n### 安全边界\n- **非指南治疗的主要风险**不是药物毒性本身，而是**初始覆盖不足→治疗失败率↑**，重症患者中后果尤重\n- 氟喹诺酮类AE（肌腱、神经、QTc）已知且可控，在有合并症的CAP患者中仍属合理选择\n- **延迟治疗**增加死亡率风险；**不必要的广谱覆盖**增加CDI和耐药选择压力\n\n### 重要证据缺口\n报告明确标注了以下缺口：①缺乏RCT直接比较指南vs非指南治疗的死亡率差异；②\"延迟治疗\"无统一时间定义；③中国人群全国性指南依从性-预后数据有限。\n\n---\n\n报告全文已保存至：`reports/住院社区获得性肺炎经验性抗菌药物选择-指南一致性治疗-vs-延迟-非指南治疗的疗效与安全性.md`",
+    "agent_answer": "报告已生成并完成验证。以下为临床结论摘要：\n\n---\n\n## 报告摘要\n\n**问题**：住院CAP患者经验性抗菌选择——指南一致性治疗 vs 延迟/非指南治疗\n\n### 核心结论\n\n| 结论 | 证据等级 |\n|------|----------|\n| 非重症住院CAP：推荐**β-内酰胺+大环内酯**联合或**呼吸喹诺酮**单药 | IDSA/ATS 2019 **强推荐/高质量证据** |\n| 重症住院CAP：推荐**β-内酰胺+大环内酯**或**β-内酰胺+呼吸喹诺酮**联合 | IDSA/ATS 2019 **强推荐/中-低质量证据** |\n| 中国地区因大环内酯类耐药率>90%，**不宜单用大环内酯类** | 中国2024指南 **II级证据/A级推荐** |\n| 依从指南与住院老年CAP死亡率降低相关（观察性研究） | 中等质量观察性证据 |\n| 延迟启动抗菌治疗不应等待PCT结果 | IDSA/ATS 2019 **强推荐/中等质量证据** |\n\n### 安全边界\n- **非指南治疗的主要风险**不是药物毒性本身，而是**初始覆盖不足→治疗失败率↑**，重症患者中后果尤重\n- 氟喹诺酮类AE（肌腱、神经、QTc）已知且可控，在有合并症的CAP患者中仍属合理选择\n- **延迟治疗**增加死亡率风险；**不必要的广谱覆盖**增加CDI和耐药选择压力\n\n### 重要证据缺口\n报告明确标注了以下缺口：①缺乏RCT直接比较指南vs非指南治疗的死亡率差异；②\"延迟治疗\"无统一时间定义；③中国人群全国性指南依从性-预后数据有限。\n\n---\n\n报告全文已保存至：`reports/住院社区获得性肺炎经验性抗菌药物选择-指南一致性治疗-vs-延迟-非指南治疗的疗效与安全性.md`",
+    "patient_summary": "报告已生成并完成验证。以下为临床结论摘要：\n\n---\n\n## 报告摘要\n\n**问题**：住院CAP患者经验性抗菌选择——指南一致性治疗 vs 延迟/非指南治疗\n\n### 核心结论\n\n| 结论 | 证据等级 |\n|------|----------|\n| 非重症住院CAP：推荐**β-内酰胺+大环内酯**联合或**呼吸喹诺酮**单药 | IDSA/ATS 2019 **强推荐/高质量证据** |\n| 重症住院CAP：推荐**β-内酰胺+大环内酯**或**β-内酰胺+呼吸喹诺酮**联合 | IDSA/ATS 2019 **强推荐/中-低质量证据** |\n| 中国地区因大环内酯类耐药率>90%，**不宜单用大环内酯类** | 中国2024指南 **II级证据/A级推荐** |\n| 依从指南与住院老年CAP死亡率降低相关（观察性研究） | 中等质量观察性证据 |\n| 延迟启动抗菌治疗不应等待PCT结果 | IDSA/ATS 2019 **强推荐/中等质量证据** |\n\n### 安全边界\n- **非指南治疗的主要风险**不是药物毒性本身，而是**初始覆盖不足→治疗失败率↑**，重症患者中后果尤重\n- 氟喹诺酮类AE（肌腱、神经、QTc）已知且可控，在有合并症的CAP患者中仍属合理选择\n- **延迟治疗**增加死亡率风险；**不必要的广谱覆盖**增加CDI和耐药选择压力\n\n### 重要证据缺口\n报告明确标注了以下缺口：①缺乏RCT直接比较指南vs非指南治疗的死亡率差异；②\"延迟治疗\"无统一时间定义；③中国人群全国性指南依从性-预后数据有限。\n\n---\n\n报告全文已保存至：`reports/住院社区获得性肺炎经验性抗菌药物选择-指南一致性治疗-vs-延迟-非指南治疗的疗效与安全性.md`",
+    "report_markdown": "## 临床问题\n\n在社区获得性肺炎（CAP）住院患者中，经验性抗菌药物选择遵循指南推荐方案相较于延迟或不遵循指南的治疗，对临床治愈率（clinical cure）、死亡率（mortality）和不良事件（adverse events）的疗效和安全性如何？\n\n## 适用人群\n\n年龄≥18岁的CAP住院患者，包括非重症和重症CAP，不包括免疫抑制宿主及COVID-19相关肺炎。\n\n## 结论摘要\n\n**指南一致性经验性抗菌治疗是住院CAP患者的标准实践。** 现有高质量指南一致推荐基于疾病严重程度、年龄、合并症和当地耐药流行病学分层的经验性方案。观察性证据提示依从指南推荐与降低住院死亡率相关。指南推荐方案的不良事件谱已充分描述，而非指南治疗的主要风险在于初始治疗覆盖不足导致治疗失败率升高，尤其在重症CAP中后果更严重。\n\n---\n\n## 1. 指南推荐的住院CAP经验性抗菌方案\n\n### 1.1 非重症住院CAP（无MRSA/铜绿假单胞菌风险因素）\n\n**IDSA/ATS 2019指南**（强推荐，高质量证据）推荐以下方案（无优先顺序）[1]：\n\n- **联合治疗**：β-内酰胺类（氨苄西林/舒巴坦、头孢噻肟、头孢曲松或头孢洛林）+ 大环内酯类（阿奇霉素或克拉霉素）\n- **单药治疗**：呼吸喹诺酮类（左氧氟沙星750 mg每日一次或莫西沙星400 mg每日一次）\n- **备选**：β-内酰胺类 + 多西环素（条件性推荐，低质量证据），适用于对大环内酯类和氟喹诺酮均有禁忌的患者\n\n对上述两类药物均有禁忌的患者，第三选项为β-内酰胺类联合多西环素（条件性推荐，低质量证据）。\n\n### 1.2 重症住院CAP（无MRSA/铜绿假单胞菌风险因素）\n\n**IDSA/ATS 2019指南**推荐[1]：\n- β-内酰胺类 + 大环内酯类（**强推荐，中等质量证据**）\n- β-内酰胺类 + 呼吸喹诺酮类（**强推荐，低质量证据**）\n\n> ⚠ 重症CAP中，**氟喹诺酮单药治疗**以及**β-内酰胺类+多西环素联合方案均不推荐**作为经验性治疗，因缺乏重症人群的研究数据。\n\n### 1.3 中国CAP指南推荐\n\n**中国急诊成人CAP临床实践指南（2024版）**[2]依据国内病原学特点（肺炎链球菌对大环内酯类耐药率>90%，肺炎支原体对大环内酯类耐药率>80%）强调：\n\n- 住院CAP经验性治疗应覆盖肺炎链球菌、非典型病原体及基于风险因素的革兰阴性杆菌\n- 不宜单用大环内酯类或四环素类\n- 推荐β-内酰胺类联合大环内酯类/四环素类/呼吸喹诺酮类\n- 老年（≥65岁）或合并基础疾病患者需要更广覆盖，警惕肠杆菌科细菌和铜绿假单胞菌\n\n**中国成人CAP基层诊疗指南（2018版）**[3]对住院患者的推荐方案与此一致。\n\n---\n\n## 2. 指南一致性治疗 vs 非指南/延迟治疗的疗效证据\n\n### 2.1 临床治愈率\n\nIDSA/ATS 2019指南的推荐基于以下证据来源[1]：\n- 住院CAP的RCT数据（多为非劣效设计）\n- 大型观察性研究比较不同方案的临床结局\n- 抗菌药物耐药监测数据\n\n指南指出：**β-内酰胺+大环内酯联合方案在住院CAP中的支持证据较β-内酰胺+氟喹诺酮联合方案更强**（表2差异总结），且两种方案均被接受作为标准治疗。\n\n**非指南治疗（如不覆盖非典型病原体、单用大环内酯类在高度耐药地区）的风险**：\n- 在肺炎链球菌对大环内酯类耐药率>30%的地区，单用大环内酯类治疗失败率显著升高[1]\n- 中国肺炎链球菌大环内酯类耐药率>90%，单用大环内酯类属于非指南治疗[2]\n\n### 2.2 死亡率\n\n**观察性证据**：\n- 中国指南引用的Han XD等研究（BMC Infect Dis, 2018）显示，**依从当前抗菌药物指南与住院老年CAP患者死亡率降低相关**[2,4]\n- IDSA/ATS指南中引用的观察性研究表明，重症CAP患者初始经验性治疗不充分与死亡率升高相关[1]\n- 指南认为将重症CAP患者误分至普通病房（而非ICU）与较高死亡率相关，这部分与初始治疗强度不足有关[1]\n\n### 2.3 不良事件\n\n指南推荐方案的安全性特征已充分描述[1,2]：\n\n| 药物类别 | 主要已知不良事件 | 管理建议 |\n|----------|-----------------|----------|\n| 大环内酯类 | QT间期延长、胃肠道反应 | 注意心电图监测，评估心脏风险 |\n| 氟喹诺酮类 | 肌腱炎/断裂、周围神经病变、QT间期延长、血糖紊乱 | FDA已汇总相关AE报告；在有合并症的CAP患者中仍为合理选择 |\n| β-内酰胺类 | 过敏反应、腹泻（含CDI） | 详询过敏史 |\n\n**非指南治疗的主要安全风险并非药物毒性本身，而是治疗失败导致的后续后果**：\n- 初始覆盖不足 → 临床恶化 → 需升级治疗 → 延长住院 → 增加医疗相关不良事件（如CDI、静脉炎、耐药菌选择）\n- 不必要的广谱覆盖（如对低风险患者常规覆盖MRSA/铜绿假单胞菌）增加药物AE和抗生素压力\n\n---\n\n## 3. 延迟治疗的危害\n\nIDSA/ATS 2019指南明确推荐[1]：\n> **经验性抗菌治疗应在临床怀疑且影像学证实的CAP患者中立即启动，不论初始降钙素原水平**（强推荐，中等质量证据）\n\n延迟启动治疗的危害包括：\n- 重症CAP患者延迟恰当抗菌治疗与更高死亡率相关\n- 流感合并细菌性肺炎患者延迟抗菌治疗增加不良结局风险\n\n---\n\n## 4. 证据缺口\n\n1. **缺乏RCT直接比较指南一致性 vs 非指南治疗的死亡率差异**——现有推荐主要基于观察性研究和间接证据\n2. **延迟治疗的明确定义和量化阈值**——现有指南未统一界定\"延迟\"的时间窗口\n3. **中国人群的指南依从性对预后的影响**——虽然有Han XD等研究，但全国性多中心数据有限\n4. **非指南治疗不良事件的系统比较**——多数安全性数据来自指南推荐方案的单臂或上市后监测\n\n---\n\n## 5. 结论与临床建议\n\n| 维度 | 结论 |\n|------|------|\n| **推荐强度** | 住院CAP经验性治疗遵循指南方案是A级推荐实践 |\n| **非重症住院** | β-内酰胺+大环内酯或呼吸喹诺酮单药（强推荐，高质量证据） |\n| **重症住院** | β-内酰胺+大环内酯或β-内酰胺+呼吸喹诺酮（强推荐，中-低质量证据） |\n| **非指南治疗风险** | 初始覆盖不足→治疗失败率↑，重症CAP中尤其危险 |\n| **延迟治疗风险** | 延迟启动与不良结局相关，不应等待生物标志物结果 |\n| **中国特殊考量** | 大环内酯类高度耐药（>90%），单用大环内酯类属非指南治疗 |\n| **安全性** | 指南方案AE已知且可控；非指南治疗的主要安全风险是治疗失败 |\n\n**底线**：住院CAP患者应基于疾病严重程度和耐药风险分层，选择指南推荐的经验性抗菌方案，避免不必要的延迟。非指南治疗（包括单用大环内酯类在中国高耐药地区、不覆盖非典型病原体、对重症患者使用氟喹诺酮单药）与治疗失败风险增加相关。指南一致性治疗的效应量在重症人群中最大，在非重症人群中以临床治愈率和安全性为获益终点。\n\n\n## 参考文献\n\n1. [1] Metlay JP, Waterer GW, Long AC, et al. Diagnosis and Treatment of Adults with Community-acquired Pneumonia. An Official Clinical Practice Guideline of the American Thoracic Society and\nInfectious Diseases Society of America. Am J Respir Crit Care Med. 2019;200(7):e45-e67.\n2. [2] 中国医师协会急诊医师分会, 中国急诊专科医联体, 北京急诊医学学会. 急诊成人社区获得性肺炎临床实践指南(2024年版). 中华急诊医学杂志, 2024.\n3. [3] 中华医学会, 中华医学会杂志社, 中华医学会全科医学分会, 等. 成人社区获得性肺炎基层诊疗指南(实践版·2018). 中华全科医师杂志, 2018.\n4. [4] Han XD, Zhou F, Li H, et al. Effects of age, comorbidity and adherence to current antimicrobial guidelines on mortality in hospitalized elderly patients with community-acquired pneumonia. BMC\nInfect Dis, 2018. 引用自中国急诊CAP指南参考文献[8].",
+    "agent_trace": [
+      {
+        "kind": "run.queued",
+        "label": "任务已创建",
+        "detail": "等待 Pi Agent 进程启动",
+        "timestamp": "2026-07-24T18:44:02.665Z"
+      },
+      {
+        "kind": "run.started",
+        "label": "任务已启动",
+        "detail": "instant 模式",
+        "timestamp": "2026-07-24T18:44:02.665Z"
+      },
+      {
+        "kind": "pi.session",
+        "label": "Pi 会话已创建",
+        "detail": "019f9571-17f1-72ac-b6a5-2c025357b728",
+        "timestamp": "2026-07-24T18:44:05.784Z"
+      },
+      {
+        "kind": "agent.started",
+        "label": "Pi Agent 已启动",
+        "timestamp": "2026-07-24T18:44:05.823Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：research_frame_init",
+        "timestamp": "2026-07-24T18:44:10.840Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：research_frame_init",
+        "timestamp": "2026-07-24T18:44:10.855Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-24T18:44:12.532Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-24T18:44:13.559Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-24T18:44:14.864Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-24T18:44:15.289Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-24T18:44:17.051Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-24T18:44:17.585Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-24T18:44:19.886Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-24T18:44:20.459Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-24T18:44:21.725Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-24T18:44:22.164Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-24T18:44:23.677Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-24T18:44:23.683Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-24T18:44:25.157Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-24T18:44:25.159Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-24T18:44:26.730Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-24T18:44:27.590Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-24T18:44:29.680Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-24T18:44:30.131Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-24T18:44:32.154Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-24T18:44:32.157Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-24T18:44:33.546Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-24T18:44:33.554Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-24T18:44:35.935Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-24T18:44:36.393Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-24T18:44:38.183Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-24T18:44:38.701Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：research_frame_scratchpad_append",
+        "timestamp": "2026-07-24T18:44:42.645Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：research_frame_scratchpad_append",
+        "timestamp": "2026-07-24T18:44:42.655Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-24T18:44:45.396Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-24T18:44:45.408Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-24T18:44:48.668Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-24T18:44:48.674Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-24T18:44:51.838Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-24T18:44:51.843Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-24T18:44:54.644Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-24T18:44:54.656Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-24T18:44:58.389Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-24T18:44:58.393Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-24T18:45:00.091Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-24T18:45:00.093Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-24T18:45:01.515Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-24T18:45:01.517Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-24T18:45:03.332Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-24T18:45:03.334Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：report_write",
+        "timestamp": "2026-07-24T18:45:25.340Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：report_write",
+        "timestamp": "2026-07-24T18:45:25.372Z"
+      },
+      {
+        "kind": "run.completed",
+        "label": "任务完成",
+        "detail": "已收到 Pi Agent 最终回答",
+        "timestamp": "2026-07-24T18:45:30.829Z"
+      }
+    ],
+    "tools": [
+      {
+        "name": "research_frame_init",
+        "status": "running"
+      },
+      {
+        "name": "research_frame_init",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "research_frame_scratchpad_append",
+        "status": "running"
+      },
+      {
+        "name": "research_frame_scratchpad_append",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "report_write",
+        "status": "running"
+      },
+      {
+        "name": "report_write",
+        "status": "completed"
+      }
+    ],
+    "summary": {
+      "research_mode": "instant",
+      "audience_mode": "clinician",
+      "deep_think": false,
+      "search_enabled": true,
+      "retrieval_policy": "mcp_only",
+      "max_iterations": 8,
+      "max_iterations_is_advisory": true,
+      "request_timeout_seconds": 300
+    }
+  }
+}

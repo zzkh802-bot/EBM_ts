@@ -30,6 +30,7 @@ function evidenceSourcePath(value: string, sessionId: string, sessionDir: string
 }
 
 export function registerEbmTools(pi: ExtensionAPI): void {
+  const retrievalPolicy = process.env.EBM_RETRIEVAL_POLICY?.trim() || "all";
   registerSessionWorkspace(pi);
   registerEbmIdentity(pi);
 
@@ -143,8 +144,10 @@ export function registerEbmTools(pi: ExtensionAPI): void {
   });
 
   registerResearchFrameTools(pi);
-  registerWebTools(pi);
-  registerPubMedTools(pi);
+  if (retrievalPolicy !== "mcp_only") {
+    registerWebTools(pi);
+    registerPubMedTools(pi);
+  }
   registerReportTools(pi);
   registerGuidelineTools(pi);
   registerCompactionArtifacts(pi);

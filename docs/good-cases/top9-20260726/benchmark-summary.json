@@ -1,0 +1,244 @@
+{
+  "expected_cases": 213,
+  "observed_cases": 213,
+  "complete_coverage": true,
+  "groups": {
+    "overall": {
+      "cases": 213,
+      "rates": {
+        "succeeded": {
+          "count": 213,
+          "n": 213,
+          "rate": 1.0,
+          "wilson_95_ci": [
+            0.9823,
+            1.0
+          ]
+        },
+        "policy_isolated": {
+          "count": 213,
+          "n": 213,
+          "rate": 1.0,
+          "wilson_95_ci": [
+            0.9823,
+            1.0
+          ]
+        },
+        "full_report": {
+          "count": 213,
+          "n": 213,
+          "rate": 1.0,
+          "wilson_95_ci": [
+            0.9823,
+            1.0
+          ]
+        },
+        "mcp_completed": {
+          "count": 213,
+          "n": 213,
+          "rate": 1.0,
+          "wilson_95_ci": [
+            0.9823,
+            1.0
+          ]
+        },
+        "evidence_completed": {
+          "count": 213,
+          "n": 213,
+          "rate": 1.0,
+          "wilson_95_ci": [
+            0.9823,
+            1.0
+          ]
+        },
+        "good_candidate": {
+          "count": 192,
+          "n": 213,
+          "rate": 0.9014,
+          "wilson_95_ci": [
+            0.854,
+            0.9346
+          ]
+        }
+      },
+      "duration_sec": {
+        "mean": 144.175,
+        "median": 129.943,
+        "p95": 245.122
+      },
+      "quality_score": {
+        "mean": 94.193,
+        "median": 95.0,
+        "p25": 91.67,
+        "p75": 96.67
+      }
+    },
+    "academic_200": {
+      "cases": 200,
+      "rates": {
+        "succeeded": {
+          "count": 200,
+          "n": 200,
+          "rate": 1.0,
+          "wilson_95_ci": [
+            0.9812,
+            1.0
+          ]
+        },
+        "policy_isolated": {
+          "count": 200,
+          "n": 200,
+          "rate": 1.0,
+          "wilson_95_ci": [
+            0.9812,
+            1.0
+          ]
+        },
+        "full_report": {
+          "count": 200,
+          "n": 200,
+          "rate": 1.0,
+          "wilson_95_ci": [
+            0.9812,
+            1.0
+          ]
+        },
+        "mcp_completed": {
+          "count": 200,
+          "n": 200,
+          "rate": 1.0,
+          "wilson_95_ci": [
+            0.9812,
+            1.0
+          ]
+        },
+        "evidence_completed": {
+          "count": 200,
+          "n": 200,
+          "rate": 1.0,
+          "wilson_95_ci": [
+            0.9812,
+            1.0
+          ]
+        },
+        "good_candidate": {
+          "count": 180,
+          "n": 200,
+          "rate": 0.9,
+          "wilson_95_ci": [
+            0.8506,
+            0.9343
+          ]
+        }
+      },
+      "duration_sec": {
+        "mean": 144.692,
+        "median": 129.169,
+        "p95": 247.97
+      },
+      "quality_score": {
+        "mean": 94.092,
+        "median": 95.0,
+        "p25": 91.67,
+        "p75": 96.67
+      }
+    },
+    "integration_environment_13": {
+      "cases": 13,
+      "rates": {
+        "succeeded": {
+          "count": 13,
+          "n": 13,
+          "rate": 1.0,
+          "wilson_95_ci": [
+            0.7719,
+            1.0
+          ]
+        },
+        "policy_isolated": {
+          "count": 13,
+          "n": 13,
+          "rate": 1.0,
+          "wilson_95_ci": [
+            0.7719,
+            1.0
+          ]
+        },
+        "full_report": {
+          "count": 13,
+          "n": 13,
+          "rate": 1.0,
+          "wilson_95_ci": [
+            0.7719,
+            1.0
+          ]
+        },
+        "mcp_completed": {
+          "count": 13,
+          "n": 13,
+          "rate": 1.0,
+          "wilson_95_ci": [
+            0.7719,
+            1.0
+          ]
+        },
+        "evidence_completed": {
+          "count": 13,
+          "n": 13,
+          "rate": 1.0,
+          "wilson_95_ci": [
+            0.7719,
+            1.0
+          ]
+        },
+        "good_candidate": {
+          "count": 12,
+          "n": 13,
+          "rate": 0.9231,
+          "wilson_95_ci": [
+            0.6669,
+            0.9863
+          ]
+        }
+      },
+      "duration_sec": {
+        "mean": 136.218,
+        "median": 133.68,
+        "p95": 185.95
+      },
+      "quality_score": {
+        "mean": 95.75,
+        "median": 95.0,
+        "p25": 93.75,
+        "p75": 100.0
+      }
+    }
+  },
+  "status_counts": {
+    "succeeded": 213
+  },
+  "forbidden_tool_cases": [],
+  "internal_route_leak_cases": [
+    "MCP-D02-C01",
+    "MCP-D02-C04",
+    "MCP-D03-C05",
+    "MCP-D05-C01",
+    "MCP-D07-C03",
+    "MCP-D08-C02",
+    "MCP-D08-C03",
+    "MCP-D10-C02",
+    "MCP-D12-C04",
+    "MCP-D14-C03",
+    "MCP-D16-C02",
+    "MCP-D16-C05",
+    "MCP-D17-C02",
+    "MCP-D18-C05",
+    "MCP-D26-C04",
+    "MCP-D30-C03",
+    "MCP-D36-C05",
+    "MCP-D38-C03",
+    "MCP-D40-C03",
+    "MCP-D40-C04",
+    "ENV13-PSY-001"
+  ]
+}

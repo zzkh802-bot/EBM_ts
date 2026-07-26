@@ -12,6 +12,7 @@
     "trace:analyze": "tsx scripts/analyze-trace.ts --markdown",
     "test:watch": "vitest",
     "ebm": "bash scripts/ebm.sh",
+    "api": "tsx scripts/api-server.ts",
     "source-library:build": "tsx scripts/build-source-library.ts",
     "source-library:evaluate": "tsx scripts/evaluate-source-library.ts",
     "source-library:audit": "tsx scripts/audit-source-library.ts",
