@@ -30,7 +30,6 @@ export const usePreferencesStore = defineStore('preferences', () => {
   watch(themeMode, (value) => { safeWrite(STORAGE_KEYS.theme, value); applyTheme() })
   const setResearchMode = (value: ResearchMode) => {
     researchMode.value = value
-    if (value === 'expert') deepThink.value = true
   }
   return { researchMode, audienceMode, deepThink, searchEnabled, backendVersion, themeMode, snapshot, applyTheme, setResearchMode }
 })

@@ -33,20 +33,25 @@ describe("DP循医 TypeScript agent API", () => {
     ...overrides,
   });
 
-  it("keeps report structure stable while modes change content depth", () => {
+  it("keeps Instant and Expert content rules identical while audience controls professional detail", () => {
     const instant = buildAgentPrompt(promptInput());
-    const expert = buildAgentPrompt(promptInput({ researchMode: "expert" }));
+    const expert = buildAgentPrompt(promptInput({ researchMode: "expert", maxIterations: 12, requestTimeoutSeconds: 600 }));
     const publicPrompt = buildAgentPrompt(promptInput({ audienceMode: "public" }));
     for (const prompt of [instant, expert, publicPrompt]) {
-      expect(prompt).toContain("研究模式和用户类型只改变内容的深度")
+      expect(prompt).toContain("Instant 与 Expert 不改变报告内容深度或前端布局")
       expect(prompt).toContain("关键安全结局")
       expect(prompt).toContain("必须使用独立的二级或三级标题")
       expect(prompt).toContain("在最终回复前调用 report_write")
       expect(prompt).toContain("不得只在聊天消息中输出摘要")
     }
-    expect(instant).toContain("最少必要")
-    expect(expert).toContain("指南推荐等级")
-    expect(publicPrompt).toContain("省略 PICO、GRADE")
+    const sharedRule = "Instant 与 Expert 使用完全相同的循证研究方法、报告内容规范和正式报告结构";
+    expect(instant).toContain(sharedRule);
+    expect(expert).toContain(sharedRule);
+    expect(instant).toContain("最大工具迭代预算为 5");
+    expect(expert).toContain("最大工具迭代预算为 12");
+    expect(publicPrompt).toContain("省略 PICO、GRADE、检索方法、研究设计细节");
+    expect(publicPrompt).toContain("必须保留并用通俗中文解释核心获益");
+    expect(instant).toContain("生成医生专业版正式报告");
   });
 
   it("creates an async run and exposes the completed normalized response", async () => {

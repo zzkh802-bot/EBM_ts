@@ -1,0 +1,560 @@
+{
+  "contract_version": "dp-xunyi-agent/v2",
+  "run_id": "e0bf57ad-a553-4922-8f86-1863943fc55d",
+  "status": "succeeded",
+  "created_at": "2026-07-26T11:45:39.493Z",
+  "started_at": "2026-07-26T11:45:39.493Z",
+  "completed_at": "2026-07-26T11:47:52.229Z",
+  "session_id": "019f9e3e-c00a-7405-a245-9ed177b7d4be",
+  "message": "正式循证报告已完成，已写入 `reports/` 目录。\n\n**报告核心结论摘要：**\n\n针对 **肾功能正常、持续蛋白尿约3 g/d、慢性病理损伤较轻** 的 IgA 肾病患者：\n\n1. **蛋白尿疗效**：减量全身糖皮质激素可在12个月内显著降低蛋白尿（TESTING试验：组间差异-1.15 g/d），但停药后获益逐渐减退。\n2. **肾功能/ESRD获益**：eGFR斜率在短期随访中有改善，但长期ESRD获益证据冲突——TESTING显示一定获益而STOP-IgAN未显示获益。\n3. **关键安全风险**：严重感染（需抗微生物预防）、代谢不良反应（新发糖尿病、库欣面容）、骨健康、胃肠道出血等风险明确存在，减量方案可降低但不能消除。独立于疗效结局，**感染和代谢不良反应**必须作为独立二级章节重点评估。\n4. **病理\"慢性损伤较轻\"的含义**：这是一个有利预后信号，按照当前指南，**尚无前瞻性试验证明可据此选择糖皮质激素治疗能改善结局**，需结合活动性炎症病变（新月体、内皮增生）进行综合判断。\n\n**总体证据强度**：KDIGO 2025给出 **有条件推荐（2B级）**——证据质量为中等，获益-风险平衡要求在个体层面审慎评估，不能视为标准治疗。建议先行优化ACEI/ARB至最大耐受剂量，若3个月后蛋白尿仍>1 g/d且病理见活动性炎症病变，可在充分告知不确定性后与患者共同决策。",
+  "agent_answer": "正式循证报告已完成，已写入 `reports/` 目录。\n\n**报告核心结论摘要：**\n\n针对 **肾功能正常、持续蛋白尿约3 g/d、慢性病理损伤较轻** 的 IgA 肾病患者：\n\n1. **蛋白尿疗效**：减量全身糖皮质激素可在12个月内显著降低蛋白尿（TESTING试验：组间差异-1.15 g/d），但停药后获益逐渐减退。\n2. **肾功能/ESRD获益**：eGFR斜率在短期随访中有改善，但长期ESRD获益证据冲突——TESTING显示一定获益而STOP-IgAN未显示获益。\n3. **关键安全风险**：严重感染（需抗微生物预防）、代谢不良反应（新发糖尿病、库欣面容）、骨健康、胃肠道出血等风险明确存在，减量方案可降低但不能消除。独立于疗效结局，**感染和代谢不良反应**必须作为独立二级章节重点评估。\n4. **病理\"慢性损伤较轻\"的含义**：这是一个有利预后信号，按照当前指南，**尚无前瞻性试验证明可据此选择糖皮质激素治疗能改善结局**，需结合活动性炎症病变（新月体、内皮增生）进行综合判断。\n\n**总体证据强度**：KDIGO 2025给出 **有条件推荐（2B级）**——证据质量为中等，获益-风险平衡要求在个体层面审慎评估，不能视为标准治疗。建议先行优化ACEI/ARB至最大耐受剂量，若3个月后蛋白尿仍>1 g/d且病理见活动性炎症病变，可在充分告知不确定性后与患者共同决策。",
+  "patient_summary": "正式循证报告已完成，已写入 `reports/` 目录。\n\n**报告核心结论摘要：**\n\n针对 **肾功能正常、持续蛋白尿约3 g/d、慢性病理损伤较轻** 的 IgA 肾病患者：\n\n1. **蛋白尿疗效**：减量全身糖皮质激素可在12个月内显著降低蛋白尿（TESTING试验：组间差异-1.15 g/d），但停药后获益逐渐减退。\n2. **肾功能/ESRD获益**：eGFR斜率在短期随访中有改善，但长期ESRD获益证据冲突——TESTING显示一定获益而STOP-IgAN未显示获益。\n3. **关键安全风险**：严重感染（需抗微生物预防）、代谢不良反应（新发糖尿病、库欣面容）、骨健康、胃肠道出血等风险明确存在，减量方案可降低但不能消除。独立于疗效结局，**感染和代谢不良反应**必须作为独立二级章节重点评估。\n4. **病理\"慢性损伤较轻\"的含义**：这是一个有利预后信号，按照当前指南，**尚无前瞻性试验证明可据此选择糖皮质激素治疗能改善结局**，需结合活动性炎症病变（新月体、内皮增生）进行综合判断。\n\n**总体证据强度**：KDIGO 2025给出 **有条件推荐（2B级）**——证据质量为中等，获益-风险平衡要求在个体层面审慎评估，不能视为标准治疗。建议先行优化ACEI/ARB至最大耐受剂量，若3个月后蛋白尿仍>1 g/d且病理见活动性炎症病变，可在充分告知不确定性后与患者共同决策。",
+  "report_markdown": "## 一、病例概述\n\n本报告针对的临床场景：肾功能正常（eGFR正常范围）、持续蛋白尿约3 g/d、肾活检显示慢性病理损伤较轻（推测牛津MEST评分中T0或低T分期）的IgA肾病患者。该患者目前正面临是否在ACEI/ARB等支持治疗基础上加用糖皮质激素的决策。\n\n**关键临床特征**：①肾功能尚处正常范围，提示尚有充分的肾功能储备；②蛋白尿约3 g/d，属于肾病范围蛋白尿，是IgA肾病进展的强独立危险因素；③慢性病理损伤较轻（肾小管萎缩/间质纤维化程度低），提示肾脏结构尚未发生不可逆损伤，理论上仍有从免疫抑制治疗中获益的机会窗口。\n\n## 二、循证问题\n\n本报告围绕以下循证子问题展开分析：\n\n1. 在充分ACEI/ARB支持治疗基础上加用糖皮质激素，能否更有效地降低蛋白尿？\n2. 加用糖皮质激素能否延缓肾功能下降或降低终末期肾病（ESRD）风险？\n3. 糖皮质激素联合治疗的安全性如何，严重感染、代谢不良反应等风险是否可接受？\n4. 患者\"慢性损伤较轻\"这一病理特征如何影响糖皮质激素的获益-风险权衡？\n\n## 三、证据基础与证据状态\n\n本报告基于以下权威指南证据：\n\n- **KDIGO 2025 IgA肾病临床实践指南**——KDIGO（改善全球肾脏病预后组织）2025年发布，为目前国际最权威的IgA肾病管理指南，获取全文 [1]\n- **中国成人IgA肾病及IgA血管炎肾炎诊治指南（2025）**——中华医学会发布，为中国成人IgA肾病诊治的权威规范，获取全文 [2]\n\n上述指南均检索并获取了全文或关键推荐章节，可直接支持本报告中的推荐声明和循证分析。\n\n## 四、循证分析\n\n### 4.1 糖皮质激素联合ACEI/ARB能否比单纯ACEI/ARB更有效降低蛋白尿？\n\n**总判断**：减量全身糖皮质激素联合支持治疗在12个月时可显著降低蛋白尿，但停药后蛋白尿获益随时间消退，不能证明持久优于单纯支持治疗。\n\n所有IgA肾病患者均应首先接受优化、最大耐受剂量的ACEI/ARB治疗，这是当前国际和中国指南一致认可的1级推荐（KDIGO 2025，推荐等级1B）[1,2]。ACEI/ARB是IgA肾病支持治疗的基石，通过降低肾小球高滤过和蛋白尿对肾小管间质的损伤来延缓肾功能丧失。\n\n对于在ACEI/ARB最大化治疗后仍存在显著蛋白尿（≥0.5 g/d）的患者，提示疾病仍处于进展风险之中，需考虑针对IgA肾病特异性致病通路的额外治疗 [1]。当前患者蛋白尿约3 g/d，远高于上述阈值，属于高进展风险人群。\n\n在此类患者中，全身糖皮质激素的疗效证据来自两项具有对比性结果的随机对照试验。TESTING研究（国际多中心RCT，含减量甲泼尼龙方案）显示，甲泼尼龙组在12个月时蛋白尿较安慰剂组显著降低（组间差异-1.15 g/d，P<0.001），eGFR也有显著改善（组间差异7.9 ml/min/1.73\nm²，P<0.001）[1]。然而，甲泼尼龙停药后蛋白尿和eGFR的获益随时间逐渐减退，提示IgA肾病可能需要更长期的免疫调节维持，而非短期糖皮质激素脉冲治疗即可解决 [1]。\n\n**对本病例的意义**：患者蛋白尿约3 g/d、肾功能尚正常，短期（12个月内）加用糖皮质激素很可能使蛋白尿显著下降。但需预见到停药后蛋白尿可能回复至基线水平附近，因此蛋白尿下降本身不必然转化为长期肾功能获益。\n\n### 4.2 加用糖皮质激素能否延缓肾功能下降或降低ESRD风险？\n\n**总判断**：减量糖皮质激素方案在改善eGFR斜率方面可能有一定短期获益，但STOP-IgAN研究与TESTING研究结果存在冲突，长期ESRD获益未被确证。\n\nTESTING研究报告了减量甲泼尼龙组在3年总eGFR斜率上的获益：采用线性样条模型计算的组间差异为2.9 ml/min/1.73 m²/年（95% CI 0.6–5.2，P=0.01）[1]。而STOP-IgAN研究（德国多中心RCT，全身糖皮质激素方案）在中位7.4年随访期内，未观察到糖皮质激素组在复合肾脏终点（ESRD、血清肌酐倍增、死亡）方面优于单纯支持治疗 [1]。\n\n这两项RCT的人群和干预方式差异可能是结果不一致的原因：TESTING以亚洲人群为主（超过80%）、蛋白尿更高、入组时eGFR较高；STOP-IgAN以白种人为主、支持治疗更为标准化。本研究病例（肾功能正常、蛋白尿约3 g/d）在入口条件上更接近TESTING人群，但当前无直接来自该亚组的单独效应量数据。\n\nKDIGO 2025指南在充分权衡现有证据后给出有条件推荐（2B级）：在Nefecon（靶向释放布地奈德）不可及的情况下，可考虑减量全身糖皮质激素方案联合抗微生物预防，用于蛋白尿持续≥0.5 g/d的进展风险患者 [1]。这是**有条件推荐**而非**强烈推荐**，反映了证据质量有限且获益-风险平衡依赖于个体化评估。\n\n**对本病例的意义**：该患者肾功能正常、慢性损伤较轻，理论上具有最大的肾功能储备和从免疫抑制中获益的潜力，但也因此面对\"治疗获益需要在数年至十年以上的时间窗中体现、而短期风险已经存在\"的矛盾。肾功能获益的不确定性远大于蛋白尿变化。\n\n### 4.3 糖皮质激素联合治疗的严重安全风险\n\n> **关键安全结局：严重感染、死亡、代谢不良反应是独立于蛋白尿疗效的核心评估维度，必须独立分析。**\n\n**感染风险**：TESTING研究报告严重不良事件特别是感染主要发生在较高剂量糖皮质激素组，减量组虽有所降低但并未完全消除风险 [1]。KDIGO 2025指南明确要求：使用全身糖皮质激素时必须同时使用抗微生物预防（针对耶氏肺孢子菌），乙肝携带者应加用抗病毒预防 [1]。这一要求本身即是对感染风险的正式确认。\n\n**代谢及全身不良反应**：KDIGO 2025指南详细列出了使用全身糖皮质激素需告知患者的风险谱：库欣面容、新发糖尿病、胃肠道出血、骨质疏松、白内障、神经精神副作用 [1]。中国一项研究（南京，n=176）比较减量糖皮质激素（泼尼松0.4–0.6 mg/kg/d）联合MMF与足量糖皮质激素，减量组的库欣面容和新发糖尿病显著减少 [2]，说明剂量-毒性关系明确，减量可降低但无法消除这些不良反应。\n\n**增加糖皮质激素毒性的风险因素**：KDIGO 2025列出了需特别注意的临床情况——eGFR<30 ml/min/1.73 m²、糖尿病/前驱糖尿病、肥胖、潜伏性感染（病毒性肝炎、结核）、活动性消化性溃疡、未控制的精神疾病、骨质疏松、白内障 [1]。该患者肾功能正常，但需核查是否合并上述任何条件。\n\n**对本病例的意义**：即使采用减量方案，严重感染（需要住院或抗微生物预防的级别）和代谢不良反应仍是可预见的风险，不应被蛋白尿的短期改善所掩盖。患者无糖尿病、无潜伏性感染、无其他禁忌条件时，可考虑但须严格监测。\n\n### 4.4 病理慢性损伤较轻如何改变获益-风险权衡？\n\n**总判断**：慢性损伤较轻提示肾脏可逆性空间较大，但目前无前瞻性研究证实可根据病理特征选择糖皮质激素治疗能改善临床结局。\n\n中国2025年成人IgA肾病指南建议：\"关注细胞/细胞纤维新月体病变是提示糖皮质激素治疗获益的病理指标\" [2]。这意味着应从病理中获取活动性炎症病变（新月体、内皮增生）的信息，而不仅仅是慢性损伤的程度。\n\nKDIGO 2025更明确指出现有证据的边界：\"虽然看起来符合逻辑——增生性或炎症性病变可能比硬化/纤维化性病变对免疫抑制治疗反应更好——但这一推论尚未在前瞻性临床试验中得到证实\"[1]。指南同时指出\"目前尚无充分证据仅根据牛津MEST-C评分来决定特定治疗方案\" [1]。\n\n**对本病例的意义**：该患者\"慢性损伤较轻\"（T0或低T分期）是一个有利的预后信号，提示如果使用糖皮质激素，慢性不可逆的肾损伤已有程度低，理论上治疗窗口更大。但这一病理特征本身**不能作为选择糖皮质激素治疗的充分依据**。临床决策更需要结合：①是否存在活动性繁殖性病变（M1、E1、C1）；②蛋白尿对ACEI/ARB的最大化治疗反应是否充分；③患者的个人风险因素和意愿。\n\n## 五、综合判断\n\n**现有证据不足以确定在充分ACEI/ARB支持治疗基础上加用全身糖皮质激素对肾功能正常的IgA肾病患者具有明确的长期获益-风险优势。**\n\n具体而言：\n\n1. **支持使用糖皮质激素的理由**：TESTING试验显示减量方案可在12个月时显著降低蛋白尿和改善eGFR斜率；患者慢性损伤较轻提示可逆性较好；KDIGO 2025有条件推荐（2B级）支持在特定条件下使用。\n\n2. **不支持或限制使用的理由**：蛋白尿和eGFR的获益在停药后随时间减退；STOP-IgAN研究未显示长期ESRD获益；严重感染和代谢不良反应是明确的风险；减量方案降低了但未消除这些风险。\n\n3. **最稳健的中间立场**：先确保ACEI/ARB已经优化至最大耐受剂量（可考虑联合ARB+ACEI或加用SGLT2抑制剂），再次评估蛋白尿水平。如果蛋白尿在3个月优化支持治疗后仍持续>1 g/d，且病理显示活动性炎症病变（新月体、内皮增生），可在充分告知获益不确定性和可预期风险的前提下，与患者共同决策是否尝试减量全身糖皮质激素方案（甲泼尼龙0.4 mg/kg/d，最大32\nmg/d，共2个月后每月递减4 mg/d，总疗程6–9个月，并联合抗微生物预防、胃保护和骨保护）。\n\n## 六、管理方案与临床落地\n\n**必须核实的条件**（在启动糖皮质激素前完成）：\n\n- ACEI/ARB已达到最大耐受剂量并持续≥3个月，蛋白尿仍未达到治疗目标（<0.5–1 g/d）\n- eGFR>30 ml/min/1.73 m²（患者目前正常，符合条件）\n- 排除糖尿病、活动性感染（特别是乙肝、结核）、消化性溃疡、未控制的精神疾病、骨质疏松等糖皮质激素禁忌或需调整监测的条件\n- 获取完整的牛津MEST-C病理评分，特别关注新月体（C）和内皮增生（E）评分；如果存在显著的炎症活动性病变，使用糖皮质激素的病理依据更充分\n- 若选择使用，必须同时启动抗微生物预防（复方新诺明预防耶氏肺孢子菌肺炎），乙肝携带者加抗病毒预防，并考虑胃保护剂/骨保护剂\n\n**拟议的减量糖皮质激素方案**（参照KDIGO 2025建议 [1]）：\n- 甲泼尼龙（或等效剂量泼尼松/泼尼松龙）0.4 mg/kg/d，最大32 mg/d×2个月\n- 之后每月递减4 mg/d，总疗程6–9个月\n- 使用期间每月监测：血糖、血压、体重、感染征象、血常规、肝肾功能、尿蛋白/尿蛋白肌酐比\n\n**停药或转换的触发条件**：出现严重感染、新发糖尿病需降糖药治疗、无法控制的精神症状、骨密度显著下降或骨折，应立即减停糖皮质激素；3–6个月内蛋白尿无改善也应重新评估治疗策略。\n\n## 七、证据局限与待核实信息\n\n- **直接比较证据的长期终点不一致**：当前直接回答糖皮质激素对比单纯支持治疗对ESRD影响的最高级别证据来自TESTING和STOP-IgAN两项RCT，二者结论存在冲突。这种冲突可能源于人群构成、支持治疗强度和糖皮质激素方案差异，但现有数据不足以充分解释。\n- **缺乏针对慢性损伤较轻、肾功能正常亚组的独立RCT**：本病例的上述特征未在任何RCT中作为预设亚组分析。上述结论是基于指南的综合判断和逻辑推演，而非来自该特定亚组的直接证据。\n- **蛋白尿降幅与长期ESRD获益之间的关联强度目前仍为替代终点**：FDA/EMA已接受蛋白尿降低作为加速批准终点，但蛋白尿变化不能完美预测个体ESRD风险下降。\n- **本报告未覆盖Nefecon（靶向释放布地奈德）、SGLT2抑制剂、sparsentan等新型治疗药物**（因本研究范围限定为糖皮质激素对比单纯ACEI/ARB），这些药物在当前指南中同样具有重要地位，临床决策时应纳入整体治疗选项。\n\n\n## 参考文献\n\n1. [1] KDIGO 2025 Clinical Practice Guideline for the Management of Immunoglobulin A Nephropathy. Kidney International Supplements. 2025.\n2. [2] 中国成人IgA肾病及IgA血管炎肾炎诊治指南(2025). 中华肾脏病杂志. 2025.",
+  "agent_trace": [
+    {
+      "kind": "run.queued",
+      "label": "任务已创建",
+      "detail": "等待 Pi Agent 进程启动",
+      "timestamp": "2026-07-26T11:45:39.493Z"
+    },
+    {
+      "kind": "run.started",
+      "label": "任务已启动",
+      "detail": "expert 模式",
+      "timestamp": "2026-07-26T11:45:39.493Z"
+    },
+    {
+      "kind": "pi.session",
+      "label": "Pi 会话已创建",
+      "detail": "019f9e3e-c00a-7405-a245-9ed177b7d4be",
+      "timestamp": "2026-07-26T11:45:40.923Z"
+    },
+    {
+      "kind": "agent.started",
+      "label": "Pi Agent 已启动",
+      "timestamp": "2026-07-26T11:45:40.937Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：read",
+      "timestamp": "2026-07-26T11:45:43.734Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：read",
+      "timestamp": "2026-07-26T11:45:43.739Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：read",
+      "timestamp": "2026-07-26T11:45:43.743Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：read",
+      "timestamp": "2026-07-26T11:45:43.743Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：guideline_mcp_search",
+      "timestamp": "2026-07-26T11:45:47.258Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：guideline_mcp_search",
+      "timestamp": "2026-07-26T11:45:47.260Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：guideline_mcp_search",
+      "timestamp": "2026-07-26T11:45:51.698Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：guideline_mcp_search",
+      "timestamp": "2026-07-26T11:45:53.147Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：guideline_mcp_read",
+      "timestamp": "2026-07-26T11:45:55.071Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：guideline_mcp_read",
+      "timestamp": "2026-07-26T11:45:55.073Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：guideline_mcp_read",
+      "timestamp": "2026-07-26T11:45:55.352Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：guideline_mcp_read",
+      "timestamp": "2026-07-26T11:45:55.802Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：read",
+      "timestamp": "2026-07-26T11:45:57.148Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：read",
+      "timestamp": "2026-07-26T11:45:57.149Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：guideline_mcp_retrieve",
+      "timestamp": "2026-07-26T11:45:59.780Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：guideline_mcp_retrieve",
+      "timestamp": "2026-07-26T11:45:59.782Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：guideline_mcp_retrieve",
+      "timestamp": "2026-07-26T11:46:05.011Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：guideline_mcp_retrieve",
+      "timestamp": "2026-07-26T11:46:07.656Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：read",
+      "timestamp": "2026-07-26T11:46:11.047Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：read",
+      "timestamp": "2026-07-26T11:46:11.050Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：read",
+      "timestamp": "2026-07-26T11:46:12.756Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：read",
+      "timestamp": "2026-07-26T11:46:12.759Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：read",
+      "timestamp": "2026-07-26T11:46:14.689Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：read",
+      "timestamp": "2026-07-26T11:46:14.691Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：read",
+      "timestamp": "2026-07-26T11:46:16.916Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：read",
+      "timestamp": "2026-07-26T11:46:16.917Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：read",
+      "timestamp": "2026-07-26T11:46:16.918Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：read",
+      "timestamp": "2026-07-26T11:46:16.918Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：guideline_mcp_retrieve",
+      "timestamp": "2026-07-26T11:46:19.312Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：guideline_mcp_retrieve",
+      "timestamp": "2026-07-26T11:46:19.312Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：guideline_mcp_retrieve",
+      "timestamp": "2026-07-26T11:46:26.452Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：guideline_mcp_retrieve",
+      "timestamp": "2026-07-26T11:46:29.824Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：research_frame_init",
+      "timestamp": "2026-07-26T11:46:39.654Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：research_frame_init",
+      "timestamp": "2026-07-26T11:46:39.657Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:46:45.642Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:46:45.644Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:46:45.645Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:46:45.649Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:46:45.651Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:46:45.653Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:46:51.376Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:46:51.377Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:46:51.377Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:46:51.379Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:46:51.380Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:46:51.381Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:46:55.963Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:46:55.964Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:46:55.966Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:46:55.968Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:46:59.081Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:46:59.084Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：report_write",
+      "timestamp": "2026-07-26T11:47:43.215Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：report_write",
+      "timestamp": "2026-07-26T11:47:43.240Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：research_frame_scratchpad_append",
+      "timestamp": "2026-07-26T11:47:47.069Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：research_frame_scratchpad_append",
+      "timestamp": "2026-07-26T11:47:47.072Z"
+    },
+    {
+      "kind": "run.completed",
+      "label": "任务完成",
+      "detail": "已收到 Pi Agent 最终回答",
+      "timestamp": "2026-07-26T11:47:52.229Z"
+    }
+  ],
+  "tools": [
+    {
+      "name": "read",
+      "status": "running"
+    },
+    {
+      "name": "read",
+      "status": "running"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "guideline_mcp_search",
+      "status": "running"
+    },
+    {
+      "name": "guideline_mcp_search",
+      "status": "running"
+    },
+    {
+      "name": "guideline_mcp_search",
+      "status": "completed"
+    },
+    {
+      "name": "guideline_mcp_search",
+      "status": "completed"
+    },
+    {
+      "name": "guideline_mcp_read",
+      "status": "running"
+    },
+    {
+      "name": "guideline_mcp_read",
+      "status": "running"
+    },
+    {
+      "name": "guideline_mcp_read",
+      "status": "completed"
+    },
+    {
+      "name": "guideline_mcp_read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "running"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "guideline_mcp_retrieve",
+      "status": "running"
+    },
+    {
+      "name": "guideline_mcp_retrieve",
+      "status": "running"
+    },
+    {
+      "name": "guideline_mcp_retrieve",
+      "status": "completed"
+    },
+    {
+      "name": "guideline_mcp_retrieve",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "running"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "running"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "running"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "running"
+    },
+    {
+      "name": "read",
+      "status": "running"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "guideline_mcp_retrieve",
+      "status": "running"
+    },
+    {
+      "name": "guideline_mcp_retrieve",
+      "status": "running"
+    },
+    {
+      "name": "guideline_mcp_retrieve",
+      "status": "completed"
+    },
+    {
+      "name": "guideline_mcp_retrieve",
+      "status": "completed"
+    },
+    {
+      "name": "research_frame_init",
+      "status": "running"
+    },
+    {
+      "name": "research_frame_init",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "report_write",
+      "status": "running"
+    },
+    {
+      "name": "report_write",
+      "status": "completed"
+    },
+    {
+      "name": "research_frame_scratchpad_append",
+      "status": "running"
+    },
+    {
+      "name": "research_frame_scratchpad_append",
+      "status": "completed"
+    }
+  ],
+  "summary": {
+    "research_mode": "expert",
+    "audience_mode": "clinician",
+    "deep_think": false,
+    "search_enabled": true,
+    "retrieval_policy": "mcp_only",
+    "max_iterations": 12,
+    "max_iterations_is_advisory": true,
+    "request_timeout_seconds": 600
+  }
+}

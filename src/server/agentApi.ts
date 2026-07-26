@@ -541,14 +541,12 @@ async function projectEnv(rootDir: string): Promise<Record<string, string>> {
 }
 
 export function buildAgentPrompt(input: AgentRunInput): string {
-  const modeInstruction: Record<ResearchMode, string> = {
-    instant: "只保留临床决策所需的关键疗效、安全结局、适用边界和简短建议，以最少必要的可追溯证据支持结论，避免不必要的扩展检索。",
-    expert: "完整呈现 PICO、指南推荐等级、研究设计、效应量、适用性、证据冲突、不确定性和详细安全边界。",
-    literature: "以文献/指南阅读、证据摘录和引用可核验性为重点。",
-  };
+  const researchInstruction = input.researchMode === "literature"
+    ? "以文献/指南阅读、证据摘录和引用可核验性为重点。"
+    : "Instant 与 Expert 使用完全相同的循证研究方法、报告内容规范和正式报告结构；二者只通过最大工具迭代预算和响应时间区分，不得把 Instant 写成简版，也不得仅因 Expert 模式增加固定章节或改变报告详细程度。";
   const audienceInstruction = input.audienceMode === "public"
-    ? "使用清晰中文面向普通用户，不给个体化处方；省略 PICO、GRADE、检索方法和不必要的统计术语，保留通俗的获益、风险、行动建议及何时应就医。"
-    : "使用面向临床人员的中文，保留 PICO、证据等级、效应量和适用边界。";
+    ? "生成用户友好版正式报告：继续使用与医生版相同的语义结构和前端渲染方式，但省略 PICO、GRADE、检索方法、研究设计细节、证据表、亚组/敏感性分析及不必要的统计术语；不要给个体化处方或精确剂量。必须保留并用通俗中文解释核心获益、常见及严重风险、适用边界、可执行的下一步、何时应就医，以及可核验的信息来源。"
+    : "生成医生专业版正式报告：使用面向临床人员的中文，按问题需要保留 PICO、指南推荐等级、研究设计、效应量、证据冲突、不确定性、适用边界及详细安全信息。";
   const retrievalInstruction = input.retrievalPolicy === "mcp_only"
     ? "本轮是隔离的 MCP-only 集成测试：只使用 guideline_mcp_search、guideline_mcp_retrieve、guideline_mcp_read 及证据/报告工具；禁止 PubMed、公共网页和本地来源库检索。若指南证据不足，明确报告证据缺口，不得改用其他检索来源。最终面向用户的报告不得出现 MCP、RAG、工具调用、内部文件路径或内部 evidence ID。"
     : input.searchEnabled
@@ -556,10 +554,10 @@ export function buildAgentPrompt(input: AgentRunInput): string {
       : "用户要求不进行外部检索；只使用当前会话中的既有材料。";
   return [
     "你是 DP循医的 TypeScript 后端 Agent。请输出中文、可追溯且不过度断言的循证回答。",
-    modeInstruction[input.researchMode],
+    researchInstruction,
     audienceInstruction,
-    "研究模式和用户类型只改变内容的深度、范围和专业程度，不改变前端布局。所有报告使用稳定的语义结构，并按需包含：临床问题与决策、主要疗效结局、关键安全结局、管理策略、结论与建议、参考文献。重大出血、死亡、感染、禁忌等关键安全结局必须使用独立的二级或三级标题，不得埋在长段落中。不要为了凑模板输出没有内容的章节。",
-    "本轮必须生成可供前端渲染的正式循证报告：在最终回复前调用 report_write；若 report_write 只保存了 draft，则修复后调用 report_finalize。不得只在聊天消息中输出摘要而跳过正式报告文件。最终聊天消息可以简短，但正式报告必须包含本模式要求的完整内容。",
+    "Instant 与 Expert 不改变报告内容深度或前端布局；回答对象只改变专业知识的保留程度。所有报告使用稳定的语义结构，并按需包含：临床问题与决策、主要疗效结局、关键安全结局、管理策略、结论与建议、参考文献。重大出血、死亡、感染、禁忌等关键安全结局必须使用独立的二级或三级标题，不得埋在长段落中。不要为了凑模板输出没有内容的章节。",
+    "本轮必须生成可供前端渲染的正式循证报告：在最终回复前调用 report_write；若 report_write 只保存了 draft，则修复后调用 report_finalize。不得只在聊天消息中输出摘要而跳过正式报告文件。最终聊天消息可以简短，但正式报告必须包含当前回答对象所需的完整内容。",
     input.deepThink ? "额外检查安全红旗、证据冲突和跨学科影响。" : "",
     retrievalInstruction,
     `本轮最大工具迭代预算为 ${input.maxIterations}（提示性约束）。`,

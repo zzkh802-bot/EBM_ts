@@ -14,7 +14,7 @@ const emit = defineEmits<{
   <article class="message" :class="message.role">
     <header><strong>{{ message.title }}</strong><small v-if="message.role === 'assistant'">{{ message.audienceMode === 'public' ? '普通用户版' : '医生专业版' }} · {{ message.researchMode }}</small></header>
     <div v-if="message.pending" class="agent-stage"><span class="spinner" />{{ currentStage }}<small>正在执行可审计的循证工作流</small></div>
-    <ReportRenderer v-else-if="message.role === 'assistant' && !message.showMarkdown" :markdown="message.content" :audience="message.audienceMode" :research-mode="message.researchMode" @citation="emit('citation', $event)" />
+    <ReportRenderer v-else-if="message.role === 'assistant' && !message.showMarkdown" :markdown="message.content" :audience="message.audienceMode" @citation="emit('citation', $event)" />
     <pre v-else-if="message.showMarkdown && message.audienceMode === 'clinician'">{{ message.content }}</pre>
     <p v-else>{{ message.content }}</p>
     <div v-if="message.attachments?.length" class="attachment-row"><span v-for="file in message.attachments" :key="file.id">📎 {{ file.name }}</span></div>

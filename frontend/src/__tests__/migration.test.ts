@@ -18,10 +18,10 @@ beforeEach(() => {
 
 describe('回答模式预算', () => {
   it.each([
-    ['instant', false, 5, 150],
-    ['instant', true, 8, 150],
-    ['expert', false, 10, 300],
-    ['expert', true, 14, 300],
+    ['instant', false, 5, 300],
+    ['instant', true, 5, 300],
+    ['expert', false, 12, 600],
+    ['expert', true, 12, 600],
   ] as const)('%s deep=%s', (researchMode, deepThink, budget, timeout) => {
     const mode = { researchMode, deepThink, audienceMode: 'clinician' as const, searchEnabled: true }
     expect(modeIterationBudget(mode)).toBe(budget)
@@ -101,7 +101,7 @@ describe('Agent DTO', () => {
     })
     expect(dto).toMatchObject({
       stable_question: '稳定问题', question: '完整问题', ebm_session_id: 'remote-1',
-      max_iterations: 14, request_timeout_seconds: 300, research_mode: 'expert',
+      max_iterations: 12, request_timeout_seconds: 600, research_mode: 'expert',
       audience_mode: 'public', deep_think: true, search_enabled: false,
     })
     expect(dto.attachments).toEqual([{

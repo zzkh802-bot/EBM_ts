@@ -63,13 +63,12 @@ export function migrateSessions(value: unknown, legacyEbmSessionId = ''): Sessio
     }))
 }
 
-export function modeIterationBudget(mode: ModeSnapshot): 5 | 8 | 10 | 14 {
-  if (mode.researchMode === 'instant') return mode.deepThink ? 8 : 5
-  return mode.deepThink ? 14 : 10
+export function modeIterationBudget(mode: ModeSnapshot): 5 | 12 {
+  return mode.researchMode === 'instant' ? 5 : 12
 }
 
-export function modeTimeoutSeconds(mode: ModeSnapshot): 150 | 300 {
-  return mode.researchMode === 'instant' ? 150 : 300
+export function modeTimeoutSeconds(mode: ModeSnapshot): 300 | 600 {
+  return mode.researchMode === 'instant' ? 300 : 600
 }
 
 export function buildAgentRequest(

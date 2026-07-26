@@ -34,7 +34,8 @@ describe("iteration budget reminder", () => {
     await test.emit("tool_execution_end");
     await test.emit("tool_execution_end");
     expect(test.sent).toHaveLength(1);
-    expect(test.sent[0]?.message.content).toContain("Instant 收束提醒");
+    expect(test.sent[0]?.message.content).toContain("【收束提醒】");
+    expect(test.sent[0]?.message.content).toContain("不要因 Instant 或 Expert 模式改变报告详细程度");
     expect(test.sent[0]?.message.content).toContain("report_write");
     expect(test.sent[0]?.message.details).toMatchObject({ maxIterations: 5, completedToolCalls: 3, remaining: 2 });
     expect(test.sent[0]?.options).toEqual({ deliverAs: "steer" });
@@ -46,7 +47,8 @@ describe("iteration budget reminder", () => {
     await test.emit("agent_start");
     for (let index = 0; index < 9; index += 1) await test.emit("tool_execution_end");
     expect(test.sent).toHaveLength(1);
-    expect(test.sent[0]?.message.content).toContain("Expert 收束提醒");
+    expect(test.sent[0]?.message.content).toContain("【收束提醒】");
+    expect(test.sent[0]?.message.content).toBe(budgetReminderText("instant", 3));
     expect(test.sent[0]?.message.details.remaining).toBe(3);
     await test.emit("agent_start");
     for (let index = 0; index < 9; index += 1) await test.emit("tool_execution_end");

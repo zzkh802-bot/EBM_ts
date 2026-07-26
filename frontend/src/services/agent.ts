@@ -36,7 +36,7 @@ const toV2Request = (dto: AgentRequest, sessionId?: string): AgentV2Request => (
   deep_think: dto.deep_think,
   search_enabled: dto.search_enabled,
   max_iterations: dto.max_iterations,
-  request_timeout_seconds: dto.research_mode === 'instant' ? 300 : 600,
+  request_timeout_seconds: dto.request_timeout_seconds,
 })
 
 const rememberActiveRun = (runId: string) => {

@@ -1,0 +1,470 @@
+{
+  "contract_version": "dp-xunyi-agent/v2",
+  "run_id": "ffdcf9ae-5acb-414e-ab92-f1afce10e827",
+  "status": "succeeded",
+  "created_at": "2026-07-26T11:43:52.068Z",
+  "started_at": "2026-07-26T11:43:52.068Z",
+  "completed_at": "2026-07-26T11:45:37.574Z",
+  "session_id": "019f9e3d-1c7b-715f-88aa-cb377a0bb239",
+  "message": "正式报告已完成并写入：\n\n**文件路径**：`data/sessions/019f9e3d_dp循医-2026-07-26/reports/反复流产患者病因筛查对比经验性保胎治疗的循证评价.md`\n\n报告共使用 7 条证据记录，全部来自 ASRM 2026 委员会意见和 Australasian RPL 管理指南 2024（MCP 集成测试规定范围内的唯一来源）。以下是核心结论摘要：\n\n---\n\n## 报告核心结论摘要\n\n### 筛查 vs 经验性保胎：三大终点评价\n\n| 终点 | 筛查策略 | 经验性保胎策略 |\n|---|---|---|\n| **诊断率（diagnostic yield）** | 流产物染色体分析可为50–75%患者提供病因解释；联合微阵列可达>90%；宫腔评估发现先天性异常RR为13.3% | 无诊断价值，掩盖病因 |\n| **活产率（live birth）** | 仅靶向治疗（APS抗凝、甲状腺素替代、纵隔切除）有获益证据；不明原因者期待管理成功率50–80% | PROMISE试验：孕激素无效；阿司匹林、依诺肝素、IVIG、糖皮质激素、脂肪乳等均无获益证据 |\n| **减少不必要治疗** | 筛查可避免对偶发非整倍体患者进行昂贵检查和不必要药物暴露；明确不推荐MTHFR/遗传性易栓症/NK细胞/甲状腺抗体常规检测 | 直接经验性治疗将使大量患者暴露于无效且有潜在风险的干预 |\n\n### 关键安全结局（独立标题）\n\n- **经验性保胎的无效与风险**：ASRM明确列出多种被证明无效的治疗，不建议用于不明原因RPL\n- **筛查的伤害**：aPL假阳性率高；宫腔镜手术低风险但仍有并发症；父母核型异常可能增加患者焦虑\n\n### 管理路径（三步骤框架）\n\n1. **先查流产组织染色体** → 偶发非整倍体者无需进一步检查\n2. **整倍体/未测者行解剖+内分泌+选择性免疫+父母核型**\n3. **针对性治疗或期待管理（不明原因者成功率50–80%）**\n\n### 证据缺口\n\n子宫纵隔切除RCT不充分、精子DNA碎片干预缺乏高质量研究、慢性子宫内膜炎治疗获益不确定、PGT-SR vs 期待管理无前瞻性比较数据。",
+  "agent_answer": "正式报告已完成并写入：\n\n**文件路径**：`data/sessions/019f9e3d_dp循医-2026-07-26/reports/反复流产患者病因筛查对比经验性保胎治疗的循证评价.md`\n\n报告共使用 7 条证据记录，全部来自 ASRM 2026 委员会意见和 Australasian RPL 管理指南 2024（MCP 集成测试规定范围内的唯一来源）。以下是核心结论摘要：\n\n---\n\n## 报告核心结论摘要\n\n### 筛查 vs 经验性保胎：三大终点评价\n\n| 终点 | 筛查策略 | 经验性保胎策略 |\n|---|---|---|\n| **诊断率（diagnostic yield）** | 流产物染色体分析可为50–75%患者提供病因解释；联合微阵列可达>90%；宫腔评估发现先天性异常RR为13.3% | 无诊断价值，掩盖病因 |\n| **活产率（live birth）** | 仅靶向治疗（APS抗凝、甲状腺素替代、纵隔切除）有获益证据；不明原因者期待管理成功率50–80% | PROMISE试验：孕激素无效；阿司匹林、依诺肝素、IVIG、糖皮质激素、脂肪乳等均无获益证据 |\n| **减少不必要治疗** | 筛查可避免对偶发非整倍体患者进行昂贵检查和不必要药物暴露；明确不推荐MTHFR/遗传性易栓症/NK细胞/甲状腺抗体常规检测 | 直接经验性治疗将使大量患者暴露于无效且有潜在风险的干预 |\n\n### 关键安全结局（独立标题）\n\n- **经验性保胎的无效与风险**：ASRM明确列出多种被证明无效的治疗，不建议用于不明原因RPL\n- **筛查的伤害**：aPL假阳性率高；宫腔镜手术低风险但仍有并发症；父母核型异常可能增加患者焦虑\n\n### 管理路径（三步骤框架）\n\n1. **先查流产组织染色体** → 偶发非整倍体者无需进一步检查\n2. **整倍体/未测者行解剖+内分泌+选择性免疫+父母核型**\n3. **针对性治疗或期待管理（不明原因者成功率50–80%）**\n\n### 证据缺口\n\n子宫纵隔切除RCT不充分、精子DNA碎片干预缺乏高质量研究、慢性子宫内膜炎治疗获益不确定、PGT-SR vs 期待管理无前瞻性比较数据。",
+  "patient_summary": "正式报告已完成并写入：\n\n**文件路径**：`data/sessions/019f9e3d_dp循医-2026-07-26/reports/反复流产患者病因筛查对比经验性保胎治疗的循证评价.md`\n\n报告共使用 7 条证据记录，全部来自 ASRM 2026 委员会意见和 Australasian RPL 管理指南 2024（MCP 集成测试规定范围内的唯一来源）。以下是核心结论摘要：\n\n---\n\n## 报告核心结论摘要\n\n### 筛查 vs 经验性保胎：三大终点评价\n\n| 终点 | 筛查策略 | 经验性保胎策略 |\n|---|---|---|\n| **诊断率（diagnostic yield）** | 流产物染色体分析可为50–75%患者提供病因解释；联合微阵列可达>90%；宫腔评估发现先天性异常RR为13.3% | 无诊断价值，掩盖病因 |\n| **活产率（live birth）** | 仅靶向治疗（APS抗凝、甲状腺素替代、纵隔切除）有获益证据；不明原因者期待管理成功率50–80% | PROMISE试验：孕激素无效；阿司匹林、依诺肝素、IVIG、糖皮质激素、脂肪乳等均无获益证据 |\n| **减少不必要治疗** | 筛查可避免对偶发非整倍体患者进行昂贵检查和不必要药物暴露；明确不推荐MTHFR/遗传性易栓症/NK细胞/甲状腺抗体常规检测 | 直接经验性治疗将使大量患者暴露于无效且有潜在风险的干预 |\n\n### 关键安全结局（独立标题）\n\n- **经验性保胎的无效与风险**：ASRM明确列出多种被证明无效的治疗，不建议用于不明原因RPL\n- **筛查的伤害**：aPL假阳性率高；宫腔镜手术低风险但仍有并发症；父母核型异常可能增加患者焦虑\n\n### 管理路径（三步骤框架）\n\n1. **先查流产组织染色体** → 偶发非整倍体者无需进一步检查\n2. **整倍体/未测者行解剖+内分泌+选择性免疫+父母核型**\n3. **针对性治疗或期待管理（不明原因者成功率50–80%）**\n\n### 证据缺口\n\n子宫纵隔切除RCT不充分、精子DNA碎片干预缺乏高质量研究、慢性子宫内膜炎治疗获益不确定、PGT-SR vs 期待管理无前瞻性比较数据。",
+  "report_markdown": "# 反复流产患者病因筛查对比经验性保胎治疗的循证评价\n\n## 一、临床问题与决策\n\n**临床问题**：对于反复流产（recurrent pregnancy loss, RPL，定义为≥2次确认的宫内妊娠丢失）患者，系统性进行遗传学（流产物染色体分析、父母核型）、解剖学（宫腔评估）和免疫学（抗磷脂抗体等）病因筛查，相比于经验性保胎治疗（孕激素、免疫调节剂、抗凝药物等），在提高诊断率（diagnostic yield）、增加活产率（live\nbirth）、减少不必要治疗（unnecessary treatment）方面的获益、伤害和适用边界如何？\n\n**临床决策**：是否应将病因筛查作为RPL患者的标准一线策略，而非直接给予经验性治疗？\n\n## 二、主要疗效结局\n\n### 2.1 遗传学筛查的诊断率与对后续管理的指导价值\n\n染色体异常是早期流产的最常见原因。ASRM（美国生殖医学学会）2026年委员会意见指出，整条染色体非整倍体在<35岁女性流产组织中的检出率约为50%，在>40岁女性中可达75%[1]。在第二次流产或RPL时进行流产物染色体分析，可为大量患者提供病因解释：若发现偶发性非整倍体，可避免昂贵且不必要的RPL全面检查，减轻患者内疚感和自责感，并提供心理获益[1]。联合24-染色体微阵列检测可为>90%的患者提供可能或确定的流产原因[1]。\n\n**ASRM 2026推荐**：在可行的情况下，将流产物染色体分析作为RPL夫妇评估的第一步；推荐基于阵列的技术（aCGH/SNP-array/NGS）因其无需细胞培养、周转快、可检测微缺失/微重复等优势而优于传统核型分析[1]。\n\n**父母核型分析**：ASRM 2026建议在流产物检测发现不平衡结构重排或未行流产物检测时提供父母外周血核型分析，以检出平衡易位等结构重排。约11.7%的RPL患者存在低深度测序可检出的染色体异常，其中40%被传统G显带核型漏检[1]。Australasian RPL管理指南（2024，Part\nI）同样推荐对双方进行核型分析（GPP，共识α级），并在发现异常时提供遗传咨询和植入前遗传学检测（PGT）[2]。\n\n### 2.2 解剖学筛查的诊断率与治疗价值\n\n先天性子宫异常在RPL女性中的患病率显著高于一般人群（RR 13.3% vs. 5.5%; RR 1.68, 95%CI 1.31–2.15），其中子宫纵隔和双角子宫与流产风险增加最为相关（纵隔子宫：RR 2.65, 95%CI 1.39–5.09）[1]。\n\n**诊断方式**：3D超声对子宫异常的诊断准确率最高（97.6%），其次为声学子宫造影（SHG, 96.5%）、2D超声（86.6%）和子宫输卵管造影（HSG, 86.9%）[1]。ASRM 2026推荐对所有不明原因RPL女性进行子宫腔评估[1]。\n\n**治疗的不确定性**：子宫纵隔切除的RCT（多中心国际试验）未发现手术改善活产率的证据（手术组31% vs 期待管理组35%; RR 0.88, 95%CI\n0.47–1.65），但该试验存在样本量小、人群异质性大等显著局限。ASRM仍建议在共享决策下为RPL合并子宫纵隔患者提供宫腔镜纵隔切除[1,3]。对于宫腔粘连、子宫内膜息肉、黏膜下肌瘤等获得性病变，手术干预在改善RPL活产率方面的高质量证据同样缺乏，但临床实践中常考虑切除[1]。\n\n### 2.3 免疫学筛查的诊断率与治疗价值\n\n**抗磷脂综合征（APS）**：是RPL中唯一有明确循证治疗（阿司匹林+肝素/低分子肝素）的免疫因素。ASRM 2026推荐在符合APS临床标准的患者中进行抗磷脂抗体（aPL）检测，包括狼疮抗凝物（LAC）、抗心磷脂抗体（aCL IgG/IgM）和抗β2糖蛋白I抗体（aβ2GPI\nIgG/IgM），阳性结果需间隔12周以上重复确认[1]。Meta分析证实，小剂量阿司匹林联合预防性肝素/LMWH可降低APS相关流产风险、提高活产率[1]。\n\n**检测的适用边界**：反复早期流产需≥3次连续流产且排除其他原因后方考虑APS检测；若所有流产物均为非整倍体，则不推荐aPL检测。aPL检测假阳性率高，重复检测可能延误后续妊娠或不必要治疗[1]。\n\n**不推荐的免疫筛查**：ASRM 2026明确不推荐在APS之外的常规自身免疫抗体检测（如NK细胞检测、甲状腺抗体常规筛查等）[1]。Australasian 2024 Part II指南同样不推荐在RPL患者中进行人类白细胞抗原（HLA）抗体检测，IVIG在RPL中的应用也缺乏足够证据支持[4]。\n\n## 三、关键安全结局\n\n### 3.1 经验性保胎治疗的无效性与潜在伤害\n\nASRM 2026委员会议明确指出以下干预措施在**不明原因RPL**中被证明无效或不推荐：\n- **经验性孕激素**：PROMISE大型多中心RCT显示，孕早期阴道孕激素与安慰剂相比未显著提高不明原因RPL的活产率[1]\n- **阿司匹林、依诺肝素**：无APS证据时不推荐用于不明原因RPL\n- **糖皮质激素、IVIG、脂肪乳（intralipid）、淋巴细胞免疫治疗、G-CSF**：均缺乏有效证据\n- **经验性溶栓治疗**：当前不推荐用于不明原因RPL[1]\n\nASRM强调，若未行流产物染色体检测，大量无法解释的RPL患者可能被驱使去追求未经证实的诊断和治疗，增加身体和经济负担并暴露于不必要的药物风险[1]。筛查→诊断→针对性治疗（如APS的抗凝治疗、甲状腺功能异常的左甲状腺素替代、结构性异常的矫正）可系统性地减少经验性治疗的使用。\n\n### 3.2 筛查本身的潜在伤害\n\n- **过度诊断**：aPL检测假阳性率高，可能错误标注患者，导致不必要的妊娠期抗凝治疗和出血风险\n- **诊断延迟**：反复检测确认阳性需间隔12周，可能推迟后续妊娠计划\n- **手术风险**：子宫腔镜下操作（纵隔切除、息肉切除等）虽总体低风险，但仍有宫腔粘连、子宫穿孔等并发症可能\n- **心理影响**：检出遗传学异常（如平衡易位）可能增加患者焦虑和生育决策复杂性\n- **经济成本**：部分检测（如PGT-SR、CMA）费用较高，且PGT-SR需IVF周期，对卵巢储备低的患者可能需要多次取卵\n\n### 3.3 安全评估小结\n\n当前证据不支持在RPL中广泛使用经验性保胎治疗，因为缺乏有效性证据且可能带来不必要的药物暴露。与此相对，基于筛查的个体化管理在特定可治疗病因（APS、甲状腺功能异常、子宫纵隔等）中显示出获益，且安全性良好。\n\n## 四、管理策略推荐\n\n基于ASRM 2026指南的分步算法，推荐管理策略如下：\n\n**第一步：流产物染色体分析**\n- 在第二次流产或RPL时即行流产物染色体分析（优先基于阵列技术）\n- 若检测发现偶发性非整倍体 → 告知患者此为偶发事件，无需进一步RPL全面检查\n- 若检测为整倍体或未检测 → 进入第二步\n\n**第二步：系统性病因筛查**\n- **解剖学**：对所有不明原因RPL女性行子宫腔评估（3D超声/SHG/宫腔镜）\n- **内分泌**：TSH检测（若>4 mIU/L或实验室正常上限则治疗）\n- **免疫学**：仅对符合APS临床标准者行aPL检测（LAC、aCL、aβ2GPI）\n- **父母核型**：流产物发现不平衡结构重排或未行流产物检测时提供\n- **其他**：在特定临床线索下考虑HbA1c（风险因素者）、催乳素（排卵障碍/溢乳症状）、精子DNA碎片（不明原因RPL合并男性因素时）\n\n**第三步：针对性治疗**\n- APS → 孕前小剂量阿司匹林+确认妊娠时开始预防剂量肝素/LMWH\n- 甲状腺功能异常 → 左甲状腺素\n- 子宫纵隔 → 共享决策下提供宫腔镜切除\n- 父母染色体结构重排 → 遗传咨询+考虑PGT-SR或供卵\n- 慢性子宫内膜炎 → 抗生素治疗，但近期RCT未显示获益\n\n**第四步：期待管理**\n- 不明原因RPL（全面筛查后仍无确定病因）→ 可讨论期待管理，因自然成功率为50%–80%[1]\n- 心理支持和咨询是RPL管理的重要组成部分\n\n## 五、证据缺口\n\n1. **子宫纵隔切除**：目前唯一相关RCT未能证明活产率获益，但存在方法学局限。需要更大规模、标准化的RCT。\n2. **精子DNA碎片**：与RPL的关联证据较强，但尚无高质量研究证明干预（精索静脉曲张手术、生活方式优化等）能降低RPL复发风险。\n3. **慢性子宫内膜炎**：最近的RCT（摘要形式）未显示多西环素治疗的获益，需要正式发表的更高质量证据。\n4. **PGT-SR** vs 期待管理：缺乏前瞻性RCT比较PGT-SR与自然受孕在RPL合并染色体结构重排患者中的活产率差异。\n5. **MTHFR/遗传性易栓症筛查**：ASRM 2026明确不推荐，但仍有一些临床实践中在使用，证据缺口需要进一步澄清。\n6. **免疫治疗（IVIG、脂肪乳等）**：在RPL特定亚组中是否可能有效？目前缺乏明确的RCT证据。\n\n## 六、结论与建议\n\n- **筛查优先于经验性治疗**：当前国际权威指南（ASRM 2026、Australasian 2024）一致推荐以系统性病因筛查作为RPL管理的第一步，而非经验性保胎治疗。流产物染色体分析是降低不必要检查和治疗的关键入口。\n- **诊断获益明确**：遗传学筛查可为50–75%的患者提供病因解释；解剖学筛查发现先天性异常的RR约为13.3%；联合流产物染色体微阵列检测可为>90%的患者确定可能病因。\n- **活产率改善**：仅针对明确病因的靶向治疗（APS抗凝、甲状腺素替代）有改善活产率的证据。经验性治疗的PROMISE试验等未证实获益。\n- **减少不必要治疗**：筛查可避免对偶发非整倍体患者进行昂贵的RPL检查和经验性治疗，减少药物暴露和医源性风险。\n- **适用边界**：筛查应遵循分步算法，非\"一刀切\"式的全项检查。aPL检测仅限于符合临床标准的患者；父母核型分析在流产物未检测或不平衡重排时进行；甲状腺抗体常规筛查不被推荐。\n\n## 七、参考文献\n\n1. Practice Committee of the American Society for Reproductive Medicine. Recurrent pregnancy loss: a committee opinion. Fertil Steril 2026.\n2. Suker A, Li Y, Robson D, et al. Australasian Recurrent Pregnancy Loss Clinical Management Guideline 2024 Part I. Aust N Z J Obstet Gynaecol 2024;64:445–458.\n3. Practice Committee of the American Society for Reproductive Medicine. Treatment of uterine septum. Fertil Steril 2024.\n4. Suker A, Li Y, Robson D, et al. Australasian Recurrent Pregnancy Loss Clinical Management Guideline 2024 Part II. Aust N Z J Obstet Gynaecol 2024;64:445–458.\n\n\n## 参考文献\n\n1. [1] Practice Committee of the American Society for Reproductive Medicine. Recurrent pregnancy loss: a committee opinion. Fertil Steril 2026.\n2. [2] Suker A, Li Y, Robson D, et al. Australasian Recurrent Pregnancy Loss Clinical Management Guideline 2024 Part I. Aust N Z J Obstet Gynaecol 2024;64:445–458.\n3. [3] Practice Committee of the American Society for Reproductive Medicine. Treatment of uterine septum: a guideline. Fertil Steril 2024.\n4. [4] Suker A, Li Y, Robson D, et al. Australasian Recurrent Pregnancy Loss Clinical Management Guideline 2024 Part II. Aust N Z J Obstet Gynaecol 2024;64:445–458.",
+  "agent_trace": [
+    {
+      "kind": "run.queued",
+      "label": "任务已创建",
+      "detail": "等待 Pi Agent 进程启动",
+      "timestamp": "2026-07-26T11:43:52.068Z"
+    },
+    {
+      "kind": "run.started",
+      "label": "任务已启动",
+      "detail": "expert 模式",
+      "timestamp": "2026-07-26T11:43:52.068Z"
+    },
+    {
+      "kind": "pi.session",
+      "label": "Pi 会话已创建",
+      "detail": "019f9e3d-1c7b-715f-88aa-cb377a0bb239",
+      "timestamp": "2026-07-26T11:43:53.524Z"
+    },
+    {
+      "kind": "agent.started",
+      "label": "Pi Agent 已启动",
+      "timestamp": "2026-07-26T11:43:53.538Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：research_frame_init",
+      "timestamp": "2026-07-26T11:43:59.732Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：research_frame_init",
+      "timestamp": "2026-07-26T11:43:59.739Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：guideline_mcp_search",
+      "timestamp": "2026-07-26T11:44:01.458Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：guideline_mcp_search",
+      "timestamp": "2026-07-26T11:44:03.264Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：guideline_mcp_read",
+      "timestamp": "2026-07-26T11:44:05.079Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：guideline_mcp_read",
+      "timestamp": "2026-07-26T11:44:05.080Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：guideline_mcp_read",
+      "timestamp": "2026-07-26T11:44:05.081Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：guideline_mcp_read",
+      "timestamp": "2026-07-26T11:44:05.507Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：guideline_mcp_read",
+      "timestamp": "2026-07-26T11:44:05.778Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：guideline_mcp_read",
+      "timestamp": "2026-07-26T11:44:06.073Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：guideline_mcp_retrieve",
+      "timestamp": "2026-07-26T11:44:08.589Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：guideline_mcp_retrieve",
+      "timestamp": "2026-07-26T11:44:08.591Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：guideline_mcp_retrieve",
+      "timestamp": "2026-07-26T11:44:08.591Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：guideline_mcp_retrieve",
+      "timestamp": "2026-07-26T11:44:15.895Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：guideline_mcp_retrieve",
+      "timestamp": "2026-07-26T11:44:19.214Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：guideline_mcp_retrieve",
+      "timestamp": "2026-07-26T11:44:25.985Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：read",
+      "timestamp": "2026-07-26T11:44:28.682Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：read",
+      "timestamp": "2026-07-26T11:44:28.691Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：read",
+      "timestamp": "2026-07-26T11:44:28.697Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：read",
+      "timestamp": "2026-07-26T11:44:28.698Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：read",
+      "timestamp": "2026-07-26T11:44:31.346Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：read",
+      "timestamp": "2026-07-26T11:44:31.347Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：read",
+      "timestamp": "2026-07-26T11:44:31.350Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：read",
+      "timestamp": "2026-07-26T11:44:31.350Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：read",
+      "timestamp": "2026-07-26T11:44:33.164Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：read",
+      "timestamp": "2026-07-26T11:44:33.166Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:44:46.027Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:44:46.029Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:44:46.030Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:44:46.030Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:44:46.031Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:44:46.031Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:44:46.035Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:44:46.037Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:44:46.038Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:44:46.040Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:44:46.042Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:44:46.043Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：read",
+      "timestamp": "2026-07-26T11:44:48.127Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：read",
+      "timestamp": "2026-07-26T11:44:48.128Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:44:50.857Z"
+    },
+    {
+      "kind": "tool.failed",
+      "label": "工具失败：evidence_add",
+      "timestamp": "2026-07-26T11:44:50.858Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：evidence_add",
+      "timestamp": "2026-07-26T11:44:53.375Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：evidence_add",
+      "timestamp": "2026-07-26T11:44:53.377Z"
+    },
+    {
+      "kind": "tool.started",
+      "label": "调用工具：report_write",
+      "timestamp": "2026-07-26T11:45:30.190Z"
+    },
+    {
+      "kind": "tool.completed",
+      "label": "工具完成：report_write",
+      "timestamp": "2026-07-26T11:45:30.202Z"
+    },
+    {
+      "kind": "run.completed",
+      "label": "任务完成",
+      "detail": "已收到 Pi Agent 最终回答",
+      "timestamp": "2026-07-26T11:45:37.574Z"
+    }
+  ],
+  "tools": [
+    {
+      "name": "research_frame_init",
+      "status": "running"
+    },
+    {
+      "name": "research_frame_init",
+      "status": "completed"
+    },
+    {
+      "name": "guideline_mcp_search",
+      "status": "running"
+    },
+    {
+      "name": "guideline_mcp_search",
+      "status": "completed"
+    },
+    {
+      "name": "guideline_mcp_read",
+      "status": "running"
+    },
+    {
+      "name": "guideline_mcp_read",
+      "status": "running"
+    },
+    {
+      "name": "guideline_mcp_read",
+      "status": "running"
+    },
+    {
+      "name": "guideline_mcp_read",
+      "status": "completed"
+    },
+    {
+      "name": "guideline_mcp_read",
+      "status": "completed"
+    },
+    {
+      "name": "guideline_mcp_read",
+      "status": "completed"
+    },
+    {
+      "name": "guideline_mcp_retrieve",
+      "status": "running"
+    },
+    {
+      "name": "guideline_mcp_retrieve",
+      "status": "running"
+    },
+    {
+      "name": "guideline_mcp_retrieve",
+      "status": "running"
+    },
+    {
+      "name": "guideline_mcp_retrieve",
+      "status": "completed"
+    },
+    {
+      "name": "guideline_mcp_retrieve",
+      "status": "completed"
+    },
+    {
+      "name": "guideline_mcp_retrieve",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "running"
+    },
+    {
+      "name": "read",
+      "status": "running"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "running"
+    },
+    {
+      "name": "read",
+      "status": "running"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "running"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "read",
+      "status": "running"
+    },
+    {
+      "name": "read",
+      "status": "completed"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "error"
+    },
+    {
+      "name": "evidence_add",
+      "status": "running"
+    },
+    {
+      "name": "evidence_add",
+      "status": "completed"
+    },
+    {
+      "name": "report_write",
+      "status": "running"
+    },
+    {
+      "name": "report_write",
+      "status": "completed"
+    }
+  ],
+  "summary": {
+    "research_mode": "expert",
+    "audience_mode": "clinician",
+    "deep_think": false,
+    "search_enabled": true,
+    "retrieval_policy": "mcp_only",
+    "max_iterations": 12,
+    "max_iterations_is_advisory": true,
+    "request_timeout_seconds": 600
+  }
+}

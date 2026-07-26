@@ -9,7 +9,7 @@ const dto: AgentRequest = {
   attachments: [],
   ebm_session_id: '',
   max_iterations: 5,
-  request_timeout_seconds: 150,
+  request_timeout_seconds: 300,
   research_mode: 'instant',
   audience_mode: 'clinician',
   deep_think: false,

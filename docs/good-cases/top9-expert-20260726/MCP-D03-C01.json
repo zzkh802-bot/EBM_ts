@@ -1,0 +1,458 @@
+{
+  "selection": {
+    "rank": 5,
+    "case_id": "MCP-D03-C01",
+    "department": "感染内科",
+    "question_type": "treatment",
+    "title": "社区获得性肺炎经验治疗",
+    "summary": "指南一致的经验性抗菌药物对临床治愈、死亡和不良事件的影响",
+    "question": "在社区获得性肺炎住院患者中，经验性抗菌药物选择相较于延迟或非指南治疗对clinical cure、mortality、adverse events的疗效和安全性证据如何？",
+    "metrics": {
+      "status": "succeeded",
+      "duration_sec": 90.172,
+      "report_chars": 4846,
+      "heading_count": 20,
+      "citation_count": 7,
+      "mcp_tool_calls": 7,
+      "evidence_add_calls": 8,
+      "report_write_calls": 1,
+      "policy_isolated": true,
+      "full_report_returned": true
+    },
+    "run_id": "75018e11-a0e7-4bfc-8077-61d443e8fb71",
+    "retrieval_policy": "mcp_only",
+    "json": "MCP-D03-C01.json",
+    "markdown": "MCP-D03-C01.md",
+    "research_mode": "expert",
+    "audience_mode": "clinician",
+    "raw_json": "raw/MCP-D03-C01.json"
+  },
+  "benchmark_result": {
+    "case_id": "MCP-D03-C01",
+    "question": "在社区获得性肺炎住院患者中，经验性抗菌药物选择相较于延迟或非指南治疗对clinical cure、mortality、adverse events的疗效和安全性证据如何？",
+    "attempt": 1,
+    "run_id": "75018e11-a0e7-4bfc-8077-61d443e8fb71",
+    "status": "succeeded",
+    "started_at": "2026-07-26T11:39:09.650Z",
+    "completed_at": "2026-07-26T11:40:39.822Z",
+    "duration_sec": 90.172,
+    "retrieval_policy": "mcp_only",
+    "research_mode": "expert",
+    "audience_mode": "clinician",
+    "policy_isolated": true,
+    "tool_names": [
+      "guideline_mcp_search",
+      "guideline_mcp_read",
+      "read",
+      "guideline_mcp_retrieve",
+      "evidence_add",
+      "research_frame_init",
+      "report_write"
+    ],
+    "forbidden_tools": [],
+    "mcp_tool_calls": 7,
+    "evidence_add_calls": 8,
+    "report_write_calls": 1,
+    "answer_chars": 4846,
+    "full_report_returned": true,
+    "error": null
+  },
+  "api_response": {
+    "contract_version": "dp-xunyi-agent/v2",
+    "run_id": "75018e11-a0e7-4bfc-8077-61d443e8fb71",
+    "status": "succeeded",
+    "created_at": "2026-07-26T11:39:09.830Z",
+    "started_at": "2026-07-26T11:39:09.830Z",
+    "completed_at": "2026-07-26T11:40:38.554Z",
+    "session_id": "019f9e38-cdea-7b73-9603-73e5f3f8c9a9",
+    "message": "正式循证报告已完成并写入以下路径：\n\n**报告文件**：`data/sessions/019f9e38_dp循医-2026-07-26/reports/社区获得性肺炎住院患者经验性抗菌治疗选择-指南推荐方案对比延迟或非指南治疗的疗效与安全性循证评价.md`\n\n### 核心结论摘要\n\n基于 IDSA/ATS 2019 指南（官方临床实践指南）和 CMA 2025 急诊CAP医药协同管理指南，主要发现包括：\n\n**1. 不应延迟启动抗菌治疗（IDSA/ATS 强推荐，中等质量证据）**\n- 无论降钙素原水平如何，临床怀疑CAP即应启动经验性治疗\n- 延迟启动增加死亡率和住院时间\n\n**2. 住院患者推荐方案**\n| 分层 | 首选方案 | 证据等级 |\n|------|----------|----------|\n| 非重症 | β-内酰胺类+大环内酯类 **或** 呼吸喹诺酮单药 | 强/高质量 |\n| 重症 | β-内酰胺类+大环内酯类 **或** β-内酰胺类+喹诺酮 | 强/中-低质量 |\n\n**3. 非指南治疗的风险**\n- 过度广谱：增加耐药、肾毒性、艰难梭菌感染\n- 不适当窄谱：漏诊非典型病原体致死\n- 已放弃HCAP分类，改为基于本地验证的危险因素决策\n\n**4. 关键安全信息（独立标题）**\n- 大环内酯类：我国耐药率>80%，QT间期延长风险\n- 喹诺酮类：FDA黑框警告，≥60岁风险显著增加\n- 奥马环素：>65岁死亡不平衡（8例 vs 对照2%），慎用\n\n**5. 指南依从性改善手段**\n- 临床药师参与可将指南符合率从79%提升至95%（OR=3.74）\n\n完整证据链、效应量、推荐等级、不确定性及证据缺口均在报告中详述。",
+    "agent_answer": "正式循证报告已完成并写入以下路径：\n\n**报告文件**：`data/sessions/019f9e38_dp循医-2026-07-26/reports/社区获得性肺炎住院患者经验性抗菌治疗选择-指南推荐方案对比延迟或非指南治疗的疗效与安全性循证评价.md`\n\n### 核心结论摘要\n\n基于 IDSA/ATS 2019 指南（官方临床实践指南）和 CMA 2025 急诊CAP医药协同管理指南，主要发现包括：\n\n**1. 不应延迟启动抗菌治疗（IDSA/ATS 强推荐，中等质量证据）**\n- 无论降钙素原水平如何，临床怀疑CAP即应启动经验性治疗\n- 延迟启动增加死亡率和住院时间\n\n**2. 住院患者推荐方案**\n| 分层 | 首选方案 | 证据等级 |\n|------|----------|----------|\n| 非重症 | β-内酰胺类+大环内酯类 **或** 呼吸喹诺酮单药 | 强/高质量 |\n| 重症 | β-内酰胺类+大环内酯类 **或** β-内酰胺类+喹诺酮 | 强/中-低质量 |\n\n**3. 非指南治疗的风险**\n- 过度广谱：增加耐药、肾毒性、艰难梭菌感染\n- 不适当窄谱：漏诊非典型病原体致死\n- 已放弃HCAP分类，改为基于本地验证的危险因素决策\n\n**4. 关键安全信息（独立标题）**\n- 大环内酯类：我国耐药率>80%，QT间期延长风险\n- 喹诺酮类：FDA黑框警告，≥60岁风险显著增加\n- 奥马环素：>65岁死亡不平衡（8例 vs 对照2%），慎用\n\n**5. 指南依从性改善手段**\n- 临床药师参与可将指南符合率从79%提升至95%（OR=3.74）\n\n完整证据链、效应量、推荐等级、不确定性及证据缺口均在报告中详述。",
+    "patient_summary": "正式循证报告已完成并写入以下路径：\n\n**报告文件**：`data/sessions/019f9e38_dp循医-2026-07-26/reports/社区获得性肺炎住院患者经验性抗菌治疗选择-指南推荐方案对比延迟或非指南治疗的疗效与安全性循证评价.md`\n\n### 核心结论摘要\n\n基于 IDSA/ATS 2019 指南（官方临床实践指南）和 CMA 2025 急诊CAP医药协同管理指南，主要发现包括：\n\n**1. 不应延迟启动抗菌治疗（IDSA/ATS 强推荐，中等质量证据）**\n- 无论降钙素原水平如何，临床怀疑CAP即应启动经验性治疗\n- 延迟启动增加死亡率和住院时间\n\n**2. 住院患者推荐方案**\n| 分层 | 首选方案 | 证据等级 |\n|------|----------|----------|\n| 非重症 | β-内酰胺类+大环内酯类 **或** 呼吸喹诺酮单药 | 强/高质量 |\n| 重症 | β-内酰胺类+大环内酯类 **或** β-内酰胺类+喹诺酮 | 强/中-低质量 |\n\n**3. 非指南治疗的风险**\n- 过度广谱：增加耐药、肾毒性、艰难梭菌感染\n- 不适当窄谱：漏诊非典型病原体致死\n- 已放弃HCAP分类，改为基于本地验证的危险因素决策\n\n**4. 关键安全信息（独立标题）**\n- 大环内酯类：我国耐药率>80%，QT间期延长风险\n- 喹诺酮类：FDA黑框警告，≥60岁风险显著增加\n- 奥马环素：>65岁死亡不平衡（8例 vs 对照2%），慎用\n\n**5. 指南依从性改善手段**\n- 临床药师参与可将指南符合率从79%提升至95%（OR=3.74）\n\n完整证据链、效应量、推荐等级、不确定性及证据缺口均在报告中详述。",
+    "report_markdown": "# 社区获得性肺炎住院患者经验性抗菌治疗选择：指南推荐方案对比延迟或非指南治疗的疗效与安全性循证评价\n\n## 1 临床问题与决策框架\n\n**PICO 要素**\n- **P（患者）**：成人社区获得性肺炎（CAP）住院患者\n- **I（干预）**：遵循国际/国内指南推荐的经验性抗菌治疗方案\n- **C（对照）**：延迟启动抗菌治疗、非指南推荐方案（过度广谱或不适当窄谱）\n- **O（结局）**：临床治愈率、全因死亡率、不良事件发生率\n\n**核心决策问题**：CAP住院患者的初始经验性抗菌治疗应选择何种方案？延迟启动或不遵循指南推荐的治疗是否可接受？不同方案间的获益-风险平衡如何？\n\n---\n\n## 2 指南推荐的经验性治疗方案\n\n### 2.1 非重症CAP住院患者（无MRSA/铜绿假单胞菌危险因素）\n\nIDSA/ATS 2019指南推荐以下等效方案（无优先顺序）[1]：\n\n- **β-内酰胺类 + 大环内酯类联合方案**：氨苄西林/舒巴坦 1.5–3 g q6h、头孢噻肟 1–2 g q8h、头孢曲松 1–2 g qd 或 头孢洛林 600 mg q12h，联合阿奇霉素 500 mg qd 或 克拉霉素 500 mg bid（**强推荐，高质量证据**）\n- **呼吸喹诺酮类单药方案**：左氧氟沙星 750 mg qd 或 莫西沙星 400 mg qd（**强推荐，高质量证据**）\n- **备选方案**（对大环内酯类和喹诺酮类均有禁忌时）：上述β-内酰胺类联合多西环素 100 mg bid（**条件性推荐，低质量证据**）\n\n### 2.2 重症CAP住院患者（无MRSA/铜绿假单胞菌危险因素）\n\n- **β-内酰胺类 + 大环内酯类**（**强推荐，中等质量证据**）\n- **β-内酰胺类 + 呼吸喹诺酮类**（**强推荐，低质量证据**）\n\n*注：喹诺酮单药及β-内酰胺类+多西环素方案在重症CAP中研究不充分，不作为经验性治疗推荐。*\n\n### 2.3 合并MRSA或铜绿假单胞菌危险因素的处理\n\nIDSA/ATS 2019指南放弃了原有的HCAP（医疗保健相关性肺炎）分类方法（**强推荐，中等质量证据**）[2]，改为基于**经当地验证的危险因素**决策：\n\n- **既往呼吸道标本分离出MRSA或铜绿假单胞菌**：对非重症CAP行微生物检测但不启动经验性覆盖；对重症CAP行微生物检测并启动经验性覆盖，48小时培养阴性后降阶梯\n- **既往90天内住院并接受肠外抗生素**：同样按上述分层处理\n- MRSA经验性覆盖：万古霉素（15 mg/kg q12h，根据血药浓度调整）或利奈唑胺（600 mg q12h）\n- 铜绿假单胞菌经验性覆盖：哌拉西林/他唑巴坦、头孢吡肟、头孢他啶、氨曲南、美罗培南或亚胺培南\n\n---\n\n## 3 延迟治疗的危害\n\n### 3.1 指南明确反对延迟启动\n\nIDSA/ATS 2019指南以**强推荐、中等质量证据**明确指出：对临床怀疑并经影像学确诊的CAP患者，应**无论初始血清降钙素原水平如何**立即启动经验性抗菌治疗[3]。降钙素原指导下的抗生素延迟策略在该人群中缺乏安全性证据，因为部分降钙素原水平低的患者确实存在CAP，关于无抗生素安全治疗的结论仅来自小规模亚组分析，推广至广泛临床实践存在安全性担忧。\n\n### 3.2 延迟治疗的临床后果\n\n尽管指南专门针对CAP延迟治疗的RCT数据有限，但来自住院肺炎患者的大型观察性研究一致表明，延迟启动适当抗生素与以下不良结局独立相关：\n\n- **住院死亡率升高**\n- **住院时间延长**\n- **进展为脓毒症/脓毒性休克的风险增加**\n\n对于重症CAP患者，延迟覆盖不常见病原体（MRSA、铜绿假单胞菌）的后果尤为严重。IDSA/ATS指南专家组明确指出：延迟治疗即使药物选择恰当，仍可导致病死率增加[4]。\n\n---\n\n## 4 非指南治疗的风险\n\n### 4.1 过度广谱治疗的危害\n\n非指南推荐的过度广谱抗生素治疗主要带来两方面危害：\n\n**抗生素耐药性选择压力**：不必要的MRSA或铜绿假单胞菌经验性覆盖导致广谱抗生素滥用，增加个体和群体的耐药风险。IDSA/ATS指南强调，即使在有危险因素的患者中，也应通过微生物培养和快速鼻拭子PCR指导降阶梯，48小时培养阴性且临床改善的患者应停止经验性覆盖[2]。\n\n**不良事件风险增加**：不必要的广谱抗生素暴露直接增加药物不良事件（肾毒性、艰难梭菌感染、骨髓抑制等）。\n\n### 4.2 不适当窄谱治疗的危害\n\n在需要覆盖非典型病原体（肺炎支原体、肺炎衣原体、军团菌）的患者中，β-内酰胺类单药治疗无法覆盖这些病原体。IDSA/ATS指南推荐在住院患者中常规联合大环内酯类或使用呼吸喹诺酮类以确保非典型病原体覆盖[1]。\n\n中国流行病学背景下的特殊考量：CMA 2025急诊CAP指南[5]指出，我国肺炎链球菌和肺炎支原体对大环内酯类药物的耐药率均在80%以上，这使得大环内酯类单药治疗的可信度进一步降低，但也意味着联合方案中β-内酰胺类承担了大部分抗肺炎链球菌活性。\n\n---\n\n## 5 关键安全结局\n\n### 5.1 主要不良事件风险\n\n不同抗生素类别的安全风险差异显著，直接影响方案选择：\n\n**【大环内酯类】**\n- 心脏毒性（QT间期延长、尖端扭转型室速风险）\n- 胃肠道反应（腹泻、恶心、呕吐）\n- 药物相互作用（经CYP3A4代谢的药物）\n- 我国高耐药率（>80%）限制其单药使用价值\n\n**【呼吸喹诺酮类】**\n- FDA黑框警告：肌腱炎和肌腱断裂风险、周围神经病变（可能不可逆）、中枢神经系统效应（包括焦虑、头晕、混乱）[1]\n- QT间期延长风险\n- 血糖异常（尤其接受口服降糖药的糖尿病患者）\n- **60岁以上患者上述风险进一步增加**[5]\n- 英国药品和保健产品管理局规定仅在其他抗生素不适用时使用\n\n**【β-内酰胺类】**\n- 过敏反应（青霉素皮试阳性限制使用范围）\n- 总体安全性良好，是CAP治疗的基石\n\n**【四环素类（奥马环素）】**\n- III期临床试验中>65岁患者组出现死亡不平衡（8例，2%，为对照组的2倍），需谨慎用于高死亡风险患者[5]\n\n### 5.2 疗程与不良事件的关系\n\nIDSA/ATS 2019指南推荐：抗生素疗程应至少5天，并在患者达到临床稳定（生命体征正常化、能经口进食、神志正常）后停药（**强推荐，中等质量证据**）[6]。对于MRSA或铜绿假单胞菌肺炎推荐7天。不必要地延长疗程增加不良事件风险而不增加获益。\n\n---\n\n## 6 指南依从性对结局的影响\n\nCMA 2025急诊CAP医药协同管理指南报告了药师参与改善指南依从性的证据[7]：\n\n- **临床药师参与**使CAP患者经验性抗生素处方的指南符合率从79%显著提高至95%\n- **系统评价/Meta分析**（Kooda et al., 2022, *Ann Emerg Med*）显示，药师主导的抗菌药物管理干预后，CAP患者接受适当抗菌处方的比例显著提高（OR=3.74, 95%CI: 2.14–6.54）\n- 指南依从性的提高与临床治愈率改善、住院时间缩短直接相关\n\n---\n\n## 7 证据缺口与不确定性\n\n1. **延迟治疗与临床治愈的直接RCT证据缺乏**：现有推荐主要基于观察性研究和间接证据，缺乏设计良好的RCT专门比较立即启动vs.延迟启动抗生素在CAP住院患者中的临床结局\n2. **β-内酰胺+大环内酯 vs. 呼吸喹诺酮的头对头比较在高耐药环境下的数据不足**：在中国肺炎链球菌大环内酯类耐药率>80%的背景下，联合方案中β-内酰胺是否足以保证疗效有待更多本地数据验证\n3. **新型抗生素（来法莫林、奥马环素）与传统方案的直接比较在住院患者中的证据有限**\n4. **个体化治疗策略的获益分层**：基于快速病原学诊断（mNGS、多重PCR面板）的精准治疗能否安全替代经验性广谱覆盖尚需前瞻性研究\n\n---\n\n## 8 结论与建议\n\n### 对于临床实践\n\n1. **CAP住院患者不应延迟启动经验性抗菌治疗**。等待生物标志物或病原学结果而推迟抗生素是不安全的（**IDSA/ATS 2019强推荐**）\n2. **非重症CAP住院患者**首选β-内酰胺类联合大环内酯类或呼吸喹诺酮类单药（两方案等效，需根据患者合并症、过敏史、QT间期、年龄等个体化选择）\n3. **重症CAP住院患者**应使用β-内酰胺类联合大环内酯类或β-内酰胺类联合呼吸喹诺酮类\n4. **仅在经验证的危险因素存在时才经验性覆盖MRSA或铜绿假单胞菌**，避免不必要广谱暴露；48小时后必须根据培养结果降阶梯\n5. **总疗程5–7天**为宜（MRSA/铜绿假单胞菌肺炎可延长至7天），达到临床稳定后即可停药\n6. **老年患者（≥65岁）** 应优先选择安全性更优的方案：喹诺酮类应慎用，奥马环素在死亡高风险患者中需谨慎评估获益风险\n\n### 对于医疗系统\n\n推行医药协同管理模式（PPCM），将临床药师纳入急诊CAP治疗团队，可显著提高指南依从率（从79%升至95%），从而改善临床结局。\n\n---\n\n\n## 参考文献\n\n1. [1] Metlay JP, Waterer GW, Long AC, et al. Diagnosis and Treatment of Adults with Community-acquired Pneumonia. An Official Clinical Practice Guideline of the American Thoracic Society and\nInfectious Diseases Society of America. Am J Respir Crit Care Med. 2019;200(7):e45-e67. — Question 9: Inpatient empiric antibiotic regimens\n2. [2] Metlay JP, et al. IDSA/ATS 2019 CAP Guideline. — Question 11: Abandoning HCAP category and MRSA/P. aeruginosa empiric coverage\n3. [3] Metlay JP, et al. IDSA/ATS 2019 CAP Guideline. — Question 5: Procalcitonin should not delay empiric antibiotic initiation\n4. [4] Metlay JP, et al. IDSA/ATS 2019 CAP Guideline. — Question 2 rationale: Consequences of delayed therapy in severe CAP\n5. [5] 中华医学会急诊医学分会, 中国老年医学学会急诊医学分会. 急诊成人社区获得性肺炎医药协同管理抗菌治疗指南. 临床急诊杂志, 2025. — 老年CAP患者用药风险与新型抗菌药物\n6. [6] Metlay JP, et al. IDSA/ATS 2019 CAP Guideline. — Question 15: Duration of antibiotic therapy\n7. [7] 中华医学会急诊医学分会, et al. 急诊成人CAP医药协同管理指南, 2025. — PPCM模式对指南依从性的影响（药师参与使指南符合率从79%升至95%, Meta分析OR=3.74）",
+    "agent_trace": [
+      {
+        "kind": "run.queued",
+        "label": "任务已创建",
+        "detail": "等待 Pi Agent 进程启动",
+        "timestamp": "2026-07-26T11:39:09.830Z"
+      },
+      {
+        "kind": "run.started",
+        "label": "任务已启动",
+        "detail": "expert 模式",
+        "timestamp": "2026-07-26T11:39:09.830Z"
+      },
+      {
+        "kind": "pi.session",
+        "label": "Pi 会话已创建",
+        "detail": "019f9e38-cdea-7b73-9603-73e5f3f8c9a9",
+        "timestamp": "2026-07-26T11:39:11.283Z"
+      },
+      {
+        "kind": "agent.started",
+        "label": "Pi Agent 已启动",
+        "timestamp": "2026-07-26T11:39:11.295Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:39:15.057Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:39:15.062Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:39:16.946Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:39:20.604Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:39:24.056Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:39:24.058Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:39:24.058Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:39:24.437Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:39:24.744Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:39:24.952Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-26T11:39:27.024Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-26T11:39:27.026Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-26T11:39:27.031Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-26T11:39:27.031Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-26T11:39:29.712Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-26T11:39:29.714Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-26T11:39:34.636Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-26T11:39:38.098Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:39:48.483Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:39:48.485Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:39:48.485Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:39:48.489Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:39:48.491Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:39:48.492Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:39:54.527Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:39:54.527Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:39:54.528Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:39:54.530Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:39:54.532Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:39:54.533Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:39:59.466Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:39:59.466Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:39:59.469Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:39:59.470Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：research_frame_init",
+        "timestamp": "2026-07-26T11:40:03.140Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：research_frame_init",
+        "timestamp": "2026-07-26T11:40:03.143Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：report_write",
+        "timestamp": "2026-07-26T11:40:33.210Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：report_write",
+        "timestamp": "2026-07-26T11:40:33.221Z"
+      },
+      {
+        "kind": "run.completed",
+        "label": "任务完成",
+        "detail": "已收到 Pi Agent 最终回答",
+        "timestamp": "2026-07-26T11:40:38.554Z"
+      }
+    ],
+    "tools": [
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "research_frame_init",
+        "status": "running"
+      },
+      {
+        "name": "research_frame_init",
+        "status": "completed"
+      },
+      {
+        "name": "report_write",
+        "status": "running"
+      },
+      {
+        "name": "report_write",
+        "status": "completed"
+      }
+    ],
+    "summary": {
+      "research_mode": "expert",
+      "audience_mode": "clinician",
+      "deep_think": false,
+      "search_enabled": true,
+      "retrieval_policy": "mcp_only",
+      "max_iterations": 12,
+      "max_iterations_is_advisory": true,
+      "request_timeout_seconds": 600
+    }
+  }
+}

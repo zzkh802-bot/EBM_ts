@@ -286,7 +286,6 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
                 v-else-if="message.role === 'assistant' && !message.showMarkdown"
                 :markdown="message.content"
                 :audience="message.audienceMode"
-                :research-mode="message.researchMode"
                 @citation="openCitation"
               />
               <pre v-else-if="message.showMarkdown && message.audienceMode === 'clinician'">{{ message.content }}</pre>

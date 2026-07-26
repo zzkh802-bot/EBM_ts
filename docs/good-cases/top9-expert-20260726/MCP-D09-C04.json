@@ -1,0 +1,513 @@
+{
+  "selection": {
+    "rank": 7,
+    "case_id": "MCP-D09-C04",
+    "department": "小儿内科",
+    "question_type": "monitoring",
+    "title": "儿童哮喘长期随访",
+    "summary": "症状控制和肺功能监测对急性发作、控制水平和生长影响的价值",
+    "question": "在儿童哮喘长期管理的管理过程中，症状控制和肺功能随访相较于急性发作才处理对exacerbation、control、growth的监测价值和证据边界如何？",
+    "metrics": {
+      "status": "succeeded",
+      "duration_sec": 86.551,
+      "report_chars": 3774,
+      "heading_count": 13,
+      "citation_count": 3,
+      "mcp_tool_calls": 6,
+      "evidence_add_calls": 10,
+      "report_write_calls": 1,
+      "policy_isolated": true,
+      "full_report_returned": true
+    },
+    "run_id": "e5716dce-478c-40d9-abc0-cf02302f9637",
+    "retrieval_policy": "mcp_only",
+    "json": "MCP-D09-C04.json",
+    "markdown": "MCP-D09-C04.md",
+    "research_mode": "expert",
+    "audience_mode": "clinician",
+    "raw_json": "raw/MCP-D09-C04.json"
+  },
+  "benchmark_result": {
+    "case_id": "MCP-D09-C04",
+    "question": "在儿童哮喘长期管理的管理过程中，症状控制和肺功能随访相较于急性发作才处理对exacerbation、control、growth的监测价值和证据边界如何？",
+    "attempt": 1,
+    "run_id": "e5716dce-478c-40d9-abc0-cf02302f9637",
+    "status": "succeeded",
+    "started_at": "2026-07-26T11:42:25.315Z",
+    "completed_at": "2026-07-26T11:43:51.866Z",
+    "duration_sec": 86.551,
+    "retrieval_policy": "mcp_only",
+    "research_mode": "expert",
+    "audience_mode": "clinician",
+    "policy_isolated": true,
+    "tool_names": [
+      "research_frame_init",
+      "guideline_mcp_search",
+      "guideline_mcp_read",
+      "read",
+      "guideline_mcp_retrieve",
+      "evidence_add",
+      "report_write",
+      "research_frame_scratchpad_append"
+    ],
+    "forbidden_tools": [],
+    "mcp_tool_calls": 6,
+    "evidence_add_calls": 10,
+    "report_write_calls": 1,
+    "answer_chars": 3774,
+    "full_report_returned": true,
+    "error": null
+  },
+  "api_response": {
+    "contract_version": "dp-xunyi-agent/v2",
+    "run_id": "e5716dce-478c-40d9-abc0-cf02302f9637",
+    "status": "succeeded",
+    "created_at": "2026-07-26T11:42:25.468Z",
+    "started_at": "2026-07-26T11:42:25.468Z",
+    "completed_at": "2026-07-26T11:43:50.676Z",
+    "session_id": "019f9e3b-ca28-7848-b538-28f4be262ba0",
+    "message": "正式循证报告已生成并写入：\n\n**文件**：`reports/儿童哮喘长期管理中症状控制与肺功能规律随访的监测价值和证据边界.md`\n\n### 核心摘要\n\n**临床问题**：儿童哮喘长期管理中，定期症状控制评估+肺功能随访 vs. 仅在急性发作时处理，对急性加重、控制水平和生长发育的监测价值和证据边界。\n\n**关键发现**：\n\n| 结局维度 | 规律随访的证据支持 | 证据等级 |\n|---|---|---|\n| **哮喘控制** | 指南一致推荐\"评估-调整治疗-监测\"循环，每1-3个月审核方案 | 高（指南级） |\n| **急性发作** | FeNO≥28ppb+FEV1≤76%预测85%发作风险；联合FeNO管理可显著减少发作 | 中-高 |\n| **生长发育** | 低剂量ICS安全明确；GINA要求每年测身高；控制不佳的哮喘本身影响生长 | 中-高 |\n\n**主要证据缺口**：\n- 缺乏直接比较\"规律随访\"与\"仅急性发作处理\"的高质量RCT\n- ≤5岁儿童中症状控制与未来风险关系研究不足（GINA证据等级D）\n- FeNO指导方案对长期生长结局缺乏前瞻性数据\n\n**临床结论**：规律的症状控制+肺功能随访管理（含FeNO）在减少急性加重、优化控制和保障安全生长方面均有充分证据支持，强烈推荐作为儿童哮喘管理的标准策略。",
+    "agent_answer": "正式循证报告已生成并写入：\n\n**文件**：`reports/儿童哮喘长期管理中症状控制与肺功能规律随访的监测价值和证据边界.md`\n\n### 核心摘要\n\n**临床问题**：儿童哮喘长期管理中，定期症状控制评估+肺功能随访 vs. 仅在急性发作时处理，对急性加重、控制水平和生长发育的监测价值和证据边界。\n\n**关键发现**：\n\n| 结局维度 | 规律随访的证据支持 | 证据等级 |\n|---|---|---|\n| **哮喘控制** | 指南一致推荐\"评估-调整治疗-监测\"循环，每1-3个月审核方案 | 高（指南级） |\n| **急性发作** | FeNO≥28ppb+FEV1≤76%预测85%发作风险；联合FeNO管理可显著减少发作 | 中-高 |\n| **生长发育** | 低剂量ICS安全明确；GINA要求每年测身高；控制不佳的哮喘本身影响生长 | 中-高 |\n\n**主要证据缺口**：\n- 缺乏直接比较\"规律随访\"与\"仅急性发作处理\"的高质量RCT\n- ≤5岁儿童中症状控制与未来风险关系研究不足（GINA证据等级D）\n- FeNO指导方案对长期生长结局缺乏前瞻性数据\n\n**临床结论**：规律的症状控制+肺功能随访管理（含FeNO）在减少急性加重、优化控制和保障安全生长方面均有充分证据支持，强烈推荐作为儿童哮喘管理的标准策略。",
+    "patient_summary": "正式循证报告已生成并写入：\n\n**文件**：`reports/儿童哮喘长期管理中症状控制与肺功能规律随访的监测价值和证据边界.md`\n\n### 核心摘要\n\n**临床问题**：儿童哮喘长期管理中，定期症状控制评估+肺功能随访 vs. 仅在急性发作时处理，对急性加重、控制水平和生长发育的监测价值和证据边界。\n\n**关键发现**：\n\n| 结局维度 | 规律随访的证据支持 | 证据等级 |\n|---|---|---|\n| **哮喘控制** | 指南一致推荐\"评估-调整治疗-监测\"循环，每1-3个月审核方案 | 高（指南级） |\n| **急性发作** | FeNO≥28ppb+FEV1≤76%预测85%发作风险；联合FeNO管理可显著减少发作 | 中-高 |\n| **生长发育** | 低剂量ICS安全明确；GINA要求每年测身高；控制不佳的哮喘本身影响生长 | 中-高 |\n\n**主要证据缺口**：\n- 缺乏直接比较\"规律随访\"与\"仅急性发作处理\"的高质量RCT\n- ≤5岁儿童中症状控制与未来风险关系研究不足（GINA证据等级D）\n- FeNO指导方案对长期生长结局缺乏前瞻性数据\n\n**临床结论**：规律的症状控制+肺功能随访管理（含FeNO）在减少急性加重、优化控制和保障安全生长方面均有充分证据支持，强烈推荐作为儿童哮喘管理的标准策略。",
+    "report_markdown": "# 儿童哮喘长期管理中症状控制与肺功能规律随访的监测价值和证据边界\n\n## 临床问题与决策背景\n\n儿童哮喘长期管理面临的核心策略选择是：应当对患儿进行定期的症状控制评估和肺功能监测随访，还是仅在急性发作时才处理？本报告围绕这一决策，系统梳理症状控制评估、肺功能监测（含FeNO）在减少急性加重（exacerbation）、改善控制水平（control）和保障生长发育（growth）三个维度的循证价值及其证据边界。\n\n**PICO框架：**\n\n- **P（人群）**：诊断为支气管哮喘的儿童（含<6岁学龄前儿童及≥6岁儿童）\n- **I（干预）**：规律随访管理，包括症状控制评估（ACT/C-ACT/ACQ/TRACK）联合肺功能监测（肺通气功能、FeNO）\n- **C（对照）**：仅在急性发作时就诊处理\n- **O（结局）**：哮喘急性发作（exacerbation）、哮喘控制水平（control）、生长发育（growth，身高/生长速度）\n\n## 主要疗效结局\n\n### 1. 对哮喘控制水平（control）的影响\n\n中华医学会儿科学分会呼吸学组2016年发布的《儿童支气管哮喘诊断与防治指南》明确推荐**基于症状控制的哮喘管理模式**，强调遵循\"**评估—调整治疗—监测**\"的管理循环[1]。该指南指出，临床常用的哮喘评估工具包括哮喘控制测试（ACT）、儿童哮喘控制测试（C-ACT，适用于4~11岁）、哮喘控制问卷（ACQ）和儿童呼吸和哮喘控制测试（TRACK），应根据患儿年龄和就诊条件定期评估[1]。\n\n治疗频率方面，指南要求**每1~3个月审核1次治疗方案**，根据哮喘控制水平（良好控制、部分控制、未控制）决定升级或降级治疗[1]。这一管理策略的核心逻辑是：只有通过规律评估才能及时发现控制水平的下降，从而在急性发作前进行干预调整。\n\n对于<6岁儿童，指南特别强调**必须定期（3~6个月）重新评估**是否需要继续抗哮喘治疗，因为大部分学龄前喘息患儿症状可能随年龄增长自然缓解[1]。GINA（2023/2024）全球哮喘防治创议同样建议，对≤5岁儿童的持续控制治疗需求应**每3~6个月进行定期评估**（证据等级D）[3]。\n\n**结论**：基于症状控制的规律随访管理（而非仅在急性发作时处理）是国内外指南一致推荐的核心管理策略，已有充分的专家共识和指南级别证据支持。\n\n### 2. 对急性发作（exacerbation）的影响\n\n肺通气功能检测在评估急性发作风险中发挥关键作用。指南指出，**肺通气功能监测是哮喘未来风险评估的重要手段**，启动控制药物治疗前（首次诊断时）、治疗后3~6个月（获得个人最佳值）以及后续定期风险评估时均应进行肺通气功能检查[1]。未启动ICS治疗或ICS使用不当（剂量不足、吸入方法不正确、依从性差）是未来发生哮喘急性发作和不可逆肺功能损害的重要危险因素[1]。\n\n**FeNO监测的预测价值更为量化**。中华医学会儿科学分会呼吸学组肺功能协作组发布的《儿童肺功能及气道非创伤性炎症指标系列指南（七）：呼出气体一氧化氮监测》指出：**FeNO≥28ppb且FEV1≤76%的临床稳定哮喘患儿，有85%的概率将来出现哮喘急性发作；而FeNO≤28ppb且FEV1≥76%的患儿，将来出现急性发作的可能性几乎为零**[2]。这一量化阈值提供了可操作的监测预警工具。\n\n更重要的是，**常规临床指标联合FeNO进行哮喘管理，较仅依靠常规临床指标，能够明显降低哮喘急性发作的概率**，同时使急性发作频率及哮喘严重度评分显著降低[2]。在ICS用量方面，指南联合FeNO管理组比指南管理组的哮喘急性发作次数明显减少[2]。\n\n**结论**：规律肺功能及FeNO监测能为急性发作提供定量预警，且联合管理策略已被证实可减少急性发作，证据等级为中级（多为观察性研究及指南专家推荐，缺乏大规模RCT直接比较规律随访 vs. 仅急性发作处理）。\n\n### 3. 证据边界与不确定性\n\nGINA 2023/2024指出：**≤5岁儿童中，症状控制与未来不良结局（如急性发作）的关系尚未被充分研究**[3]。虽然症状控制良好的儿童也可能在数月后发生急性发作，但当前症状控制差时风险更大[3]。这说明症状控制评估的应用在低龄儿童中存在证据缺口，需要更多研究。\n\n另外，本报告所依赖的指南证据均来自**推荐规律随访**的框架，其对比组为\"不规律或不充分管理\"。目前缺乏专门设计的高质量随机对照试验直接比较\"定期症状+肺功能随访\"与\"仅在急性发作时处理\"两种策略在exacerbation、control和growth三方面的差异。这是本领域最重要的证据缺口。\n\n## 关键安全结局\n\n### 3. 对生长发育（growth）的影响\n\n**低剂量ICS的安全性**：《儿童支气管哮喘诊断与防治指南（2016年版）》明确指出：**长期研究未显示低剂量ICS治疗对儿童生长发育、骨质代谢、下丘脑-垂体-肾上腺轴有明显的抑制作用**，并将表中列出的低剂量定义为\"现有研究中未发现与临床不良反应相关的剂量，即相对安全剂量\"[1]。\n\n**生长监测的重要性**：GINA\n2023/2024指南要求**每年或更频繁测量儿童身高**[3]。ICS治疗的前1~2年可能对生长速度产生一定影响，但**控制不佳的哮喘本身也会影响生长**[3]。因此，维持哮喘良好控制的获益（减少急性发作、改善肺功能、维持正常活动水平）通常大于低剂量ICS对生长的潜在影响。指南推荐使用**能维持良好控制的最低有效剂量ICS**，并在出现生长速度下降时综合考虑哮喘控制不佳、频繁口服激素、营养不良等因素[3]。\n\n**停药的风险**：GINA指出，如果降级或停用控制治疗，应在**3~6周后安排随访**，以检查症状是否复发，必要时需重新升级或恢复治疗[3]。这进一步强调了规律随访管理在保障安全中的价值。\n\n**结论**：规律随访管理允许临床医生使用最低有效剂量维持控制，并将ICS相关生长发育风险控制在可接受范围内。规范随访本身不会对生长产生负面影响，反而通过优化控制减少了不必要的激素暴露。\n\n## 管理策略建议\n\n综合指南推荐，儿童哮喘规律随访管理应包括以下核心要素：\n\n1. **症状控制评估**：每次随访使用标准化的症状控制评估工具。≥6岁使用ACT（哮喘控制测试）；4~11岁使用C-ACT；<4岁可使用TRACK。\n2. **肺功能监测**：初诊、治疗后3~6个月、后续定期随访时行肺通气功能检测（FEV1、FEV1/FVC、PEF变异率）。学龄期儿童应常规进行。\n3. **FeNO监测**：作为气道炎症的客观指标，联合常规临床评估，可提高控制评价的准确性，减少急性发作风险。\n4. **生长发育监测**：至少每年测量身高，记录在生长曲线图上。\n5. **治疗调整频率**：每1~3个月审核治疗方案；<6岁每3~6个月重新评估是否需要继续控制治疗。\n6. **书面哮喘行动计划**：提供给家长/照护者，明确恶化征象、干预措施和就医指征。\n\n## 结论与建议\n\n### 核心结论\n\n1. **规律的症状控制和肺功能随访**（而非仅在急性发作时处理）是国内外权威指南一致推荐的儿童哮喘管理策略，证据等级为指南级别推荐。\n2. 规律随访管理能够**更早识别控制恶化、预测急性发作风险**，从而及时调整治疗，减少急性发作（证据等级：中级）。FeNO联合管理可显著降低发作频率。\n3. 低剂量ICS治疗对**生长发育的影响在安全范围内**，且通过规律随访可以确保使用最低有效剂量，进一步降低风险。控制不佳的哮喘本身对生长的负面影响更大。\n4. 对于≤5岁儿童，症状控制与未来急性发作的关系尚需进一步研究，但规律随访（每3~6个月）已被普遍推荐。\n\n### 证据缺口\n\n- 缺乏高质量RCT直接比较\"规律症状+肺功能随访\"与\"仅在急性发作时处理\"两种策略在三个结局维度上的差异。\n- ≤5岁儿童中症状控制与未来风险的关系研究不足，证据等级为D。\n- FeNO指导治疗对长期生长结局的影响尚缺乏前瞻性数据。\n\n### 临床建议\n\n对于儿童哮喘患者，强烈推荐实施**基于症状控制的规律随访管理体系**，包括定期的症状评估、肺功能检测（含FeNO）和生长发育监测，而非仅在急性发作时才进行干预。这一策略在减少急性加重、优化控制水平和保障安全生长方面均有充分证据支持。\n\n\n## 参考文献\n\n1. [1] 中华医学会儿科学分会呼吸学组《中华儿科杂志》编辑委员会. 儿童支气管哮喘诊断与防治指南(2016年版). 中华儿科杂志, 2016.\n2. [2] 中华医学会儿科学分会呼吸学组肺功能协作组《中华实用儿科临床杂志》编辑委员会. 儿童肺功能及气道非创伤性炎症指标系列指南(七):呼出气体一氧化氮监测. 中华实用儿科临床杂志, 2017.\n3. [3] Global Initiative for Asthma (GINA). Global Strategy for Asthma Management and Prevention, 2023-2024.",
+    "agent_trace": [
+      {
+        "kind": "run.queued",
+        "label": "任务已创建",
+        "detail": "等待 Pi Agent 进程启动",
+        "timestamp": "2026-07-26T11:42:25.468Z"
+      },
+      {
+        "kind": "run.started",
+        "label": "任务已启动",
+        "detail": "expert 模式",
+        "timestamp": "2026-07-26T11:42:25.468Z"
+      },
+      {
+        "kind": "pi.session",
+        "label": "Pi 会话已创建",
+        "detail": "019f9e3b-ca28-7848-b538-28f4be262ba0",
+        "timestamp": "2026-07-26T11:42:26.916Z"
+      },
+      {
+        "kind": "agent.started",
+        "label": "Pi Agent 已启动",
+        "timestamp": "2026-07-26T11:42:26.929Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：research_frame_init",
+        "timestamp": "2026-07-26T11:42:31.664Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：research_frame_init",
+        "timestamp": "2026-07-26T11:42:31.671Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:42:33.336Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:42:33.338Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:42:35.078Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:42:37.429Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:42:39.768Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:42:39.769Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:42:39.770Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:42:40.180Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:42:40.482Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:42:40.677Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-26T11:42:42.584Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-26T11:42:42.586Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-26T11:42:42.589Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-26T11:42:42.590Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-26T11:42:45.330Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-26T11:42:45.331Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-26T11:42:45.335Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-26T11:42:49.457Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:42:59.068Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:42:59.070Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:42:59.071Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:42:59.074Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:42:59.075Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:42:59.077Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:43:04.684Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:43:04.685Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:43:04.685Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:43:04.687Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:43:04.689Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:43:04.690Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:43:09.191Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:43:09.192Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:43:09.194Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:43:09.195Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:43:13.149Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:43:13.149Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:43:13.152Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:43:13.154Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：report_write",
+        "timestamp": "2026-07-26T11:43:42.832Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：report_write",
+        "timestamp": "2026-07-26T11:43:42.843Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：research_frame_scratchpad_append",
+        "timestamp": "2026-07-26T11:43:46.494Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：research_frame_scratchpad_append",
+        "timestamp": "2026-07-26T11:43:46.497Z"
+      },
+      {
+        "kind": "run.completed",
+        "label": "任务完成",
+        "detail": "已收到 Pi Agent 最终回答",
+        "timestamp": "2026-07-26T11:43:50.676Z"
+      }
+    ],
+    "tools": [
+      {
+        "name": "research_frame_init",
+        "status": "running"
+      },
+      {
+        "name": "research_frame_init",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "report_write",
+        "status": "running"
+      },
+      {
+        "name": "report_write",
+        "status": "completed"
+      },
+      {
+        "name": "research_frame_scratchpad_append",
+        "status": "running"
+      },
+      {
+        "name": "research_frame_scratchpad_append",
+        "status": "completed"
+      }
+    ],
+    "summary": {
+      "research_mode": "expert",
+      "audience_mode": "clinician",
+      "deep_think": false,
+      "search_enabled": true,
+      "retrieval_policy": "mcp_only",
+      "max_iterations": 12,
+      "max_iterations_is_advisory": true,
+      "request_timeout_seconds": 600
+    }
+  }
+}

@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { AudienceMode, ResearchMode } from '../../types/domain'
+import type { AudienceMode } from '../../types/domain'
 import { extractReferences, parseReport, projectReport, reportPlainText, type InlineNode, type Reference, type ReportNode } from '../../utils/report'
 import InlineContent from './InlineContent.vue'
 import ReportNodeView from './ReportNode.vue'
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   markdown: string
   audience: AudienceMode
-  researchMode?: ResearchMode
-}>(), { researchMode: 'instant' })
+}>()
 const emit = defineEmits<{ citation: [reference: Reference] }>()
 const nodes = computed(() => projectReport(parseReport(props.markdown), props.audience))
 const references = computed(() => extractReferences(props.markdown))
@@ -79,7 +78,7 @@ const referenceMeta = (reference: Reference) => reference.pmid
 </script>
 
 <template>
-  <div class="evidence-report" :class="[`report-audience-${audience}`, `report-mode-${researchMode}`]">
+  <div class="evidence-report" :class="`report-audience-${audience}`">
     <div class="report-markdown">
       <template v-for="(section, index) in sections" :key="index">
         <section v-if="section.heading && section.group" class="report-section-group">
