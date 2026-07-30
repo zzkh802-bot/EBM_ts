@@ -29,6 +29,11 @@ Persistent implementation memory for context compaction/recovery. Update after e
 - Added local single-user account-connection endpoints. They relay only an authorization URL, device code, non-secret selection/manual-code prompt and status; credentials remain in the service-owned credential store and never enter an API response or frontend state.
 - Runtime configuration now reevaluates subscription availability after a connection, making the corresponding model selectable without exposing provider/runtime internals.
 
+### Sweep cleanup: inactive frontend paths
+
+- Removed four unreferenced duplicate evidence components: an old composer, conversation feed, message renderer and debug panel. The active Evidence page is now the single owner of the chat/composer/rendering path.
+- Removed the visible but inert voice-input control rather than advertising a feature with no implementation.
+
 ## 2026-07-21 — implementation started
 
 ### Planned order

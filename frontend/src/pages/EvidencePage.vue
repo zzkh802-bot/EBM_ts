@@ -261,9 +261,6 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
           <button class="composer-option" type="button" :aria-pressed="preferences.searchEnabled" :class="{ active: preferences.searchEnabled }" :disabled="run.busy" @click="toggleSearch">证据检索</button>
           <span v-if="runtimeConfigError" class="runtime-error">{{ runtimeConfigError }}</span>
         </div>
-        <button class="voice-button secondary-action" type="button" aria-label="语音输入">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V7a3 3 0 0 0-3-3ZM6 11v1a6 6 0 0 0 12 0v-1M12 18v3M9 21h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
-        </button>
         <button class="send-button" type="button" :aria-label="run.busy ? '停止' : '提交问题'" @click="submit()">
           <svg v-if="!run.busy" width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
           <span v-else>■</span>
