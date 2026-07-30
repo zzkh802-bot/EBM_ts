@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { access, copyFile, mkdir, readFile, readdir, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
+import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 
 const CONTRACT_VERSION = "xunyi-research/v1";
 const MAX_REQUEST_BYTES = 1_048_576;
@@ -42,12 +43,25 @@ export type RuntimeModel = {
   model_label: string;
   available: boolean;
   setup_hint?: string;
+  connection_provider?: string;
 };
 
 export type RuntimeConfig = {
   default_provider: string;
   default_model: string;
   models: RuntimeModel[];
+};
+
+type AccountConnectionStatus = "waiting" | "connected" | "failed" | "cancelled";
+type AccountConnection = {
+  id: string;
+  provider: "openai-codex" | "anthropic";
+  status: AccountConnectionStatus;
+  message: string;
+  authorization?: { url?: string; instructions?: string; device_code?: string; verification_url?: string };
+  prompt?: { type: "text" | "select" | "manual_code"; message: string; placeholder?: string; options?: Array<{ id: string; label: string; description?: string }> };
+  resolvePrompt?: (value: string) => void;
+  controller: AbortController;
 };
 
 export type AgentExecutionResult = {
@@ -247,19 +261,25 @@ export type AgentApiServerOptions = {
   executor: AgentExecutor;
   corsOrigin?: string;
   maxCompletedRuns?: number;
-  runtimeConfig?: RuntimeConfig;
+  runtimeConfig?: RuntimeConfig | (() => Promise<RuntimeConfig>);
+  accountConnections?: AccountConnectionStore;
 };
 
 export function createAgentApiServer(options: AgentApiServerOptions): { server: Server; store: AgentRunStore } {
   const store = new AgentRunStore(options.executor, options.maxCompletedRuns);
+  const configuredRuntimeConfig = options.runtimeConfig;
+  const runtimeConfig = typeof configuredRuntimeConfig === "function"
+    ? configuredRuntimeConfig
+    : async () => configuredRuntimeConfig ?? defaultRuntimeConfig();
   const server = createServer((request, response) => {
-    void handleRequest(request, response, store, options.corsOrigin ?? "*", options.runtimeConfig ?? defaultRuntimeConfig());
+    void handleRequest(request, response, store, options.corsOrigin ?? "*", runtimeConfig, options.accountConnections);
   });
   return { server, store };
 }
 
 export async function loadRuntimeConfig(rootDir: string): Promise<RuntimeConfig> {
   const env = { ...(await projectEnv(rootDir)), ...process.env };
+  const accountAuth = await subscriptionAuthStatus(rootDir);
   const models: RuntimeModel[] = [
     {
       provider: "xinqiong", provider_label: "芯穹 / Infini-AI", model: "deepseek-v4-flash", model_label: "DeepSeek V4 Flash",
@@ -276,7 +296,12 @@ export async function loadRuntimeConfig(rootDir: string): Promise<RuntimeConfig>
     },
     {
       provider: "anthropic", provider_label: "Anthropic", model: "claude-sonnet-4-5", model_label: "Claude Sonnet 4.5",
-      available: Boolean(env.ANTHROPIC_API_KEY || env.ANTHROPIC_OAUTH_TOKEN), setup_hint: "设置 ANTHROPIC_API_KEY 或 ANTHROPIC_OAUTH_TOKEN。",
+      available: Boolean(env.ANTHROPIC_API_KEY || env.ANTHROPIC_OAUTH_TOKEN || accountAuth.anthropic),
+      setup_hint: "设置 ANTHROPIC_API_KEY，或连接 Claude 订阅账户。", connection_provider: "anthropic",
+    },
+    {
+      provider: "openai-codex", provider_label: "ChatGPT 订阅", model: "gpt-5.5", model_label: "GPT-5.5",
+      available: accountAuth.openaiCodex, setup_hint: "连接 ChatGPT Plus 或 Pro 账户。", connection_provider: "openai-codex",
     },
   ];
   const configuredDefault = models.find((item) => item.provider === env.EBM_PROVIDER && item.model === (env.EBM_MODEL || item.model));
@@ -286,6 +311,128 @@ export async function loadRuntimeConfig(rootDir: string): Promise<RuntimeConfig>
     default_model: fallback.model,
     models,
   };
+}
+
+export class AccountConnectionStore {
+  private readonly connections = new Map<string, AccountConnection>();
+
+  constructor(private readonly rootDir: string) {}
+
+  async start(provider: string): Promise<AccountConnection> {
+    if (provider !== "openai-codex" && provider !== "anthropic") {
+      throw new ApiError(422, "unsupported_connection", "该服务暂不支持账户连接。");
+    }
+    await preparePiAgentDirectory(this.rootDir);
+    const runtime = await ModelRuntime.create({
+      authPath: path.join(this.rootDir, "data", "pi-agent", "auth.json"),
+      modelsPath: path.join(this.rootDir, "data", "pi-agent", "models.json"),
+    });
+    if (!runtime.getProvider(provider)?.auth.oauth) {
+      throw new ApiError(422, "subscription_login_unavailable", "当前运行时未提供该账户的订阅登录。");
+    }
+    const connection: AccountConnection = {
+      id: randomUUID(), provider, status: "waiting", message: "正在准备账户授权。", controller: new AbortController(),
+    };
+    this.connections.set(connection.id, connection);
+    void runtime.login(provider, "oauth", {
+      signal: connection.controller.signal,
+      notify: (event) => this.handleNotification(connection, event),
+      prompt: (prompt) => this.waitForPrompt(connection, prompt),
+    }).then(() => {
+      connection.status = "connected";
+      connection.message = "账户已连接。";
+      delete connection.prompt;
+    }).catch((error) => {
+      if (connection.status === "cancelled") return;
+      connection.status = "failed";
+      connection.message = `账户连接失败：${errorMessage(error)}`.slice(0, 300);
+      delete connection.prompt;
+    });
+    return connection;
+  }
+
+  get(id: string): AccountConnection | undefined {
+    return this.connections.get(id);
+  }
+
+  respond(id: string, value: unknown): AccountConnection {
+    const connection = this.connections.get(id);
+    if (!connection) throw new ApiError(404, "connection_not_found", "未找到该账户连接。");
+    if (!connection.resolvePrompt || !connection.prompt) throw new ApiError(409, "connection_not_waiting", "当前连接不需要输入。");
+    if (typeof value !== "string" || !value.trim()) throw new ApiError(422, "invalid_connection_input", "请输入有效内容。");
+    const resolve = connection.resolvePrompt;
+    delete connection.resolvePrompt;
+    delete connection.prompt;
+    resolve(value.trim());
+    return connection;
+  }
+
+  cancel(id: string): AccountConnection {
+    const connection = this.connections.get(id);
+    if (!connection) throw new ApiError(404, "connection_not_found", "未找到该账户连接。");
+    if (connection.status === "waiting") {
+      connection.status = "cancelled";
+      connection.message = "已取消账户连接。";
+      connection.controller.abort();
+    }
+    return connection;
+  }
+
+  private handleNotification(connection: AccountConnection, event: { type: string; [key: string]: unknown }): void {
+    if (event.type === "auth_url") {
+      connection.message = "请在新窗口完成账户授权。";
+      connection.authorization = {
+        ...(typeof event.url === "string" ? { url: event.url } : {}),
+        ...(typeof event.instructions === "string" ? { instructions: event.instructions } : {}),
+      };
+      return;
+    }
+    if (event.type === "device_code") {
+      connection.message = "请按提示输入设备授权码。";
+      connection.authorization = {
+        ...(typeof event.userCode === "string" ? { device_code: event.userCode } : {}),
+        ...(typeof event.verificationUri === "string" ? { verification_url: event.verificationUri } : {}),
+      };
+      return;
+    }
+    if (typeof event.message === "string") connection.message = event.message;
+  }
+
+  private waitForPrompt(connection: AccountConnection, prompt: { type: string; message: string; placeholder?: string; options?: readonly { id: string; label: string; description?: string }[]; signal?: AbortSignal }): Promise<string> {
+    if (prompt.type === "secret") return Promise.reject(new Error("账户连接不接受网页密钥输入。"));
+    if (prompt.type !== "text" && prompt.type !== "select" && prompt.type !== "manual_code") return Promise.reject(new Error("不支持的账户连接步骤。"));
+    connection.message = prompt.message;
+    connection.prompt = {
+      type: prompt.type,
+      message: prompt.message,
+      ...(prompt.placeholder ? { placeholder: prompt.placeholder } : {}),
+      ...(prompt.options ? { options: [...prompt.options] } : {}),
+    };
+    return new Promise((resolve, reject) => {
+      connection.resolvePrompt = resolve;
+      const abort = () => reject(new Error("账户连接已取消。"));
+      connection.controller.signal.addEventListener("abort", abort, { once: true });
+      prompt.signal?.addEventListener("abort", abort, { once: true });
+    });
+  }
+}
+
+function publicConnection(connection: AccountConnection): Omit<AccountConnection, "controller" | "resolvePrompt"> {
+  const { controller: _controller, resolvePrompt: _resolvePrompt, ...visible } = connection;
+  return visible;
+}
+
+async function subscriptionAuthStatus(rootDir: string): Promise<{ openaiCodex: boolean; anthropic: boolean }> {
+  try {
+    const runtime = await ModelRuntime.create({
+      authPath: path.join(rootDir, "data", "pi-agent", "auth.json"),
+      modelsPath: path.join(rootDir, "data", "pi-agent", "models.json"),
+    });
+    const [openaiCodex, anthropic] = await Promise.all([runtime.checkAuth("openai-codex"), runtime.checkAuth("anthropic")]);
+    return { openaiCodex: openaiCodex?.type === "oauth", anthropic: anthropic?.type === "oauth" };
+  } catch {
+    return { openaiCodex: false, anthropic: false };
+  }
 }
 
 export function createPiCliExecutor(input: { rootDir: string }): AgentExecutor {
@@ -315,7 +462,7 @@ export function createPiCliExecutor(input: { rootDir: string }): AgentExecutor {
   };
 }
 
-async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: RuntimeConfig): Promise<void> {
+async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: () => Promise<RuntimeConfig>, accountConnections?: AccountConnectionStore): Promise<void> {
   setCors(response, corsOrigin);
   if (request.method === "OPTIONS") {
     response.writeHead(204);
@@ -335,11 +482,36 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       return;
     }
     if (request.method === "GET" && pathname === "/api/v1/runtime-config") {
-      sendJson(response, 200, runtimeConfig);
+      sendJson(response, 200, await runtimeConfig());
       return;
     }
+    if (accountConnections && request.method === "POST" && pathname === "/api/v1/account-connections") {
+      const body = await readJsonBody(request);
+      const provider = isRecord(body) ? body.provider : undefined;
+      sendJson(response, 202, publicConnection(await accountConnections.start(typeof provider === "string" ? provider : "")));
+      return;
+    }
+    const connectionMatch = /^\/api\/v1\/account-connections\/([^/]+)(?:\/(input|cancel))?$/.exec(pathname);
+    if (accountConnections && connectionMatch) {
+      const id = decodeURIComponent(connectionMatch[1] ?? "");
+      if (request.method === "GET" && !connectionMatch[2]) {
+        const connection = accountConnections.get(id);
+        if (!connection) throw new ApiError(404, "connection_not_found", "未找到该账户连接。");
+        sendJson(response, 200, publicConnection(connection));
+        return;
+      }
+      if (request.method === "POST" && connectionMatch[2] === "input") {
+        const body = await readJsonBody(request);
+        sendJson(response, 200, publicConnection(accountConnections.respond(id, isRecord(body) ? body.value : undefined)));
+        return;
+      }
+      if (request.method === "POST" && connectionMatch[2] === "cancel") {
+        sendJson(response, 200, publicConnection(accountConnections.cancel(id)));
+        return;
+      }
+    }
     if (request.method === "POST" && pathname === "/api/v1/agent-runs") {
-      const input = validateAgentRunInput(await readJsonBody(request), runtimeConfig);
+      const input = validateAgentRunInput(await readJsonBody(request), await runtimeConfig());
       const run = store.submit(input);
       sendJson(response, 202, {
         ...run,

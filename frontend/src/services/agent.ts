@@ -1,8 +1,9 @@
-import type { AgentRequest, AgentResponse, AgentV2Request, AgentV2Response, RuntimeConfig } from '../types/domain'
+import type { AccountConnection, AgentRequest, AgentResponse, AgentV2Request, AgentV2Response, RuntimeConfig } from '../types/domain'
 import { HttpError, postJson, request } from './http'
 
 const V2_BASE = '/ts-api/api/v1/agent-runs'
 const V2_RUNTIME_CONFIG = '/ts-api/api/v1/runtime-config'
+const ACCOUNT_CONNECTIONS = '/ts-api/api/v1/account-connections'
 const ACTIVE_V2_RUN_KEY = 'dp_xunyi_active_v2_run'
 const activeStatuses = new Set(['queued', 'running', 'cancelling'])
 const retryableStatuses = new Set([408, 425, 429, 500, 502, 503, 504])
@@ -83,6 +84,10 @@ const toAgentResponse = (run: AgentV2Response): AgentResponse => ({
 
 export const agentService = {
   getRuntimeConfig: () => request<RuntimeConfig>(V2_RUNTIME_CONFIG),
+  startAccountConnection: (provider: AccountConnection['provider']) => postJson<AccountConnection>(ACCOUNT_CONNECTIONS, { provider }),
+  getAccountConnection: (id: string) => request<AccountConnection>(`${ACCOUNT_CONNECTIONS}/${encodeURIComponent(id)}`),
+  respondAccountConnection: (id: string, value: string) => postJson<AccountConnection>(`${ACCOUNT_CONNECTIONS}/${encodeURIComponent(id)}/input`, { value }),
+  cancelAccountConnection: (id: string) => postJson<AccountConnection>(`${ACCOUNT_CONNECTIONS}/${encodeURIComponent(id)}/cancel`, {}),
   runV1: (dto: AgentRequest, signal: AbortSignal) =>
     postJson<AgentResponse>('/ebm/agent', dto, signal, (dto.request_timeout_seconds + 5) * 1000),
   cancelV2: (runId: string) =>

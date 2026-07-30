@@ -247,6 +247,32 @@ body.theme-dark .run-step { border-color: rgba(255,255,255,.08); }
 body.theme-dark .run-step summary { color: #d9e5fb; }
 body.theme-dark .run-step-detail pre { background: rgba(15, 23, 42, .8); color: #d9e5fb; }
 
+.account-connect-card p { margin: 8px 0; color: #718096; font-size: 12px; line-height: 1.6; }
+.account-connect-button, .account-cancel-button, .account-prompt button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  margin: 4px 6px 0 0;
+  padding: 0 10px;
+  border: 1px solid #bcd3ff;
+  border-radius: 8px;
+  background: #eef4ff;
+  color: #2453af;
+  font: 600 12px inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+.account-connect-button:disabled { cursor: wait; opacity: .6; }
+.account-cancel-button { border-color: #d7dee9; background: #fff; color: #64748b; }
+.account-device-code { padding: 8px; border-radius: 8px; background: #f1f5f9; color: #334155 !important; font: 700 13px ui-monospace, SFMono-Regular, Menlo, monospace !important; }
+.account-prompt { margin-top: 10px; }
+.account-prompt > span { color: #475569; font-size: 12px; }
+.account-prompt form { display: flex; gap: 6px; margin-top: 6px; }
+.account-prompt input { min-width: 0; flex: 1; padding: 7px 8px; border: 1px solid #d7dee9; border-radius: 8px; font: inherit; }
+.account-choice-list { display: flex; flex-wrap: wrap; margin-top: 5px; }
+body.theme-dark .account-cancel-button, body.theme-dark .account-prompt input { border-color: rgba(255,255,255,.14); background: rgba(255,255,255,.05); color: #d9e5fb; }
+
 body.theme-dark .history-list .history-item.active {
   border-color: rgba(138, 180, 255, .34);
   background: rgba(138, 180, 255, .12);

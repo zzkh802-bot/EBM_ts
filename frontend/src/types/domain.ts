@@ -105,6 +105,21 @@ export interface RuntimeModel {
   model_label: string
   available: boolean
   setup_hint?: string
+  connection_provider?: string
+}
+
+export interface AccountConnection {
+  id: string
+  provider: 'openai-codex' | 'anthropic'
+  status: 'waiting' | 'connected' | 'failed' | 'cancelled'
+  message: string
+  authorization?: { url?: string; instructions?: string; device_code?: string; verification_url?: string }
+  prompt?: {
+    type: 'text' | 'select' | 'manual_code'
+    message: string
+    placeholder?: string
+    options?: Array<{ id: string; label: string; description?: string }>
+  }
 }
 
 export interface RuntimeConfig {

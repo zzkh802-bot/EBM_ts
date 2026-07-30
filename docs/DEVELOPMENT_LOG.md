@@ -23,6 +23,12 @@ Persistent implementation memory for context compaction/recovery. Update after e
 - Deliberately did not add a per-tool approval/rollback workflow: clinical research involves many read-only actions, so it would add friction without a meaningful decision boundary.
 - Verification: root `npm run typecheck`; focused `npm test -- tests/agentApi.test.ts` (5 passing); frontend `npm run typecheck && npm test` (20 passing).
 
+### Completed slice: subscription account connection
+
+- Studied the runtime TUI account flow and reused its `ModelRuntime.login()` interface instead of reimplementing provider OAuth. The runtime supports ChatGPT Plus/Pro (Codex) and Claude Pro/Max subscription login, alongside API-key deployment configuration.
+- Added local single-user account-connection endpoints. They relay only an authorization URL, device code, non-secret selection/manual-code prompt and status; credentials remain in the service-owned credential store and never enter an API response or frontend state.
+- Runtime configuration now reevaluates subscription availability after a connection, making the corresponding model selectable without exposing provider/runtime internals.
+
 ## 2026-07-21 — implementation started
 
 ### Planned order

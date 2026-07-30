@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { agentService, archiveService } from '../services'
 import { useAgentRunStore, usePreferencesStore, useSessionsStore, useUiStore } from '../stores'
-import type { Message, ModeSnapshot, RuntimeConfig } from '../types/domain'
+import type { AccountConnection, Message, ModeSnapshot, RuntimeConfig } from '../types/domain'
 import { buildAgentRequest, newId, nowIso, responseText } from '../utils/core'
 import { parseReport, projectReport, reportPlainText, type Reference } from '../utils/report'
 import { copyText } from '../utils/browser'
@@ -18,6 +18,9 @@ const question = ref('')
 const feed = ref<HTMLElement | null>(null)
 const runtimeConfig = ref<RuntimeConfig | null>(null)
 const runtimeConfigError = ref('')
+const accountConnection = ref<AccountConnection | null>(null)
+const connectionInput = ref('')
+let connectionTimer: number | undefined
 const stages = {
   planning: '规划问题', retrieving: '检索证据', tooling: '调用工具',
   generating: '生成回答', network_wait: '等待后端', idle: '',
@@ -32,6 +35,7 @@ const providers = computed(() => availableModels.value.filter((item, index, item
   items.findIndex((candidate) => candidate.provider === item.provider) === index,
 ))
 const modelsForProvider = computed(() => availableModels.value.filter((item) => item.provider === preferences.provider))
+const connectableProviders = computed(() => runtimeConfig.value?.models.filter((item) => !item.available && item.connection_provider) || [])
 watch(() => preferences.provider, () => {
   if (modelsForProvider.value.some((item) => item.model === preferences.model)) return
   preferences.model = modelsForProvider.value[0]?.model || ''
@@ -44,6 +48,50 @@ onMounted(async () => {
     runtimeConfigError.value = error instanceof Error ? error.message : '无法读取服务器运行配置'
   }
 })
+onBeforeUnmount(() => { if (connectionTimer) window.clearInterval(connectionTimer) })
+
+const refreshRuntimeConfig = async () => {
+  runtimeConfig.value = await agentService.getRuntimeConfig()
+  preferences.applyRuntimeConfig(runtimeConfig.value)
+}
+const stopConnectionPolling = () => {
+  if (connectionTimer) window.clearInterval(connectionTimer)
+  connectionTimer = undefined
+}
+const refreshConnection = async () => {
+  if (!accountConnection.value) return
+  try {
+    accountConnection.value = await agentService.getAccountConnection(accountConnection.value.id)
+    if (accountConnection.value.status !== 'waiting') {
+      stopConnectionPolling()
+      if (accountConnection.value.status === 'connected') await refreshRuntimeConfig()
+    }
+  } catch (error) {
+    accountConnection.value = { ...accountConnection.value, status: 'failed', message: error instanceof Error ? error.message : '无法读取账户连接状态' }
+    stopConnectionPolling()
+  }
+}
+const connectAccount = async (provider: string) => {
+  if (provider !== 'openai-codex' && provider !== 'anthropic') return
+  try {
+    stopConnectionPolling()
+    accountConnection.value = await agentService.startAccountConnection(provider)
+    connectionInput.value = ''
+    connectionTimer = window.setInterval(() => { void refreshConnection() }, 1_500)
+  } catch (error) {
+    accountConnection.value = { id: '', provider, status: 'failed', message: error instanceof Error ? error.message : '无法启动账户连接' }
+  }
+}
+const submitConnectionInput = async (value = connectionInput.value) => {
+  if (!accountConnection.value || !value.trim()) return
+  accountConnection.value = await agentService.respondAccountConnection(accountConnection.value.id, value.trim())
+  connectionInput.value = ''
+}
+const cancelConnection = async () => {
+  if (!accountConnection.value?.id) return
+  accountConnection.value = await agentService.cancelAccountConnection(accountConnection.value.id)
+  stopConnectionPolling()
+}
 
 watch(() => sessions.active.messages.length, async () => {
   await nextTick()
@@ -297,6 +345,36 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
           <div><span>模型</span><small>{{ modelsForProvider.find((item) => item.model === preferences.model)?.model_label || '使用服务器默认值' }}</small></div>
           <div><span>检索</span><small>{{ preferences.searchEnabled ? '按需调用证据工具' : '仅使用当前会话材料' }}</small></div>
         </div>
+      </section>
+      <section v-if="connectableProviders.length" class="workspace-info-card account-connect-card">
+        <div class="workspace-info-title"><span>连接账户</span></div>
+        <p>连接订阅账户后，可直接在模型选择器中使用。</p>
+        <button
+          v-for="item in connectableProviders"
+          :key="item.connection_provider"
+          class="account-connect-button"
+          type="button"
+          :disabled="accountConnection?.status === 'waiting'"
+          @click="connectAccount(item.connection_provider || '')"
+        >连接 {{ item.provider_label }}</button>
+      </section>
+      <section v-if="accountConnection" class="workspace-info-card account-connect-card" aria-live="polite">
+        <div class="workspace-info-title"><span>账户连接</span><strong>{{ accountConnection.status === 'waiting' ? '进行中' : accountConnection.status === 'connected' ? '已连接' : '未完成' }}</strong></div>
+        <p>{{ accountConnection.message }}</p>
+        <a v-if="accountConnection.authorization?.url" class="account-connect-button" :href="accountConnection.authorization.url" target="_blank" rel="noopener">打开授权页面</a>
+        <a v-if="accountConnection.authorization?.verification_url" class="account-connect-button" :href="accountConnection.authorization.verification_url" target="_blank" rel="noopener">打开设备授权页面</a>
+        <p v-if="accountConnection.authorization?.device_code" class="account-device-code">授权码：{{ accountConnection.authorization.device_code }}</p>
+        <div v-if="accountConnection.prompt" class="account-prompt">
+          <span>{{ accountConnection.prompt.message }}</span>
+          <div v-if="accountConnection.prompt.type === 'select'" class="account-choice-list">
+            <button v-for="option in accountConnection.prompt.options" :key="option.id" type="button" @click="submitConnectionInput(option.id)">{{ option.label }}</button>
+          </div>
+          <form v-else @submit.prevent="submitConnectionInput()">
+            <input v-model="connectionInput" :placeholder="accountConnection.prompt.placeholder || '输入授权码'" />
+            <button type="submit">继续</button>
+          </form>
+        </div>
+        <button v-if="accountConnection.status === 'waiting'" class="account-cancel-button" type="button" @click="cancelConnection">取消</button>
       </section>
       <section class="workspace-info-card">
         <div class="workspace-info-title"><span>当前工作模式</span></div>

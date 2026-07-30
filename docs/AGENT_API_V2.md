@@ -22,6 +22,17 @@ npm run api
 
 前端只显示已配置的选项。可在创建任务时传入 `provider` 和 `model`；服务器会拒绝未注册或未配置的组合，而不是在执行中才返回不明错误。
 
+## 订阅账户连接
+
+本地单用户部署可连接 ChatGPT Plus/Pro 和 Claude Pro/Max 订阅账户。循医复用运行时的账户授权流程，并将凭据保留在服务器私有目录；浏览器只会收到授权链接、设备码和连接状态。
+
+- `POST /api/v1/account-connections`，请求体为 `{ "provider": "openai-codex" }` 或 `{ "provider": "anthropic" }`，启动连接。
+- `GET /api/v1/account-connections/{id}`，轮询授权状态。
+- `POST /api/v1/account-connections/{id}/input`，仅用于设备码或授权流程要求的非密钥输入。
+- `POST /api/v1/account-connections/{id}/cancel`，取消未完成的连接。
+
+网页不接受、保存或返回 API key；API key 仍由服务器部署配置提供。
+
 Linux 部署可使用 `bash scripts/run-api.sh`。如果模型密钥由网关的环境文件管理，设置 `DP_XUNYI_TS_ENV_FILE=/path/to/.env.public`；如果 Node 安装在用户目录，设置 `DP_XUNYI_TS_NODE_BIN=/path/to/node`。
 
 ## 创建任务
