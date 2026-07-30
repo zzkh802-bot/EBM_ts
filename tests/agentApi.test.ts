@@ -57,7 +57,8 @@ describe("循医研究服务 API", () => {
       receivedInput = input;
       hooks.setSessionId("pi-session-1");
       hooks.onTrace({ kind: "tool.completed", label: "PubMed", timestamp: new Date().toISOString() });
-      hooks.onTool({ name: "pubmed_search", status: "completed" });
+      hooks.onTool({ id: "tool-1", name: "pubmed_search", status: "running" });
+      hooks.onTool({ id: "tool-1", name: "pubmed_search", status: "completed", result: "已找到候选文献。" });
       return { message: "这是可追溯的循证回答。", reportMarkdown: "# 完整循证报告\n\n正文。" };
     };
     const { api, baseUrl } = await startApi(executor);
@@ -82,7 +83,7 @@ describe("循医研究服务 API", () => {
       expect(result.summary.retrieval_policy).toBe("all");
       expect(receivedInput?.retrievalPolicy).toBe("all");
       expect(result.agent_trace.some((event: { kind: string }) => event.kind === "tool.completed")).toBe(true);
-      expect(result.tools).toContainEqual({ name: "pubmed_search", status: "completed" });
+      expect(result.tools).toEqual([{ id: "tool-1", name: "pubmed_search", status: "completed", result: "已找到候选文献。" }]);
     } finally {
       api.server.close();
       await once(api.server, "close");

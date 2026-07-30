@@ -54,6 +54,15 @@ Persistent implementation memory for context compaction/recovery. Update after e
 - Captured the real local product page with host Chrome in headless mode and used the review to remove generic/internal English labels, clarify example usage, and prevent provider labels from wrapping character-by-character.
 - Verification: frontend typecheck, production build, frontend test suite (20 passing), root boundary check, and visual screenshots at 1440px.
 
+### Completed slice: trustworthy research-process visibility
+
+- Used a real non-patient clinical query to inspect the live task event stream, then cancelled it once the display path was verified to avoid unnecessary provider usage.
+- Fixed the API run store so a tool start and its completion, which share a call ID, update one record instead of creating duplicate rows. Added a focused regression assertion for that lifecycle merge.
+- Classified startup reads of project research rules as a concise preparation step. Their path and full internal content no longer enter the user-visible tool detail panel.
+- The frontend now translates common evidence operations into plain-language steps (for example searching literature, reading guidelines, recording evidence, and drafting the final report). The full visible tool result remains available on expansion for research work itself.
+- Server-reported state now wins over time-based fallback labels for a short freshness window. The pending status therefore tracks actual retrieval, active tool work, report drafting, cancellation, and network recovery instead of only elapsed time.
+- Verification: root typecheck; focused API test suite (5 passing); frontend typecheck and production build; restarted local service and confirmed health endpoint.
+
 ## 2026-07-21 — implementation started
 
 ### Planned order

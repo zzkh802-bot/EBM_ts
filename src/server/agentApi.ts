@@ -210,7 +210,10 @@ export class AgentRunStore {
   }
 
   private addTool(run: InternalRun, event: Record<string, unknown>): void {
-    run.tools.push(event);
+    const id = typeof event.id === "string" ? event.id : undefined;
+    const existing = id ? run.tools.findIndex((item) => item.id === id) : -1;
+    if (existing >= 0) run.tools[existing] = { ...run.tools[existing], ...event };
+    else run.tools.push(event);
     if (run.tools.length > MAX_TOOL_EVENTS) run.tools.splice(0, run.tools.length - MAX_TOOL_EVENTS);
   }
 
@@ -695,6 +698,7 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
   let latestAnswer = "";
   const tools: Array<Record<string, unknown>> = [];
   const traceEvents: AgentTraceEvent[] = [];
+  const preparationToolCalls = new Set<string>();
 
   const addTrace = (event: AgentTraceEvent) => {
     traceEvents.push(event);
@@ -729,16 +733,26 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
       const name = typeof event.toolName === "string" ? event.toolName : "tool";
       const id = typeof event.toolCallId === "string" ? event.toolCallId : undefined;
       const argumentsValue = event.args;
-      addTool({ ...(id ? { id } : {}), name, status: "running", ...(argumentsValue === undefined ? {} : { arguments: argumentsValue }) });
-      addTrace(trace("tool.started", `调用工具：${name}`, toolArgumentsSummary(argumentsValue)));
+      const preparation = isPreparationRead(rootDir, name, argumentsValue);
+      if (preparation && id) preparationToolCalls.add(id);
+      addTool({
+        ...(id ? { id } : {}), name, status: "running",
+        ...(preparation ? { presentation: "preparation" } : argumentsValue === undefined ? {} : { arguments: argumentsValue }),
+      });
+      addTrace(trace("tool.started", preparation ? "准备研究规则" : `调用工具：${name}`, preparation ? "" : toolArgumentsSummary(argumentsValue)));
       return;
     }
     if (event.type === "tool_execution_end") {
       const name = typeof event.toolName === "string" ? event.toolName : "tool";
       const id = typeof event.toolCallId === "string" ? event.toolCallId : undefined;
-      const result = summarizeToolResult(event.result);
-      addTool({ ...(id ? { id } : {}), name, status: event.isError === true ? "error" : "completed", ...(result ? { result } : {}) });
-      addTrace(trace(event.isError === true ? "tool.failed" : "tool.completed", `${event.isError === true ? "工具失败" : "工具完成"}：${name}`, result));
+      const preparation = Boolean(id && preparationToolCalls.delete(id));
+      const result = preparation ? "已加载研究规则。" : summarizeToolResult(event.result);
+      addTool({
+        ...(id ? { id } : {}), name, status: event.isError === true ? "error" : "completed",
+        ...(preparation ? { presentation: "preparation" } : {}),
+        ...(result ? { result } : {}),
+      });
+      addTrace(trace(event.isError === true ? "tool.failed" : "tool.completed", preparation ? "研究规则已准备" : `${event.isError === true ? "工具失败" : "工具完成"}：${name}`, result));
       return;
     }
     if (event.type === "message_update" && isRecord(event.assistantMessageEvent) && event.assistantMessageEvent.type === "text_delta" && typeof event.assistantMessageEvent.delta === "string") {
@@ -819,6 +833,12 @@ function defaultRuntimeConfig(): RuntimeConfig {
 function toolArgumentsSummary(value: unknown): string {
   const text = summarizeToolResult(value);
   return text ? `输入：${text}` : "";
+}
+
+function isPreparationRead(rootDir: string, name: string, argumentsValue: unknown): boolean {
+  if (name !== "read" || !isRecord(argumentsValue) || typeof argumentsValue.path !== "string") return false;
+  const instructionRoot = path.join(rootDir, ".pi");
+  return path.resolve(argumentsValue.path).startsWith(`${instructionRoot}${path.sep}`);
 }
 
 function summarizeToolResult(value: unknown): string {

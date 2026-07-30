@@ -22,8 +22,8 @@ const accountConnection = ref<AccountConnection | null>(null)
 const connectionInput = ref('')
 let connectionTimer: number | undefined
 const stages = {
-  planning: '规划问题', retrieving: '检索证据', tooling: '调用工具',
-  generating: '生成回答', network_wait: '等待后端', idle: '',
+  planning: '正在梳理问题与检索范围', retrieving: '正在检索可用证据', tooling: '正在阅读与核验资料',
+  generating: '正在生成正式循证报告', network_wait: '正在等待研究服务响应', idle: '',
 }
 watch(() => sessions.activeSessionId, () => {
   question.value = ''
@@ -128,7 +128,7 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
   const pendingId = newId('msg')
   sessions.addMessage({
     id: pendingId, role: 'assistant', title: '循医',
-    content: '正在准备循证检索…', trace: [], tools: [],
+    content: '正在梳理问题与检索范围…', trace: [], tools: [],
     sourceQuestion: text, pending: true, stage: 'planning', createdAt: nowIso(), ...mode,
   })
   const signal = run.start()
@@ -145,12 +145,16 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
           provider: preferences.provider || undefined,
           model: preferences.model || undefined,
           onStatus: (status) => {
-            if (status.status === 'queued') run.stage = 'planning'
-            if (status.status === 'running') run.stage = status.agent_trace?.some((item) => item.kind?.startsWith('tool.')) ? 'tooling' : 'retrieving'
-            if (status.status === 'cancelling') run.stage = 'network_wait'
+            if (status.status === 'queued') run.setStage('planning')
+            if (status.status === 'running') {
+              const activeTool = status.tools?.some((item) => item.status === 'running')
+              const reportStarted = status.tools?.some((item) => item.name === 'report_write' || item.name === 'report_finalize')
+              run.setStage(activeTool ? 'tooling' : reportStarted ? 'generating' : 'retrieving')
+            }
+            if (status.status === 'cancelling') run.setStage('network_wait')
             sessions.patchMessage(pendingId, { trace: status.agent_trace || [], tools: status.tools || [] })
           },
-          onNetworkRetry: () => { run.stage = 'network_wait' },
+          onNetworkRetry: () => { run.setStage('network_wait') },
         })
     sessions.active.v2SessionId = data.session_id || sessions.active.v2SessionId
     sessions.patchMessage(pendingId, {
