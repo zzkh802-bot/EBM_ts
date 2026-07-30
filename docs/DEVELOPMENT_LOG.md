@@ -10,6 +10,19 @@ Persistent implementation memory for context compaction/recovery. Update after e
 - Local development first; Pi native TUI and bash remain available.
 - Governing decisions: `docs/adr/0001-*`, `0002-*`, `0003-*`.
 
+## 2026-07-30 — product runtime and execution visibility
+
+### Completed slice: model configuration and user-visible execution
+
+- Made the TypeScript research service the only user-facing chat path. The retired Python/V1 route remains a compatibility API only; the UI no longer asks users to choose an implementation backend.
+- Added `GET /api/v1/runtime-config`. It returns only provider/model labels, availability and setup hints—never credentials. The submit request now carries the selected provider/model and the server validates it against this configuration before launching the runtime.
+- Added server configuration for 芯穹, DeepSeek, OpenAI and Anthropic. 芯穹 now prefers `XINQIONG_API_KEY` while retaining the existing `OPENAI_API_KEY` compatibility path; OpenAI requires the explicit `EBM_ENABLE_OPENAI=1` guard to avoid mistaking a legacy 芯穹 key for an OpenAI key.
+- Reused the runtime's native tool lifecycle: a tool starts one record and completion updates that same record. The frontend polls and renders each call as one compact line; users can expand it for input, result summary, error and timestamps. Tool output is bounded and obvious secret-shaped values are redacted before it crosses the API boundary.
+- Removed demo-like static “connected sources”, fabricated daily counts and fabricated continuation cards. The side panel now reflects real server configuration and the selected research mode.
+- Kept the runtime implementation private in product text: user-visible copy refers to the “循证研究服务” and “研究引擎”; runtime names remain limited to internal code/ADR documentation.
+- Deliberately did not add a per-tool approval/rollback workflow: clinical research involves many read-only actions, so it would add friction without a meaningful decision boundary.
+- Verification: root `npm run typecheck`; focused `npm test -- tests/agentApi.test.ts` (5 passing); frontend `npm run typecheck && npm test` (20 passing).
+
 ## 2026-07-21 — implementation started
 
 ### Planned order

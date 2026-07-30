@@ -46,7 +46,7 @@ describe('会话存储迁移', () => {
     expect(readLegacyString('dp_xunyi_theme_mode_v1')).toBe('dark')
     expect(localStorage.getItem('dp_xunyi_theme_mode_v1')).toBe('dark')
     expect(usePreferencesStore().themeMode).toBe('dark')
-    expect(usePreferencesStore().backendVersion).toBe('v1')
+    expect(usePreferencesStore().backendVersion).toBe('v2')
     expect(useSessionsStore().activeSessionId).toBe('session-id')
     expect(localStorage.getItem('dp_xunyi_active_session_v1')).toBe('session-id')
   })

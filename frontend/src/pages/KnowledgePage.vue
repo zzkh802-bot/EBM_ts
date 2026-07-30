@@ -28,7 +28,7 @@ const formatTime = (value?: string) => {
 
 const backendName = (value?: string) => {
   if (!value) return '循证引擎'
-  if (/ebm|agent/i.test(value)) return 'DP循医 Agent'
+  if (/ebm|agent/i.test(value)) return '循医'
   return value
 }
 

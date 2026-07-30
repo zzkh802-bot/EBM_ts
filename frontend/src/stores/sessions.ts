@@ -5,8 +5,8 @@ import { migrateSessions, newId, nowIso, readLegacyString, safeRead, safeWrite, 
 import { defaultModes } from './preferences'
 
 const welcome = (): Message => ({
-  id: newId('welcome'), role: 'assistant', title: 'DP循医 Agent',
-  content: '在下方输入医学问题，或点击 + 上传报告、文献片段、图片后提交。我会调用 DP循医循证引擎进行证据检索、分级和回答生成。',
+  id: newId('welcome'), role: 'assistant', title: '循医',
+  content: '在下方输入医学问题。循医会进行证据检索、分级和回答生成，并保留可展开的运行记录。',
   trace: [], createdAt: nowIso(), ...defaultModes,
 })
 const createSession = (): Session => {

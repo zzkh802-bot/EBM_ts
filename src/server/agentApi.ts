@@ -4,7 +4,7 @@ import { access, copyFile, mkdir, readFile, readdir, stat } from "node:fs/promis
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
 
-const CONTRACT_VERSION = "dp-xunyi-agent/v2";
+const CONTRACT_VERSION = "xunyi-research/v1";
 const MAX_REQUEST_BYTES = 1_048_576;
 const MAX_TRACE_EVENTS = 240;
 const MAX_TOOL_EVENTS = 160;
@@ -31,6 +31,23 @@ export type AgentRunInput = {
   retrievalPolicy: RetrievalPolicy;
   maxIterations: number;
   requestTimeoutSeconds: number;
+  provider: string;
+  model: string;
+};
+
+export type RuntimeModel = {
+  provider: string;
+  provider_label: string;
+  model: string;
+  model_label: string;
+  available: boolean;
+  setup_hint?: string;
+};
+
+export type RuntimeConfig = {
+  default_provider: string;
+  default_model: string;
+  models: RuntimeModel[];
 };
 
 export type AgentExecutionResult = {
@@ -97,8 +114,8 @@ export class AgentRunStore {
       input,
       status: "queued",
       createdAt: new Date().toISOString(),
-      message: "任务已创建，等待 DP循医 TypeScript Agent 运行。",
-      agentTrace: [trace("run.queued", "任务已创建", "等待 Pi Agent 进程启动")],
+      message: "任务已创建，等待循证研究服务运行。",
+      agentTrace: [trace("run.queued", "任务已创建", "等待研究引擎启动")],
       tools: [],
       controller: new AbortController(),
     };
@@ -130,7 +147,7 @@ export class AgentRunStore {
     }
     run.status = "running";
     run.startedAt = new Date().toISOString();
-    run.message = "DP循医 TypeScript Agent 正在检索和生成回答。";
+    run.message = "循证研究服务正在检索和生成回答。";
     this.addTrace(run, trace("run.started", "任务已启动", `${run.input.researchMode} 模式`));
     try {
       const result = await this.executor(run.input, {
@@ -152,7 +169,7 @@ export class AgentRunStore {
       run.status = "succeeded";
       run.completedAt = new Date().toISOString();
       run.message = result.message.trim() || "Agent 已完成，但没有生成可展示的文本。";
-      this.addTrace(run, trace("run.completed", "任务完成", "已收到 Pi Agent 最终回答"));
+      this.addTrace(run, trace("run.completed", "任务完成", "已收到最终回答"));
     } catch (error) {
       if (run.controller.signal.aborted || isAbortError(error)) {
         this.markCancelled(run);
@@ -160,7 +177,7 @@ export class AgentRunStore {
       }
       run.status = "failed";
       run.completedAt = new Date().toISOString();
-      run.message = "DP循医 TypeScript Agent 未能完成本次任务。";
+      run.message = "循证研究服务未能完成本次任务。";
       run.error = { code: "agent_execution_failed", message: errorMessage(error) };
       this.addTrace(run, trace("run.failed", "任务失败", run.error.message));
     }
@@ -170,7 +187,7 @@ export class AgentRunStore {
     run.status = "cancelled";
     run.completedAt = new Date().toISOString();
     run.message = "任务已中断。";
-    this.addTrace(run, trace("run.cancelled", "任务已中断", "Pi Agent 进程已收到取消信号"));
+    this.addTrace(run, trace("run.cancelled", "任务已中断", "研究引擎已收到取消信号"));
   }
 
   private addTrace(run: InternalRun, event: AgentTraceEvent): void {
@@ -210,6 +227,8 @@ export class AgentRunStore {
         max_iterations: run.input.maxIterations,
         max_iterations_is_advisory: true,
         request_timeout_seconds: run.input.requestTimeoutSeconds,
+        provider: run.input.provider,
+        model: run.input.model,
       },
       ...(run.error ? { error: run.error } : {}),
     };
@@ -228,14 +247,45 @@ export type AgentApiServerOptions = {
   executor: AgentExecutor;
   corsOrigin?: string;
   maxCompletedRuns?: number;
+  runtimeConfig?: RuntimeConfig;
 };
 
 export function createAgentApiServer(options: AgentApiServerOptions): { server: Server; store: AgentRunStore } {
   const store = new AgentRunStore(options.executor, options.maxCompletedRuns);
   const server = createServer((request, response) => {
-    void handleRequest(request, response, store, options.corsOrigin ?? "*");
+    void handleRequest(request, response, store, options.corsOrigin ?? "*", options.runtimeConfig ?? defaultRuntimeConfig());
   });
   return { server, store };
+}
+
+export async function loadRuntimeConfig(rootDir: string): Promise<RuntimeConfig> {
+  const env = { ...(await projectEnv(rootDir)), ...process.env };
+  const models: RuntimeModel[] = [
+    {
+      provider: "xinqiong", provider_label: "芯穹 / Infini-AI", model: "deepseek-v4-flash", model_label: "DeepSeek V4 Flash",
+      available: Boolean(env.XINQIONG_API_KEY || (env.EBM_PROVIDER === "xinqiong" && env.OPENAI_API_KEY)),
+      setup_hint: "设置 XINQIONG_API_KEY；旧配置可继续使用 EBM_PROVIDER=xinqiong 与 OPENAI_API_KEY。",
+    },
+    {
+      provider: "deepseek", provider_label: "DeepSeek", model: "deepseek-v4-flash", model_label: "DeepSeek V4 Flash",
+      available: Boolean(env.DEEPSEEK_API_KEY), setup_hint: "设置 DEEPSEEK_API_KEY。",
+    },
+    {
+      provider: "openai", provider_label: "OpenAI", model: "gpt-5-mini", model_label: "GPT-5 mini",
+      available: env.EBM_ENABLE_OPENAI === "1" && Boolean(env.OPENAI_API_KEY), setup_hint: "设置 OPENAI_API_KEY，并显式设置 EBM_ENABLE_OPENAI=1。",
+    },
+    {
+      provider: "anthropic", provider_label: "Anthropic", model: "claude-sonnet-4-5", model_label: "Claude Sonnet 4.5",
+      available: Boolean(env.ANTHROPIC_API_KEY || env.ANTHROPIC_OAUTH_TOKEN), setup_hint: "设置 ANTHROPIC_API_KEY 或 ANTHROPIC_OAUTH_TOKEN。",
+    },
+  ];
+  const configuredDefault = models.find((item) => item.provider === env.EBM_PROVIDER && item.model === (env.EBM_MODEL || item.model));
+  const fallback = configuredDefault ?? models.find((item) => item.available) ?? models[0]!;
+  return {
+    default_provider: fallback.provider,
+    default_model: fallback.model,
+    models,
+  };
 }
 
 export function createPiCliExecutor(input: { rootDir: string }): AgentExecutor {
@@ -265,7 +315,7 @@ export function createPiCliExecutor(input: { rootDir: string }): AgentExecutor {
   };
 }
 
-async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string): Promise<void> {
+async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: RuntimeConfig): Promise<void> {
   setCors(response, corsOrigin);
   if (request.method === "OPTIONS") {
     response.writeHead(204);
@@ -278,14 +328,18 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     if (request.method === "GET" && pathname === "/health") {
       sendJson(response, 200, {
         ok: true,
-        service: "dp-xunyi-ts-agent-api",
+        service: "xunyi-research-service",
         contract_version: CONTRACT_VERSION,
-        endpoints: ["POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel"],
+        endpoints: ["GET /api/v1/runtime-config", "POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel"],
       });
       return;
     }
+    if (request.method === "GET" && pathname === "/api/v1/runtime-config") {
+      sendJson(response, 200, runtimeConfig);
+      return;
+    }
     if (request.method === "POST" && pathname === "/api/v1/agent-runs") {
-      const input = validateAgentRunInput(await readJsonBody(request));
+      const input = validateAgentRunInput(await readJsonBody(request), runtimeConfig);
       const run = store.submit(input);
       sendJson(response, 202, {
         ...run,
@@ -317,7 +371,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
   }
 }
 
-function validateAgentRunInput(value: unknown): AgentRunInput {
+function validateAgentRunInput(value: unknown, runtimeConfig: RuntimeConfig): AgentRunInput {
   if (!isRecord(value)) throw new ApiError(400, "invalid_json", "请求体必须是 JSON 对象。");
   const question = requiredString(value.question, "question", 12_000);
   const attachments = value.attachments;
@@ -330,6 +384,11 @@ function validateAgentRunInput(value: unknown): AgentRunInput {
   const requestTimeoutSeconds = boundedInteger(value.request_timeout_seconds, "request_timeout_seconds", 30, 900, researchMode === "instant" ? 300 : 600);
   const retrievalPolicy = enumValue(value.retrieval_policy, ["all", "mcp_only"] as const, "retrieval_policy", "all");
   const sessionId = optionalString(value.session_id ?? value.ebm_session_id, "session_id", 200);
+  const provider = optionalString(value.provider, "provider", 80) ?? runtimeConfig.default_provider;
+  const model = optionalString(value.model, "model", 160) ?? runtimeConfig.models.find((item) => item.provider === provider)?.model ?? runtimeConfig.default_model;
+  const selected = runtimeConfig.models.find((item) => item.provider === provider && item.model === model);
+  if (!selected) throw new ApiError(422, "unsupported_model", "该模型不在当前循医运行配置中。");
+  if (!selected.available) throw new ApiError(422, "model_not_configured", `${selected.provider_label} 尚未在服务器配置中启用。`);
   return {
     question,
     ...(sessionId ? { sessionId } : {}),
@@ -340,6 +399,8 @@ function validateAgentRunInput(value: unknown): AgentRunInput {
     retrievalPolicy,
     maxIterations,
     requestTimeoutSeconds,
+    provider,
+    model,
   };
 }
 
@@ -390,10 +451,18 @@ async function readLatestFinalReport(rootDir: string, sessionId: string): Promis
 
 async function runPiCli(input: { rootDir: string; piEntrypoint: string; request: AgentRunInput; hooks: AgentExecutionHooks; signal: AbortSignal }): Promise<AgentExecutionResult> {
   const { rootDir, piEntrypoint, request, hooks, signal } = input;
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    ...(await projectEnv(rootDir)),
+    PI_SKIP_VERSION_CHECK: "1",
+    PI_CODING_AGENT_DIR: path.join(rootDir, "data", "pi-agent"),
+    EBM_RETRIEVAL_POLICY: request.retrievalPolicy,
+  };
   const args = [
     piEntrypoint,
     "--mode", "json",
     "--approve",
+    "--model", `${request.provider}/${request.model}`,
     "--session-dir", path.join(rootDir, "data", "pi-sessions"),
     "--no-extensions",
     "--extension", path.join(rootDir, ".pi", "extensions", "ebm-providers.ts"),
@@ -404,16 +473,9 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
   ];
   if (request.retrievalPolicy === "mcp_only") args.push("--exclude-tools", "bash");
   if (request.sessionId) args.push("--session", request.sessionId);
-  else args.push("--name", `DP循医-${new Date().toISOString().slice(0, 10)}`);
+  else args.push("--name", `循医-${new Date().toISOString().slice(0, 10)}`);
   args.push(buildAgentPrompt(request));
 
-  const env = {
-    ...process.env,
-    ...(await projectEnv(rootDir)),
-    PI_SKIP_VERSION_CHECK: "1",
-    PI_CODING_AGENT_DIR: path.join(rootDir, "data", "pi-agent"),
-    EBM_RETRIEVAL_POLICY: request.retrievalPolicy,
-  };
   const child = spawn(process.execPath, args, { cwd: rootDir, env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
   let stdoutBuffer = "";
   let stderr = "";
@@ -428,7 +490,10 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
     hooks.onTrace(event);
   };
   const addTool = (event: Record<string, unknown>) => {
-    tools.push(event);
+    const id = typeof event.id === "string" ? event.id : undefined;
+    const existing = id ? tools.findIndex((item) => item.id === id) : -1;
+    if (existing >= 0) tools[existing] = { ...tools[existing], ...event };
+    else tools.push(event);
     if (tools.length > MAX_TOOL_EVENTS) tools.splice(0, tools.length - MAX_TOOL_EVENTS);
     hooks.onTool(event);
   };
@@ -438,26 +503,30 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
     try {
       event = JSON.parse(line) as unknown;
     } catch {
-      addTrace(trace("pi.output", "Pi 输出无法解析", line.slice(0, 500)));
+      addTrace(trace("runtime.output", "运行输出无法解析", line.slice(0, 500)));
       return;
     }
     if (!isRecord(event)) return;
     if (event.type === "session" && typeof event.id === "string") {
       sessionId = event.id;
       hooks.setSessionId(sessionId);
-      addTrace(trace("pi.session", "Pi 会话已创建", sessionId));
+      addTrace(trace("runtime.session", "研究会话已创建", sessionId));
       return;
     }
     if (event.type === "tool_execution_start") {
       const name = typeof event.toolName === "string" ? event.toolName : "tool";
-      addTool({ name, status: "running" });
-      addTrace(trace("tool.started", `调用工具：${name}`, ""));
+      const id = typeof event.toolCallId === "string" ? event.toolCallId : undefined;
+      const argumentsValue = event.args;
+      addTool({ ...(id ? { id } : {}), name, status: "running", ...(argumentsValue === undefined ? {} : { arguments: argumentsValue }) });
+      addTrace(trace("tool.started", `调用工具：${name}`, toolArgumentsSummary(argumentsValue)));
       return;
     }
     if (event.type === "tool_execution_end") {
       const name = typeof event.toolName === "string" ? event.toolName : "tool";
-      addTool({ name, status: event.isError === true ? "error" : "completed" });
-      addTrace(trace(event.isError === true ? "tool.failed" : "tool.completed", `${event.isError === true ? "工具失败" : "工具完成"}：${name}`, ""));
+      const id = typeof event.toolCallId === "string" ? event.toolCallId : undefined;
+      const result = summarizeToolResult(event.result);
+      addTool({ ...(id ? { id } : {}), name, status: event.isError === true ? "error" : "completed", ...(result ? { result } : {}) });
+      addTrace(trace(event.isError === true ? "tool.failed" : "tool.completed", `${event.isError === true ? "工具失败" : "工具完成"}：${name}`, result));
       return;
     }
     if (event.type === "message_update" && isRecord(event.assistantMessageEvent) && event.assistantMessageEvent.type === "text_delta" && typeof event.assistantMessageEvent.delta === "string") {
@@ -467,9 +536,10 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
     if (event.type === "message_end" && isRecord(event.message) && event.message.role === "assistant") {
       const text = contentText(event.message.content);
       if (text) latestAnswer = text;
+      else if (typeof event.message.errorMessage === "string") addTrace(trace("model.error", "模型服务请求失败", modelErrorSummary(event.message.errorMessage)));
       return;
     }
-    if (event.type === "agent_start") addTrace(trace("agent.started", "Pi Agent 已启动", ""));
+    if (event.type === "agent_start") addTrace(trace("agent.started", "研究引擎已启动", ""));
     if (event.type === "agent_end") {
       const messages = Array.isArray(event.messages) ? event.messages : [];
       const finalAssistant = [...messages].reverse().find((message) => isRecord(message) && message.role === "assistant");
@@ -505,9 +575,12 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
     });
     if (stdoutBuffer.trim()) consume(stdoutBuffer);
     if (signal.aborted) throw abortError();
-    if (exitCode !== 0) throw new Error(`Pi CLI exited with code ${exitCode}${stderr ? `: ${stderr}` : ""}`);
+    if (exitCode !== 0) throw new Error(`研究引擎异常退出（代码 ${exitCode}）。`);
     const message = latestAnswer.trim();
-    if (!message) throw new Error(`Pi CLI completed without a final assistant message${stderr ? `: ${stderr}` : ""}`);
+    if (!message) {
+      const modelError = traceEvents.findLast((event) => event.kind === "model.error")?.detail;
+      throw new Error(modelError || "研究引擎完成后未返回可展示的回答。");
+    }
     const reportMarkdown = sessionId ? await readLatestFinalReport(rootDir, sessionId) : undefined;
     return {
       ...(sessionId ? { sessionId } : {}),
@@ -519,6 +592,33 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
     signal.removeEventListener("abort", abort);
     if (forcedKill.value) clearTimeout(forcedKill.value);
   }
+}
+
+function defaultRuntimeConfig(): RuntimeConfig {
+  return {
+    default_provider: "deepseek",
+    default_model: "deepseek-v4-flash",
+    models: [
+      { provider: "deepseek", provider_label: "DeepSeek", model: "deepseek-v4-flash", model_label: "DeepSeek V4 Flash", available: true },
+    ],
+  };
+}
+
+function toolArgumentsSummary(value: unknown): string {
+  const text = summarizeToolResult(value);
+  return text ? `输入：${text}` : "";
+}
+
+function summarizeToolResult(value: unknown): string {
+  if (value === undefined || value === null) return "";
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  return text.replace(/((?:api[_-]?key|authorization|bearer))\s*[:=]\s*[^\s,}"']+/gi, "$1: [已隐藏]").slice(0, 12_000);
+}
+
+function modelErrorSummary(value: string): string {
+  const status = /\b(401|402|403|429|5\d\d)\b/.exec(value)?.[1];
+  const message = /"message"\s*:\s*"([^"]+)"/.exec(value)?.[1] ?? value;
+  return `${status ? `模型服务返回 ${status}：` : "模型服务错误："}${message}`.slice(0, 500);
 }
 
 async function projectEnv(rootDir: string): Promise<Record<string, string>> {
@@ -553,7 +653,7 @@ export function buildAgentPrompt(input: AgentRunInput): string {
       ? "可按需使用已配置的检索工具。"
       : "用户要求不进行外部检索；只使用当前会话中的既有材料。";
   return [
-    "你是 DP循医的 TypeScript 后端 Agent。请输出中文、可追溯且不过度断言的循证回答。",
+    "你是循医的循证研究服务。请输出中文、可追溯且不过度断言的循证回答。",
     modeInstruction[input.researchMode],
     audienceInstruction,
     "研究模式和用户类型只改变内容的深度、范围和专业程度，不改变前端布局。所有报告使用稳定的语义结构，并按需包含：临床问题与决策、主要疗效结局、关键安全结局、管理策略、结论与建议、参考文献。重大出血、死亡、感染、禁忌等关键安全结局必须使用独立的二级或三级标题，不得埋在长段落中。不要为了凑模板输出没有内容的章节。",

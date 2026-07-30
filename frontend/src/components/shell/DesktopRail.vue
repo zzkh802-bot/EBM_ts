@@ -11,8 +11,8 @@ const isActive = (path: string) => route.path === path || route.path.startsWith(
 </script>
 
 <template>
-  <aside class="gemini-rail" aria-label="DP循医快速导航">
-    <button class="rail-menu" type="button" aria-label="打开 DP循医菜单" @click="ui.sessionDrawerOpen = true">
+  <aside class="gemini-rail" aria-label="循医快速导航">
+    <button class="rail-menu" type="button" aria-label="打开循医菜单" @click="ui.sessionDrawerOpen = true">
       <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
     </button>
     <nav class="workspace-nav" aria-label="工作台一级导航">

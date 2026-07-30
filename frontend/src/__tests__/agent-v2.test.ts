@@ -23,12 +23,12 @@ const jsonResponse = (value: unknown, status = 200) => new Response(JSON.stringi
 
 afterEach(() => vi.unstubAllGlobals())
 
-describe('TypeScript Agent v2 client', () => {
+describe('循医研究服务客户端', () => {
   it('创建任务、轮询并映射为现有 AgentResponse', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ contract_version: 'dp-xunyi-agent/v2', run_id: 'run-1', status: 'queued' }, 202))
+      .mockResolvedValueOnce(jsonResponse({ contract_version: 'xunyi-research/v1', run_id: 'run-1', status: 'queued' }, 202))
       .mockResolvedValueOnce(jsonResponse({
-        contract_version: 'dp-xunyi-agent/v2', run_id: 'run-1', status: 'succeeded',
+        contract_version: 'xunyi-research/v1', run_id: 'run-1', status: 'succeeded',
         session_id: 'pi-session', agent_answer: '循证回答摘要', report_markdown: '# 完整循证报告\n\n正文。', agent_trace: [], tools: [],
       }))
     vi.stubGlobal('fetch', fetchMock)
@@ -48,10 +48,10 @@ describe('TypeScript Agent v2 client', () => {
 
   it('轮询瞬时断网时沿用同一任务 ID 重试，不重复创建任务', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ contract_version: 'dp-xunyi-agent/v2', run_id: 'run-retry', status: 'queued' }, 202))
+      .mockResolvedValueOnce(jsonResponse({ contract_version: 'xunyi-research/v1', run_id: 'run-retry', status: 'queued' }, 202))
       .mockRejectedValueOnce(new TypeError('Failed to fetch'))
       .mockResolvedValueOnce(jsonResponse({
-        contract_version: 'dp-xunyi-agent/v2', run_id: 'run-retry', status: 'succeeded',
+        contract_version: 'xunyi-research/v1', run_id: 'run-retry', status: 'succeeded',
         agent_answer: '断线恢复后的回答', agent_trace: [], tools: [],
       }))
     vi.stubGlobal('fetch', fetchMock)

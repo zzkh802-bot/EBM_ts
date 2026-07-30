@@ -1,7 +1,8 @@
-import type { AgentRequest, AgentResponse, AgentV2Request, AgentV2Response } from '../types/domain'
+import type { AgentRequest, AgentResponse, AgentV2Request, AgentV2Response, RuntimeConfig } from '../types/domain'
 import { HttpError, postJson, request } from './http'
 
 const V2_BASE = '/ts-api/api/v1/agent-runs'
+const V2_RUNTIME_CONFIG = '/ts-api/api/v1/runtime-config'
 const ACTIVE_V2_RUN_KEY = 'dp_xunyi_active_v2_run'
 const activeStatuses = new Set(['queued', 'running', 'cancelling'])
 const retryableStatuses = new Set([408, 425, 429, 500, 502, 503, 504])
@@ -13,6 +14,8 @@ type V2RunOptions = {
   maxPollRetries?: number
   onStatus?: (run: AgentV2Response) => void
   onNetworkRetry?: (attempt: number) => void
+  provider?: string
+  model?: string
 }
 
 const wait = (milliseconds: number, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
@@ -28,7 +31,7 @@ const wait = (milliseconds: number, signal: AbortSignal) => new Promise<void>((r
   signal.addEventListener('abort', onAbort, { once: true })
 })
 
-const toV2Request = (dto: AgentRequest, sessionId?: string): AgentV2Request => ({
+const toV2Request = (dto: AgentRequest, sessionId?: string, provider?: string, model?: string): AgentV2Request => ({
   question: dto.question,
   session_id: sessionId || undefined,
   research_mode: dto.research_mode,
@@ -37,6 +40,8 @@ const toV2Request = (dto: AgentRequest, sessionId?: string): AgentV2Request => (
   search_enabled: dto.search_enabled,
   max_iterations: dto.max_iterations,
   request_timeout_seconds: dto.research_mode === 'instant' ? 300 : 600,
+  ...(provider ? { provider } : {}),
+  ...(model ? { model } : {}),
 })
 
 const rememberActiveRun = (runId: string) => {
@@ -77,14 +82,15 @@ const toAgentResponse = (run: AgentV2Response): AgentResponse => ({
 })
 
 export const agentService = {
+  getRuntimeConfig: () => request<RuntimeConfig>(V2_RUNTIME_CONFIG),
   runV1: (dto: AgentRequest, signal: AbortSignal) =>
     postJson<AgentResponse>('/ebm/agent', dto, signal, (dto.request_timeout_seconds + 5) * 1000),
   cancelV2: (runId: string) =>
     postJson<AgentV2Response>(`${V2_BASE}/${encodeURIComponent(runId)}/cancel`, {}),
   async runV2(dto: AgentRequest, signal: AbortSignal, options: V2RunOptions = {}): Promise<AgentResponse> {
-    if (dto.attachments.length) throw new Error('TypeScript Agent v2 首版暂不支持附件，请切换回 V1。')
-    const created = await postJson<AgentV2Response>(V2_BASE, toV2Request(dto, options.sessionId), signal)
-    if (!created.run_id) throw new Error('TypeScript Agent v2 未返回任务 ID。')
+    if (dto.attachments.length) throw new Error('当前循证研究服务暂不支持附件。')
+    const created = await postJson<AgentV2Response>(V2_BASE, toV2Request(dto, options.sessionId, options.provider, options.model), signal)
+    if (!created.run_id) throw new Error('循证研究服务未返回任务 ID。')
     const runId = created.run_id
     rememberActiveRun(runId)
     let consecutivePollFailures = 0
@@ -118,7 +124,7 @@ export const agentService = {
         }
         forgetActiveRun(runId)
         if (run.status === 'succeeded') return toAgentResponse(run)
-        throw new Error(run.error?.message || run.message || `TypeScript Agent v2 任务状态：${run.status}`)
+        throw new Error(run.error?.message || run.message || `研究任务状态：${run.status}`)
       }
     } catch (error) {
       if (signal.aborted) void agentService.cancelV2(runId).catch(() => undefined)

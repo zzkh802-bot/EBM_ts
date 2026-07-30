@@ -1,9 +1,9 @@
 import { once } from "node:events";
 import { describe, expect, it } from "vitest";
-import { buildAgentPrompt, createAgentApiServer, type AgentExecutor, type AgentRunInput } from "../src/server/agentApi.js";
+import { buildAgentPrompt, createAgentApiServer, type AgentExecutor, type AgentRunInput, type RuntimeConfig } from "../src/server/agentApi.js";
 
-async function startApi(executor: AgentExecutor) {
-  const api = createAgentApiServer({ executor });
+async function startApi(executor: AgentExecutor, runtimeConfig?: RuntimeConfig) {
+  const api = createAgentApiServer({ executor, ...(runtimeConfig ? { runtimeConfig } : {}) });
   api.server.listen(0, "127.0.0.1");
   await once(api.server, "listening");
   const address = api.server.address();
@@ -20,7 +20,7 @@ async function eventually<T>(read: () => Promise<T>, predicate: (value: T) => bo
   throw new Error("Timed out waiting for API result");
 }
 
-describe("DP循医 TypeScript agent API", () => {
+describe("循医研究服务 API", () => {
   const promptInput = (overrides: Partial<AgentRunInput> = {}): AgentRunInput => ({
     question: "测试临床问题",
     researchMode: "instant",
@@ -30,6 +30,8 @@ describe("DP循医 TypeScript agent API", () => {
     retrievalPolicy: "all",
     maxIterations: 5,
     requestTimeoutSeconds: 300,
+    provider: "deepseek",
+    model: "deepseek-v4-flash",
     ...overrides,
   });
 
@@ -67,7 +69,7 @@ describe("DP循医 TypeScript agent API", () => {
       });
       expect(created.status).toBe(202);
       const accepted = await created.json() as { run_id: string; status: string; contract_version: string };
-      expect(accepted.contract_version).toBe("dp-xunyi-agent/v2");
+      expect(accepted.contract_version).toBe("xunyi-research/v1");
       expect(accepted.status).toBe("queued");
 
       const result = await eventually(
@@ -81,6 +83,42 @@ describe("DP循医 TypeScript agent API", () => {
       expect(receivedInput?.retrievalPolicy).toBe("all");
       expect(result.agent_trace.some((event: { kind: string }) => event.kind === "tool.completed")).toBe(true);
       expect(result.tools).toContainEqual({ name: "pubmed_search", status: "completed" });
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
+  });
+
+  it("publishes server-configured models and sends the selected model to the executor", async () => {
+    let receivedInput: Parameters<AgentExecutor>[0] | undefined;
+    const runtimeConfig: RuntimeConfig = {
+      default_provider: "xinqiong",
+      default_model: "deepseek-v4-flash",
+      models: [
+        { provider: "xinqiong", provider_label: "芯穹", model: "deepseek-v4-flash", model_label: "DeepSeek V4 Flash", available: true },
+        { provider: "deepseek", provider_label: "DeepSeek", model: "deepseek-v4-flash", model_label: "DeepSeek V4 Flash", available: false },
+      ],
+    };
+    const { api, baseUrl } = await startApi(async (input) => {
+      receivedInput = input;
+      return { message: "完成。" };
+    }, runtimeConfig);
+    try {
+      const config = await fetch(`${baseUrl}/api/v1/runtime-config`);
+      const published = await config.json() as RuntimeConfig;
+      expect(published.default_provider).toBe("xinqiong");
+      expect(published.models.find((item) => item.provider === "xinqiong")).toMatchObject({ available: true });
+      const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: "请检索一个临床问题", provider: "xinqiong", model: "deepseek-v4-flash" }),
+      });
+      const accepted = await created.json() as { run_id: string };
+      await eventually(
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        (value) => value.status === "succeeded",
+      );
+      expect(receivedInput).toMatchObject({ provider: "xinqiong", model: "deepseek-v4-flash" });
     } finally {
       api.server.close();
       await once(api.server, "close");

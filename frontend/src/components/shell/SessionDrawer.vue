@@ -43,7 +43,7 @@ const formatSessionTime = (value: string) => {
   <div class="drawer-backdrop" :hidden="!ui.sessionDrawerOpen" @click="ui.sessionDrawerOpen = false" />
   <aside class="side-drawer" :aria-hidden="!ui.sessionDrawerOpen" aria-label="用户信息与历史对话">
     <div class="drawer-top">
-      <div class="drawer-title">我的 DP循医</div>
+      <div class="drawer-title">我的循医</div>
       <button class="drawer-close" type="button" aria-label="关闭历史列表" @click="ui.sessionDrawerOpen = false">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
       </button>
@@ -55,10 +55,10 @@ const formatSessionTime = (value: string) => {
       <div class="user-meta">
         <div class="user-name">本地演示用户 <span class="auth-badge">已认证</span></div>
         <div class="user-line">登录状态：已登录 · 会话保存在本机浏览器</div>
-        <div class="user-line">服务：DP循医循证引擎 · 检测中</div>
+        <div class="user-line">服务：循医循证引擎 · 检测中</div>
       </div>
     </section>
-    <nav class="drawer-nav" aria-label="DP循医抽屉导航">
+    <nav class="drawer-nav" aria-label="循医抽屉导航">
       <button class="drawer-new-question" type="button" @click="createSession">
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" /></svg>
         新建循证对话

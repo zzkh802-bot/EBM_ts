@@ -34,6 +34,7 @@ export interface TraceItem {
   tool?: string
   payload?: unknown
   arguments?: Record<string, unknown>
+  timestamp?: string
 }
 
 export interface CitationAudit {
@@ -93,6 +94,23 @@ export interface AgentV2Request {
   search_enabled: boolean
   max_iterations: 5 | 8 | 10 | 14
   request_timeout_seconds: 300 | 600
+  provider?: string
+  model?: string
+}
+
+export interface RuntimeModel {
+  provider: string
+  provider_label: string
+  model: string
+  model_label: string
+  available: boolean
+  setup_hint?: string
+}
+
+export interface RuntimeConfig {
+  default_provider: string
+  default_model: string
+  models: RuntimeModel[]
 }
 
 export interface AgentV2Response {
@@ -120,6 +138,7 @@ export interface Message extends ModeSnapshot {
   content: string
   createdAt: string
   trace: TraceItem[]
+  tools?: Array<Record<string, unknown>>
   attachments?: AttachmentData[]
   archive?: ArchiveRef | null
   citationAudit?: CitationAudit | null
