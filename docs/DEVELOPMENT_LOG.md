@@ -34,6 +34,7 @@ Persistent implementation memory for context compaction/recovery. Update after e
 - Removed four unreferenced duplicate evidence components: an old composer, conversation feed, message renderer and debug panel. The active Evidence page is now the single owner of the chat/composer/rendering path.
 - Removed the visible but inert voice-input control rather than advertising a feature with no implementation.
 - Pointed the shell health state at the active research service instead of the retired Python proxy. Replaced fabricated recent sessions and demo-user authentication text with live browser-session data and truthful local-workspace copy; removed the inert global share button.
+- Removed four unimported legacy stylesheet files after confirming `styles/index.css` is the sole stylesheet entry point. Production build remains unchanged in size and succeeds.
 
 ## 2026-07-21 — implementation started
 
