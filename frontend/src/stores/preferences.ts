@@ -34,7 +34,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
   watch(themeMode, (value) => { safeWrite(STORAGE_KEYS.theme, value); applyTheme() })
   const setResearchMode = (value: ResearchMode) => {
     researchMode.value = value
-    if (value === 'expert') deepThink.value = true
+    deepThink.value = value === 'expert'
   }
   const applyRuntimeConfig = (config: RuntimeConfig) => {
     const selected = config.models.find((item) => item.available && item.provider === provider.value && item.model === model.value)

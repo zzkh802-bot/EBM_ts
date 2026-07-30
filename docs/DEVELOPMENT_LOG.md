@@ -45,6 +45,15 @@ Persistent implementation memory for context compaction/recovery. Update after e
 - Account-connection failures now expose a concise recovery message instead of a runtime exception. Credentials and account-store data remain server-owned.
 - Verification: root typecheck and boundary check; frontend typecheck and production build; live same-origin checks for `/`, `/evidence`, `/ts-api/health`, and an unknown API route (404 JSON).
 
+### Completed slice: research-mode and conversation ergonomics
+
+- Reframed the user-facing research choices as 快速 and 专家 while retaining the `instant` / `expert` API values. The composer now states what the selected mode changes; switching modes also gives deep thinking a coherent default, which remains user-adjustable.
+- Made the primary action truthful while a run is active: an empty composer stops the current research run; typed text becomes a queued follow-up and the button changes accordingly.
+- Selecting a clinical example fills and focuses the composer. Assistant messages retain the mode and audience used for that specific answer, so a mixed-mode conversation stays legible.
+- Reduced report-action noise: follow-up, concise conclusion and expanded evidence remain visible; copy, speech, sharing, rerun, Markdown and archive actions live under one “更多” menu.
+- Captured the real local product page with host Chrome in headless mode and used the review to remove generic/internal English labels, clarify example usage, and prevent provider labels from wrapping character-by-character.
+- Verification: frontend typecheck, production build, frontend test suite (20 passing), root boundary check, and visual screenshots at 1440px.
+
 ## 2026-07-21 — implementation started
 
 ### Planned order

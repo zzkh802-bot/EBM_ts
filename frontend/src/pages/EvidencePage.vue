@@ -36,6 +36,16 @@ const providers = computed(() => availableModels.value.filter((item, index, item
 ))
 const modelsForProvider = computed(() => availableModels.value.filter((item) => item.provider === preferences.provider))
 const connectableProviders = computed(() => runtimeConfig.value?.models.filter((item) => !item.available && item.connection_provider) || [])
+const questionInput = ref<HTMLTextAreaElement | null>(null)
+const researchModeLabel = (mode: ModeSnapshot['researchMode']) => mode === 'expert' ? '专家' : '快速'
+const audienceModeLabel = (mode: ModeSnapshot['audienceMode']) => mode === 'public' ? '普通用户版' : '医生专业版'
+const modeSummary = computed(() => preferences.researchMode === 'expert'
+  ? '专家模式会进行更完整的检索、核验与正式报告生成。'
+  : '快速模式聚焦关键结论与直接支持它的证据。')
+const primaryActionLabel = computed(() => {
+  if (!run.busy) return '开始研究'
+  return question.value.trim() ? '加入后续追问' : '停止本轮研究'
+})
 watch(() => preferences.provider, () => {
   if (modelsForProvider.value.some((item) => item.model === preferences.model)) return
   preferences.model = modelsForProvider.value[0]?.model || ''
@@ -195,6 +205,21 @@ const runQueued = (index: number) => {
   const text = run.queuedGuidance.splice(index, 1)[0]
   if (text) void submit(text)
 }
+const focusQuestion = async () => {
+  await nextTick()
+  questionInput.value?.focus()
+}
+const selectGoodCase = async (value: string) => {
+  question.value = value
+  await focusQuestion()
+}
+const handlePrimaryAction = () => {
+  if (run.busy && !question.value.trim()) {
+    run.stop()
+    return
+  }
+  void submit()
+}
 const toggleDeepThink = () => { if (!run.busy) preferences.deepThink = !preferences.deepThink }
 const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !preferences.searchEnabled }
 </script>
@@ -215,8 +240,8 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
             <span class="mode-group-label">工作模式</span>
             <fieldset class="mode-segment">
               <legend class="sr-only">循证工作模式</legend>
-              <button class="mode-button" :class="{ active: preferences.researchMode === 'instant' }" type="button" :aria-pressed="preferences.researchMode === 'instant'" :disabled="run.busy" @click="preferences.setResearchMode('instant')">Instant</button>
-              <button class="mode-button" :class="{ active: preferences.researchMode === 'expert' }" type="button" :aria-pressed="preferences.researchMode === 'expert'" :disabled="run.busy" @click="preferences.setResearchMode('expert')">Expert</button>
+              <button class="mode-button" :class="{ active: preferences.researchMode === 'instant' }" type="button" :aria-pressed="preferences.researchMode === 'instant'" :disabled="run.busy" @click="preferences.setResearchMode('instant')">快速</button>
+              <button class="mode-button" :class="{ active: preferences.researchMode === 'expert' }" type="button" :aria-pressed="preferences.researchMode === 'expert'" :disabled="run.busy" @click="preferences.setResearchMode('expert')">专家</button>
             </fieldset>
           </div>
           <div class="mode-group">
@@ -228,6 +253,10 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
             </fieldset>
           </div>
         </div>
+        <div class="mode-context" aria-live="polite">
+          <strong>{{ researchModeLabel(preferences.researchMode) }}模式</strong>
+          <span>{{ modeSummary }}</span>
+        </div>
         <div class="composer-body">
           <div class="queue-tray" :hidden="!run.queuedGuidance.length">
             <span v-for="(item, index) in run.queuedGuidance" :key="`${item}-${index}`">
@@ -237,6 +266,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
             </span>
           </div>
           <textarea
+            ref="questionInput"
             v-model="question"
             placeholder="输入临床问题，例如：EGFR 19del 晚期肺癌一线治疗如何选择？"
             aria-label="医学问题"
@@ -261,8 +291,9 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
           <button class="composer-option" type="button" :aria-pressed="preferences.searchEnabled" :class="{ active: preferences.searchEnabled }" :disabled="run.busy" @click="toggleSearch">证据检索</button>
           <span v-if="runtimeConfigError" class="runtime-error">{{ runtimeConfigError }}</span>
         </div>
-        <button class="send-button" type="button" :aria-label="run.busy ? '停止' : '提交问题'" @click="submit()">
+        <button class="send-button" :class="{ 'queue-mode': run.busy && question.trim() }" type="button" :aria-label="primaryActionLabel" @click="handlePrimaryAction">
           <svg v-if="!run.busy" width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          <span v-else-if="question.trim()" aria-hidden="true">＋</span>
           <span v-else>■</span>
         </button>
       </form>
@@ -270,7 +301,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
       <div class="app-desktop-grid">
         <section class="feature-section" aria-label="循医场景">
           <div class="feature-header">
-            <span><strong>循证 Good Cases</strong><small>来自跨科室正式标记 good_case 的完整检索与引用链案例</small></span>
+            <span><strong>循证示例</strong><small>按科室选择一个完整案例，也可以在输入框中继续修改问题</small></span>
           </div>
           <div class="feature-track" aria-label="循医问题场景滑动列表">
             <button
@@ -280,7 +311,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
               :class="{ primary: index === 0 }"
               type="button"
               :data-case-id="item.id"
-              @click="question = item.question"
+              @click="selectGoodCase(item.question)"
             >
               <span class="feature-icon">{{ item.department }}</span>
               <strong>{{ item.title }}</strong>
@@ -298,7 +329,10 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
             :class="message.role"
           >
             <div class="bubble">
-              <strong>{{ message.title }}</strong>
+              <div class="message-heading">
+                <strong>{{ message.title }}</strong>
+                <span v-if="message.role === 'assistant'" class="message-mode">{{ researchModeLabel(message.researchMode) }} · {{ audienceModeLabel(message.audienceMode) }}</span>
+              </div>
               <div v-if="message.pending" class="agent-stage">{{ stages[run.stage] || '正在调用循证引擎…' }}</div>
               <RunActivity v-if="message.role === 'assistant'" :trace="message.trace" :tools="message.tools" :pending="message.pending" />
               <ReportRenderer
@@ -314,14 +348,20 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
                 <span v-for="file in message.attachments" :key="file.id">{{ file.name }}</span>
               </div>
               <div v-if="message.role === 'assistant' && !message.pending" class="message-actions">
-                <button type="button" @click="copy(message)">复制</button>
-                <button type="button" @click="speak(message)">朗读</button>
-                <button type="button" @click="share(message)">分享</button>
-                <button type="button" @click="retry(message)">重试</button>
-                <button type="button" @click="retry(message, '请用更简洁、适合快速决策的方式回答：')">简化</button>
-                <button type="button" @click="retry(message, '请展开 PICO、证据等级、引用依据和复核点：')">详细</button>
-                <button v-if="message.audienceMode === 'clinician'" type="button" @click="sessions.patchMessage(message.id, { showMarkdown: !message.showMarkdown })">Markdown</button>
-                <button v-if="message.archive" type="button" @click="openArchive(message)">查看档案</button>
+                <button class="message-action-primary" type="button" @click="focusQuestion">继续追问</button>
+                <button type="button" @click="retry(message, '请用更简洁、适合快速决策的方式回答：')">简化结论</button>
+                <button type="button" @click="retry(message, '请展开 PICO、证据等级、引用依据和复核点：')">展开依据</button>
+                <details class="message-more-actions">
+                  <summary>更多</summary>
+                  <div>
+                    <button type="button" @click="copy(message)">复制</button>
+                    <button type="button" @click="speak(message)">朗读</button>
+                    <button type="button" @click="share(message)">分享</button>
+                    <button type="button" @click="retry(message)">重新运行</button>
+                    <button v-if="message.audienceMode === 'clinician'" type="button" @click="sessions.patchMessage(message.id, { showMarkdown: !message.showMarkdown })">查看 Markdown</button>
+                    <button v-if="message.archive" type="button" @click="openArchive(message)">查看档案</button>
+                  </div>
+                </details>
               </div>
             </div>
           </article>
@@ -376,10 +416,10 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
       <section class="workspace-info-card">
         <div class="workspace-info-title"><span>当前工作模式</span></div>
         <div class="workspace-mode-list">
-          <div><span>研究模式</span><strong>{{ preferences.researchMode === 'expert' ? 'Expert' : 'Instant' }}</strong></div>
+          <div><span>研究模式</span><strong>{{ researchModeLabel(preferences.researchMode) }}</strong></div>
           <div><span>深度思考</span><strong>{{ preferences.deepThink ? '开启' : '关闭' }}</strong></div>
           <div><span>证据检索</span><strong :class="{ 'mode-on': preferences.searchEnabled }">{{ preferences.searchEnabled ? '开启' : '关闭' }}</strong></div>
-          <div><span>回答对象</span><strong>{{ preferences.audienceMode === 'public' ? '普通用户版' : '医生专业版' }}</strong></div>
+          <div><span>回答对象</span><strong>{{ audienceModeLabel(preferences.audienceMode) }}</strong></div>
         </div>
       </section>
       <div class="workspace-trust-note">

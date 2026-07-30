@@ -5968,7 +5968,7 @@
     }
     }
 
-    /* AI Workspace */
+    /* 循证工作台 */
     .sr-only {
       position: absolute !important;
       width: 1px !important;
@@ -6031,7 +6031,7 @@
     }
 
     .app-brand::after {
-      content: "AI Workspace";
+      content: "循证工作台";
       border-left: 1px solid var(--workspace-line);
       margin-left: 4px;
       padding-left: 14px;
