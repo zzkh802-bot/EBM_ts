@@ -13,6 +13,8 @@
     "test:watch": "vitest",
     "ebm": "bash scripts/ebm.sh",
     "api": "tsx scripts/api-server.ts",
+    "frontend:build": "npm --prefix frontend run build",
+    "start": "npm run frontend:build && npm run api",
     "source-library:build": "tsx scripts/build-source-library.ts",
     "source-library:evaluate": "tsx scripts/evaluate-source-library.ts",
     "source-library:audit": "tsx scripts/audit-source-library.ts",

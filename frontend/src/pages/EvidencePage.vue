@@ -336,7 +336,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
           <span>运行状态</span>
           <span class="workspace-live"><i />{{ runtimeConfigError ? '配置异常' : '已连接' }}</span>
         </div>
-        <strong>{{ runtimeConfig ? '循证研究服务已就绪' : '正在读取服务器配置' }}</strong>
+        <strong>{{ runtimeConfig ? '服务器配置已读取' : '正在读取服务器配置' }}</strong>
         <div class="evidence-source-list">
           <div><span>服务</span><small>{{ providers.find((item) => item.provider === preferences.provider)?.provider_label || '未选择' }}</small></div>
           <div><span>模型</span><small>{{ modelsForProvider.find((item) => item.model === preferences.model)?.model_label || '使用服务器默认值' }}</small></div>

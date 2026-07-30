@@ -263,6 +263,7 @@ export type AgentApiServerOptions = {
   maxCompletedRuns?: number;
   runtimeConfig?: RuntimeConfig | (() => Promise<RuntimeConfig>);
   accountConnections?: AccountConnectionStore;
+  staticDir?: string;
 };
 
 export function createAgentApiServer(options: AgentApiServerOptions): { server: Server; store: AgentRunStore } {
@@ -271,8 +272,9 @@ export function createAgentApiServer(options: AgentApiServerOptions): { server: 
   const runtimeConfig = typeof configuredRuntimeConfig === "function"
     ? configuredRuntimeConfig
     : async () => configuredRuntimeConfig ?? defaultRuntimeConfig();
+  const staticDir = options.staticDir ? path.resolve(options.staticDir) : undefined;
   const server = createServer((request, response) => {
-    void handleRequest(request, response, store, options.corsOrigin ?? "*", runtimeConfig, options.accountConnections);
+    void handleRequest(request, response, store, options.corsOrigin ?? "*", runtimeConfig, options.accountConnections, staticDir);
   });
   return { server, store };
 }
@@ -342,10 +344,10 @@ export class AccountConnectionStore {
       connection.status = "connected";
       connection.message = "账户已连接。";
       delete connection.prompt;
-    }).catch((error) => {
+    }).catch(() => {
       if (connection.status === "cancelled") return;
       connection.status = "failed";
-      connection.message = `账户连接失败：${errorMessage(error)}`.slice(0, 300);
+      connection.message = "账户连接未完成，请重试或检查账户授权。";
       delete connection.prompt;
     });
     return connection;
@@ -395,7 +397,7 @@ export class AccountConnectionStore {
       };
       return;
     }
-    if (typeof event.message === "string") connection.message = event.message;
+    connection.message = "账户授权正在进行中。";
   }
 
   private waitForPrompt(connection: AccountConnection, prompt: { type: string; message: string; placeholder?: string; options?: readonly { id: string; label: string; description?: string }[]; signal?: AbortSignal }): Promise<string> {
@@ -462,7 +464,7 @@ export function createPiCliExecutor(input: { rootDir: string }): AgentExecutor {
   };
 }
 
-async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: () => Promise<RuntimeConfig>, accountConnections?: AccountConnectionStore): Promise<void> {
+async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: () => Promise<RuntimeConfig>, accountConnections?: AccountConnectionStore, staticDir?: string): Promise<void> {
   setCors(response, corsOrigin);
   if (request.method === "OPTIONS") {
     response.writeHead(204);
@@ -470,7 +472,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     return;
   }
   const url = new URL(request.url ?? "/", "http://localhost");
-  const pathname = url.pathname.replace(/\/$/, "") || "/";
+  const requestPathname = url.pathname.replace(/\/$/, "") || "/";
+  const pathname = requestPathname === "/ts-api" ? "/" : requestPathname.startsWith("/ts-api/") ? requestPathname.slice(7) : requestPathname;
   try {
     if (request.method === "GET" && pathname === "/health") {
       sendJson(response, 200, {
@@ -536,10 +539,47 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
         return;
       }
     }
+    if (
+      request.method === "GET"
+      && staticDir
+      && !requestPathname.startsWith("/api/")
+      && !requestPathname.startsWith("/ts-api/")
+      && await serveStatic(response, staticDir, requestPathname)
+    ) return;
     throw new ApiError(404, "not_found", "未找到接口。");
   } catch (error) {
     const apiError = error instanceof ApiError ? error : new ApiError(500, "internal_error", errorMessage(error));
     sendJson(response, apiError.status, { ok: false, contract_version: CONTRACT_VERSION, error: { code: apiError.code, message: apiError.message } });
+  }
+}
+
+async function serveStatic(response: ServerResponse, staticDir: string, pathname: string): Promise<boolean> {
+  const requested = pathname === "/" ? "index.html" : pathname.slice(1);
+  const target = path.resolve(staticDir, requested);
+  const insideStaticDir = target === staticDir || target.startsWith(`${staticDir}${path.sep}`);
+  if (!insideStaticDir) return false;
+  const file = await readableFile(target) ? target : path.extname(requested) ? undefined : path.join(staticDir, "index.html");
+  if (!file || !await readableFile(file)) return false;
+  const extension = path.extname(file);
+  const contentType = ({
+    ".css": "text/css; charset=utf-8",
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".svg": "image/svg+xml",
+  } as Record<string, string>)[extension] ?? "application/octet-stream";
+  response.writeHead(200, {
+    "Content-Type": contentType,
+    "Cache-Control": extension === ".html" ? "no-store" : "public, max-age=31536000, immutable",
+  });
+  response.end(await readFile(file));
+  return true;
+}
+
+async function readableFile(file: string): Promise<boolean> {
+  try {
+    return (await stat(file)).isFile();
+  } catch {
+    return false;
   }
 }
 

@@ -36,6 +36,15 @@ Persistent implementation memory for context compaction/recovery. Update after e
 - Pointed the shell health state at the active research service instead of the retired Python proxy. Replaced fabricated recent sessions and demo-user authentication text with live browser-session data and truthful local-workspace copy; removed the inert global share button.
 - Removed four unimported legacy stylesheet files after confirming `styles/index.css` is the sole stylesheet entry point. Production build remains unchanged in size and succeeds.
 
+### Completed slice: unified local product delivery
+
+- Kept Vue/Vite for productive development, but added one production launch path: `npm start` builds the frontend and the Node research service hosts the resulting files and APIs from the same origin.
+- The service recognizes the existing `/ts-api` development prefix, so the frontend keeps one API contract in development and production. Unknown API routes remain JSON 404s; only ordinary browser routes receive the SPA fallback.
+- Rebranded the browser document title and metadata as 循医. No implementation/runtime name is exposed in product-facing copy.
+- Preserved the existing blue-green palette. Tightened the clinical-workspace hierarchy around the question composer, evidence-run details, side-panel status and keyboard focus without changing the product's visual language.
+- Account-connection failures now expose a concise recovery message instead of a runtime exception. Credentials and account-store data remain server-owned.
+- Verification: root typecheck and boundary check; frontend typecheck and production build; live same-origin checks for `/`, `/evidence`, `/ts-api/health`, and an unknown API route (404 JSON).
+
 ## 2026-07-21 — implementation started
 
 ### Planned order
