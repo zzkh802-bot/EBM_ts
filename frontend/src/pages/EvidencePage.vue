@@ -299,6 +299,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
           <svg v-if="!run.busy" width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
           <span v-else-if="question.trim()" aria-hidden="true">＋</span>
           <span v-else>■</span>
+          <span class="send-label">{{ primaryActionLabel }}</span>
         </button>
       </form>
 

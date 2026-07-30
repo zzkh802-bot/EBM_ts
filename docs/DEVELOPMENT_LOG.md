@@ -63,6 +63,14 @@ Persistent implementation memory for context compaction/recovery. Update after e
 - Server-reported state now wins over time-based fallback labels for a short freshness window. The pending status therefore tracks actual retrieval, active tool work, report drafting, cancellation, and network recovery instead of only elapsed time.
 - Verification: root typecheck; focused API test suite (5 passing); frontend typecheck and production build; restarted local service and confirmed health endpoint.
 
+### Completed slice: single-service navigation and mobile research flow
+
+- Removed the visible entry points for legacy knowledge and literature pages because their requests still require the retired service. Old bookmarks now return to the evidence workspace instead of exposing a broken screen; the active navigation is limited to evidence work, research records, and creating a new research session.
+- Updated desktop, drawer and mobile vocabulary from “问诊/历史” to “研究记录”, matching the product’s evidence-workflow role.
+- Reworked the mobile composer into a vertical five-step layout: mode, mode explanation, clinical question, provider/retrieval choices, and an explicit primary action. This prevents desktop control geometry from forcing horizontal overflow on narrow screens.
+- Rebuilt the mobile bottom navigation as three equal actions: records, evidence workspace, and new research.
+- Verification: frontend typecheck/build/test suite, boundary check, old-route SPA fallback, and visual review at desktop plus 500px mobile layout.
+
 ## 2026-07-21 — implementation started
 
 ### Planned order

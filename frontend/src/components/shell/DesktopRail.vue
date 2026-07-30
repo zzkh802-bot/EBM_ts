@@ -25,17 +25,9 @@ const openSession = (id: string) => {
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4h7l4 4v12H7zM14 4v4h4M9.5 14.5l2 2 4-5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" /></svg>
         <span>循证问答</span>
       </button>
-      <button class="nav-item workspace-nav-item" :class="{ active: isActive('/knowledge') }" type="button" aria-label="我的知识" @click="go('/knowledge')">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 4h12v16H6zM9 7h6M9 11h6M9 15h4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" /></svg>
-        <span>我的知识</span>
-      </button>
-      <button class="nav-item workspace-nav-item" :class="{ active: isActive('/literature') }" type="button" aria-label="文献溯源" @click="go('/literature')">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4h11v16H7a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 0v16M10 8h5M10 12h5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" /></svg>
-        <span>文献溯源</span>
-      </button>
-      <button class="workspace-nav-item workspace-history-button" type="button" aria-label="历史问诊" @click="ui.sessionDrawerOpen = true">
+      <button class="workspace-nav-item workspace-history-button" type="button" aria-label="研究记录" @click="ui.sessionDrawerOpen = true">
         <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.35-5.65L4 8.7M4 4v4.7h4.7M12 8v4l2.8 1.8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" /></svg>
-        <span>历史问诊</span>
+        <span>研究记录</span>
       </button>
       <section class="workspace-recent-sessions" aria-label="最近会话">
         <span class="recent-session-date">最近会话</span>

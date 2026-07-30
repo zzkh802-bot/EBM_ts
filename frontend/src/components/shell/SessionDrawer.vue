@@ -41,10 +41,10 @@ const formatSessionTime = (value: string) => {
 
 <template>
   <div class="drawer-backdrop" :hidden="!ui.sessionDrawerOpen" @click="ui.sessionDrawerOpen = false" />
-  <aside class="side-drawer" :aria-hidden="!ui.sessionDrawerOpen" aria-label="用户信息与历史对话">
+  <aside class="side-drawer" :aria-hidden="!ui.sessionDrawerOpen" aria-label="工作区与研究记录">
     <div class="drawer-top">
       <div class="drawer-title">我的循医</div>
-      <button class="drawer-close" type="button" aria-label="关闭历史列表" @click="ui.sessionDrawerOpen = false">
+      <button class="drawer-close" type="button" aria-label="关闭研究记录" @click="ui.sessionDrawerOpen = false">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
       </button>
     </div>
@@ -63,18 +63,15 @@ const formatSessionTime = (value: string) => {
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" /></svg>
         新建循证对话
       </button>
-      <button class="drawer-nav-button" type="button" @click="router.push('/evidence'); ui.sessionDrawerOpen = false">循证问答</button>
-      <button class="drawer-nav-button" type="button" @click="router.push('/knowledge'); ui.sessionDrawerOpen = false">我的知识</button>
-      <button class="drawer-nav-button" type="button" @click="router.push('/literature'); ui.sessionDrawerOpen = false">文献速递</button>
     </nav>
     <label class="drawer-search">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m20 20-4.3-4.3M18 11a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" /></svg>
-      <span class="sr-only">搜索历史问诊</span>
-      <input v-model="query" type="search" placeholder="搜索对话内容" aria-label="搜索历史问诊">
+      <span class="sr-only">搜索研究记录</span>
+      <input v-model="query" type="search" placeholder="搜索研究记录" aria-label="搜索研究记录">
     </label>
-    <section class="history-panel" aria-label="历史对话">
+    <section class="history-panel" aria-label="研究记录">
       <div class="history-head">
-        <span>历史对话</span>
+        <span>研究记录</span>
         <button class="history-clear" type="button" @click="sessions.clear()">清空</button>
       </div>
       <div class="history-list">
