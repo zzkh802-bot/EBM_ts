@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
-import { useUiStore } from '../../stores'
+import { useSessionsStore, useUiStore } from '../../stores'
 
 const route = useRoute()
 const router = useRouter()
 const ui = useUiStore()
+const sessions = useSessionsStore()
 
 const go = (path: string) => router.push(path)
 const isActive = (path: string) => route.path === path || route.path.startsWith(`${path}/`)
+const openSession = (id: string) => {
+  sessions.activeSessionId = id
+  void go('/evidence')
+}
 </script>
 
 <template>
@@ -33,20 +38,13 @@ const isActive = (path: string) => route.path === path || route.path.startsWith(
         <span>历史问诊</span>
       </button>
       <section class="workspace-recent-sessions" aria-label="最近会话">
-        <div class="recent-session-group">
-          <span class="recent-session-date">今天</span>
-          <button class="recent-session-link example" type="button" @click="go('/evidence')">CKD / SGLT2 证据报告</button>
-          <button class="recent-session-link example" type="button" @click="go('/evidence')">RA 升级治疗</button>
-        </div>
-        <div class="recent-session-group">
-          <span class="recent-session-date">昨天</span>
-          <button class="recent-session-link example" type="button" @click="go('/evidence')">EGFR 靶向治疗</button>
-        </div>
+        <span class="recent-session-date">最近会话</span>
+        <button v-for="session in sessions.sessions.slice(0, 3)" :key="session.id" class="recent-session-link" type="button" @click="openSession(session.id)">{{ session.title }}</button>
       </section>
     </nav>
-    <button class="rail-avatar" type="button" aria-label="当前账号：本地演示用户" @click="ui.sessionDrawerOpen = true">
-      <span class="avatar-initial" aria-hidden="true">Z</span>
-      <span class="rail-user-label">用户与设置</span>
+    <button class="rail-avatar" type="button" aria-label="打开本地工作区" @click="ui.sessionDrawerOpen = true">
+      <span class="avatar-initial" aria-hidden="true">循</span>
+      <span class="rail-user-label">工作区</span>
       <span class="avatar-dot" aria-hidden="true"></span>
     </button>
   </aside>

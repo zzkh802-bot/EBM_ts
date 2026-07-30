@@ -48,14 +48,14 @@ const formatSessionTime = (value: string) => {
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
       </button>
     </div>
-    <section class="user-card" aria-label="用户登录和认证状态">
+    <section class="user-card" aria-label="本地工作区状态">
       <div class="user-avatar">
         <svg class="dp-logo-icon avatar-logo" viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect class="dp-logo-sheet" x="14" y="8" width="36" height="48" rx="8" /><path class="dp-logo-check" d="M22 22l7 7 14-15" /><path class="dp-logo-pulse" d="M19 38h8l4-10 6 19 5-12h7" /><circle class="dp-logo-node" cx="50" cy="48" r="5" /></svg>
       </div>
       <div class="user-meta">
-        <div class="user-name">本地演示用户 <span class="auth-badge">已认证</span></div>
-        <div class="user-line">登录状态：已登录 · 会话保存在本机浏览器</div>
-        <div class="user-line">服务：循医循证引擎 · 检测中</div>
+        <div class="user-name">本地工作区</div>
+        <div class="user-line">对话保存在当前浏览器</div>
+        <div class="user-line">模型账户由本机循医服务管理</div>
       </div>
     </section>
     <nav class="drawer-nav" aria-label="循医抽屉导航">
@@ -63,7 +63,7 @@ const formatSessionTime = (value: string) => {
         <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" /></svg>
         新建循证对话
       </button>
-      <button class="drawer-nav-button" type="button" @click="router.push('/evidence'); ui.sessionDrawerOpen = false">循证 Agent</button>
+      <button class="drawer-nav-button" type="button" @click="router.push('/evidence'); ui.sessionDrawerOpen = false">循证问答</button>
       <button class="drawer-nav-button" type="button" @click="router.push('/knowledge'); ui.sessionDrawerOpen = false">我的知识</button>
       <button class="drawer-nav-button" type="button" @click="router.push('/literature'); ui.sessionDrawerOpen = false">文献速递</button>
     </nav>
