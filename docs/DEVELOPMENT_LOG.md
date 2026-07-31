@@ -18,6 +18,7 @@
 - Restored the research-asset route and made it a first-class desktop and mobile navigation destination; the previous redirect made the real workspace-backed library unreachable.
 - Replaced the flat research-file list with a VS Code–style explorer: reports, evidence, notes, and archived sources retain their directory structure; selected reports render as documents beside the tree.
 - Kept the explorer scoped to the active research conversation, so the chat, generated formal report, evidence files, and archived sources are one continuous workflow rather than separate product areas.
+- Refined the asset library after visual review: it now presents one research archive per session, named from its formal report and summarized by report/evidence/source counts. Internal evidence identifiers and source index files remain available only inside that archive's explorer.
 - Verification: a real quick-mode hypertension research run completed through the active local provider, produced a formal report and 19 workspace files, then was visually reviewed in desktop conversation, desktop explorer, and mobile explorer states. The unavailable local guideline service appeared as failed tool records while remaining retrieval continued.
 
 Persistent implementation memory for context compaction/recovery. Update after each verified vertical slice.

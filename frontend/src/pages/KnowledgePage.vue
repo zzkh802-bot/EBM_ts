@@ -4,24 +4,57 @@ import { useRouter } from 'vue-router'
 import { useKnowledgeStore, useUiStore } from '../stores'
 import type { WorkspaceAsset } from '../types/domain'
 
+type ResearchArchive = {
+  id: string
+  sessionId: string
+  title: string
+  files: WorkspaceAsset[]
+  report?: WorkspaceAsset
+  updatedAt: string
+  evidenceCount: number
+  sourceCount: number
+}
+
 const knowledge = useKnowledgeStore()
 const ui = useUiStore()
 const router = useRouter()
 const search = ref('')
 
-const kindLabel = (kind: WorkspaceAsset['kind']) => ({ report: '正式报告', research_frame: '研究框架', evidence: '证据记录', source: '来源归档' }[kind])
-const formatBytes = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`
-const locationLabel = (asset: WorkspaceAsset) => `${asset.path.split('/').slice(0, -1).join(' / ')} · ${asset.sessionTitle}`
+const archiveTitle = (report: WorkspaceAsset | undefined, fallback: string) => {
+  const title = report?.path.split('/').at(-1)?.replace(/\.md$/, '')
+  return title || (/^\d+$/.test(fallback) ? '未命名循证研究' : fallback)
+}
+const archives = computed<ResearchArchive[]>(() => {
+  const bySession = new Map<string, WorkspaceAsset[]>()
+  for (const asset of knowledge.workspaceAssets) {
+    const files = bySession.get(asset.sessionId) || []
+    files.push(asset)
+    bySession.set(asset.sessionId, files)
+  }
+  return [...bySession.entries()].map(([sessionId, files]) => {
+    const report = files.find((file) => file.kind === 'report')
+    return {
+      id: sessionId,
+      sessionId,
+      title: archiveTitle(report, files[0]?.sessionTitle || ''),
+      files,
+      report,
+      updatedAt: files.reduce((latest, file) => latest > file.modified_at ? latest : file.modified_at, ''),
+      evidenceCount: files.filter((file) => file.kind === 'evidence').length,
+      sourceCount: files.filter((file) => file.kind === 'source').length,
+    }
+  }).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+})
 const rows = computed(() => {
   const query = search.value.trim().toLowerCase()
-  if (!query) return knowledge.workspaceAssets
-  return knowledge.workspaceAssets.filter((asset) => [asset.path, asset.sessionTitle, kindLabel(asset.kind)].join(' ').toLowerCase().includes(query))
+  if (!query) return archives.value
+  return archives.value.filter((archive) => [archive.title, ...archive.files.map((file) => file.path)].join(' ').toLowerCase().includes(query))
 })
 const reportCount = computed(() => knowledge.workspaceAssets.filter((asset) => asset.kind === 'report').length)
 const sourceCount = computed(() => knowledge.workspaceAssets.filter((asset) => asset.kind === 'source').length)
 const evidenceCount = computed(() => knowledge.workspaceAssets.filter((asset) => asset.kind === 'evidence').length)
-const openAsset = (asset: WorkspaceAsset) => {
-  ui.openDetail(asset.sessionTitle, { session_id: asset.sessionId, files: [asset], preferred_path: asset.path }, 'workspace')
+const openArchive = (archive: ResearchArchive) => {
+  ui.openDetail(archive.title, { session_id: archive.sessionId, files: archive.files, preferred_path: archive.report?.path }, 'workspace')
 }
 
 onMounted(() => { void knowledge.loadWorkspaceAssets() })
@@ -49,9 +82,9 @@ onMounted(() => { void knowledge.loadWorkspaceAssets() })
     <div class="asset-toolbar">
       <label>
         <span class="sr-only">搜索研究资产</span>
-        <input v-model="search" type="search" placeholder="搜索报告、研究问题或来源文件">
+        <input v-model="search" type="search" placeholder="搜索研究主题、正式报告或来源">
       </label>
-      <span>仅显示已由后端归档的真实文件</span>
+      <span>每项研究均可展开查看完整文件目录</span>
     </div>
 
     <section v-if="knowledge.workspaceLoading" class="asset-empty">正在读取各会话的研究工作区…</section>
@@ -60,14 +93,14 @@ onMounted(() => { void knowledge.loadWorkspaceAssets() })
       <p>完成一次循证研究后，正式报告、研究框架和证据文件会自动出现在这里。</p>
       <button type="button" @click="router.push('/evidence')">开始循证研究</button>
     </section>
-    <section v-else class="asset-list" aria-label="已归档研究文件">
-      <button v-for="asset in rows" :key="asset.id" class="asset-row" type="button" @click="openAsset(asset)">
-        <span class="asset-kind">{{ kindLabel(asset.kind) }}</span>
+    <section v-else class="asset-list" aria-label="已完成循证研究">
+      <button v-for="archive in rows" :key="archive.id" class="asset-project" type="button" @click="openArchive(archive)">
+        <span class="asset-project-state">已归档</span>
         <span class="asset-main">
-          <strong>{{ asset.path.split('/').at(-1) }}</strong>
-          <small>{{ locationLabel(asset) }}</small>
+          <strong>{{ archive.title }}</strong>
+          <small>{{ archive.report ? '正式报告已生成' : '研究文件已归档' }} · {{ archive.evidenceCount }} 条证据记录 · {{ archive.sourceCount }} 个来源</small>
         </span>
-        <span class="asset-meta">{{ formatBytes(asset.size) }}</span>
+        <span class="asset-open">打开文件</span>
       </button>
     </section>
   </section>
