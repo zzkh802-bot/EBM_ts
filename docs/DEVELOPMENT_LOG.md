@@ -6,6 +6,13 @@
 - Added a small, reproducible dependency patch: automatic fallback now cools down for 30 seconds before retrying WebSocket; explicitly selected WebSocket transports fail visibly instead of silently changing transport.
 - Added one transport-level regression test with a simulated WebSocket outage and no real account or credential access.
 
+## 2026-07-31 — research asset library
+
+- Replaced the knowledge page's retired archive calls and browser-only "imported" metadata with a direct view of real per-session research workspaces.
+- The library now lists formal reports, research frames, evidence records, and archived sources produced by the local service; selecting a row opens that exact file in the existing workspace detail view.
+- Removed UI claims about upload processing, embeddings, shared libraries, and review states that the service does not implement. File import and retrieval-augmented knowledge management remain a separate future capability, rather than a simulated one.
+- Verification: root `npm run typecheck`; frontend production build; live local service health and knowledge-route checks.
+
 Persistent implementation memory for context compaction/recovery. Update after each verified vertical slice.
 
 ## Current direction

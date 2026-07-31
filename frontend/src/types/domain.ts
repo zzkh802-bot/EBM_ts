@@ -197,6 +197,13 @@ export interface WorkspaceFileResponse extends WorkspaceFile {
   content: string
 }
 
+export interface WorkspaceAsset extends WorkspaceFile {
+  id: string
+  sessionId: string
+  sessionTitle: string
+  sessionUpdatedAt: string
+}
+
 export type AgentStage = 'idle' | 'planning' | 'retrieving' | 'tooling' | 'generating' | 'network_wait'
 
 export interface KnowledgeItem {
