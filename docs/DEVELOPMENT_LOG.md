@@ -321,6 +321,7 @@ The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening ra
 - Bound each submitted browser conversation to its own local session ID for every status update and final patch. Switching conversations while a run is in progress can no longer write tool progress or a final answer into the newly active conversation.
 - Added read-only workspace-file access for a research session. Users can now browse the actual generated formal reports, research frame, evidence records, and archived source Markdown from the conversation's “研究文件” entry; hidden metadata and account files are not exposed.
 - Restored the distinction between a natural chat reply and a formal report file. The chat uses the model's final answer, while the verified report stays in the session workspace. Report rendering no longer filters sections by audience or rearranges/collapses report sections; opening a report file renders its original Markdown content.
+- Promoted the active conversation's file directory from a modal-only action to a persistent desktop sidebar. The directory now stays beside the conversation, uses a readable type scale, and opens an individual file only when the user chooses to inspect its content. Narrow screens retain the compact “研究文件” entry instead of squeezing a second column into the chat.
 
 ### Clinical conversation surface
 

@@ -6,9 +6,7 @@ import type { WorkspaceFile } from '../../types/domain'
 import type { Reference } from '../../utils/report'
 import { copyText, safeExternalUrl } from '../../utils/browser'
 import ReportRenderer from '../report/ReportRenderer.vue'
-
-type WorkspaceFolder = { name: string; path: string; folders: Map<string, WorkspaceFolder>; files: WorkspaceFile[] }
-type WorkspaceTreeEntry = { type: 'folder'; name: string; path: string; depth: number } | { type: 'file'; file: WorkspaceFile; depth: number }
+import WorkspaceFileTree from '../evidence/WorkspaceFileTree.vue'
 
 const ui = useUiStore()
 const record = computed<Record<string, unknown>>(() =>
@@ -34,42 +32,6 @@ const workspace = computed(() => {
     error: typeof data.error === 'string' ? data.error : '',
     emptyMessage: typeof data.message === 'string' ? data.message : '',
   }
-})
-const workspaceTree = computed<WorkspaceTreeEntry[]>(() => {
-  const root: WorkspaceFolder = { name: '', path: '', folders: new Map(), files: [] }
-  for (const file of workspace.value.files) {
-    const parts = file.path.split('/')
-    const filename = parts.pop()
-    if (!filename) continue
-    let folder = root
-    for (const part of parts) {
-      const path = folder.path ? `${folder.path}/${part}` : part
-      let child = folder.folders.get(part)
-      if (!child) {
-        child = { name: part, path, folders: new Map(), files: [] }
-        folder.folders.set(part, child)
-      }
-      folder = child
-    }
-    folder.files.push(file)
-  }
-  const priority = (name: string) => ['reports', 'notes', 'evidence', 'sources'].indexOf(name)
-  const entries: WorkspaceTreeEntry[] = []
-  const append = (folder: WorkspaceFolder, depth: number) => {
-    const folders = [...folder.folders.values()].sort((left, right) => {
-      const order = priority(left.name) - priority(right.name)
-      return order || left.name.localeCompare(right.name)
-    })
-    for (const child of folders) {
-      entries.push({ type: 'folder', name: child.name, path: child.path, depth })
-      append(child, depth + 1)
-    }
-    for (const file of [...folder.files].sort((left, right) => left.path.localeCompare(right.path))) {
-      entries.push({ type: 'file', file, depth })
-    }
-  }
-  append(root, 0)
-  return entries
 })
 const workspaceKindLabel = (kind: WorkspaceFile['kind']) => ({ report: '正式报告', research_frame: '研究框架', evidence: '证据记录', source: '来源归档' }[kind])
 const selectedWorkspaceFile = ref<WorkspaceFile | null>(null)
@@ -136,16 +98,7 @@ watch(() => ui.detailPayload, (payload) => {
         <p v-else-if="workspace.error">{{ workspace.error }}</p>
         <p v-else-if="!workspace.files.length">{{ workspace.emptyMessage || '本次对话尚未生成可展示的研究文件。' }}</p>
         <div v-else class="workspace-explorer">
-          <aside class="workspace-tree" aria-label="研究文件目录">
-            <div class="workspace-tree-head"><span>研究文件</span><small>{{ workspace.files.length }} 个文件</small></div>
-            <div class="workspace-tree-root">{{ ui.detailTitle || '本次研究' }}</div>
-            <template v-for="entry in workspaceTree" :key="entry.type === 'folder' ? entry.path : entry.file.path">
-              <span v-if="entry.type === 'folder'" class="workspace-tree-folder" :style="{ paddingLeft: `${12 + entry.depth * 14}px` }">{{ entry.name }}</span>
-              <button v-else class="workspace-tree-file" :class="{ active: selectedWorkspaceFile?.path === entry.file.path }" type="button" :style="{ paddingLeft: `${12 + entry.depth * 14}px` }" @click="openWorkspaceFile(entry.file)">
-                {{ entry.file.path.split('/').at(-1) }}
-              </button>
-            </template>
-          </aside>
+          <WorkspaceFileTree :files="workspace.files" :title="ui.detailTitle" :selected-path="selectedWorkspaceFile?.path" @select="openWorkspaceFile" />
           <section class="workspace-preview" aria-label="研究文件预览">
             <div v-if="selectedWorkspaceFile" class="workspace-preview-head">
               <span>{{ workspaceKindLabel(selectedWorkspaceFile.kind) }}</span>

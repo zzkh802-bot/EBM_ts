@@ -2,12 +2,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { agentService, archiveService, workspaceService } from '../services'
 import { useAgentRunStore, usePreferencesStore, useSessionsStore, useUiStore } from '../stores'
-import type { AccountConnection, Message, ModeSnapshot, RuntimeConfig } from '../types/domain'
+import type { AccountConnection, Message, ModeSnapshot, RuntimeConfig, WorkspaceFile } from '../types/domain'
 import { buildAgentRequest, newId, nowIso, responseText } from '../utils/core'
 import { parseReport, reportPlainText, type Reference } from '../utils/report'
 import { copyText } from '../utils/browser'
 import ReportRenderer from '../components/report/ReportRenderer.vue'
 import RunActivity from '../components/evidence/RunActivity.vue'
+import WorkspaceFileTree from '../components/evidence/WorkspaceFileTree.vue'
 import { goodCases } from '../data/goodCases'
 
 const preferences = usePreferencesStore()
@@ -19,6 +20,8 @@ const feed = ref<HTMLElement | null>(null)
 const runtimeConfig = ref<RuntimeConfig | null>(null)
 const runtimeConfigError = ref('')
 const accountConnection = ref<AccountConnection | null>(null)
+const conversationFiles = ref<WorkspaceFile[]>([])
+const conversationFilesLoading = ref(false)
 const connectionInput = ref('')
 let connectionTimer: number | undefined
 const stages = {
@@ -47,6 +50,19 @@ const primaryActionLabel = computed(() => {
   return question.value.trim() ? '加入后续追问' : '停止本轮研究'
 })
 const hasConversation = computed(() => sessions.active.messages.some((message) => message.role === 'user'))
+const loadConversationFiles = async () => {
+  const sessionId = sessions.active.v2SessionId
+  if (!sessionId) {
+    conversationFiles.value = []
+    return
+  }
+  conversationFilesLoading.value = true
+  try { conversationFiles.value = (await workspaceService.list(sessionId)).files }
+  catch { conversationFiles.value = [] }
+  finally { conversationFilesLoading.value = false }
+}
+const openConversationFile = (file: WorkspaceFile) => openWorkspace(file.path)
+watch(() => [sessions.activeSessionId, sessions.active.v2SessionId], () => { void loadConversationFiles() }, { immediate: true })
 watch(() => preferences.provider, () => {
   if (modelsForProvider.value.some((item) => item.model === preferences.model)) return
   preferences.model = modelsForProvider.value[0]?.model || ''
@@ -160,6 +176,7 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
           onNetworkRetry: () => { run.setStage('network_wait') },
         })
     if (data.session_id) sessions.setV2SessionId(localSessionId, data.session_id)
+    void loadConversationFiles()
     sessions.patchMessageIn(localSessionId, pendingId, {
       pending: false, stage: 'idle', content: responseText(data), trace: data.agent_trace || [],
       tools: data.tools || [],
@@ -415,7 +432,16 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
 
     </div>
 
-    <aside class="workspace-info-panel" aria-label="工作台信息">
+    <aside v-if="hasConversation" class="conversation-files-panel" aria-label="本次研究文件">
+      <div class="conversation-files-head">
+        <span>本次研究</span>
+      </div>
+      <p v-if="conversationFilesLoading">正在同步研究文件…</p>
+      <p v-else-if="!conversationFiles.length">研究开始后，报告、证据和来源会在这里出现。</p>
+      <WorkspaceFileTree v-else :files="conversationFiles" :title="sessions.active.title" @select="openConversationFile" />
+    </aside>
+
+    <aside v-else class="workspace-info-panel" aria-label="工作台信息">
       <section class="workspace-info-card evidence-status-card">
         <div class="workspace-info-title">
           <span>运行状态</span>
