@@ -64,7 +64,7 @@ export function migrateSessions(value: unknown, legacyEbmSessionId = ''): Sessio
 }
 
 export function modeIterationBudget(mode: ModeSnapshot): 5 | 8 | 10 | 14 {
-  if (mode.researchMode === 'instant') return mode.deepThink ? 8 : 5
+  if (mode.researchMode === 'instant') return mode.deepThink ? 10 : 8
   return mode.deepThink ? 14 : 10
 }
 

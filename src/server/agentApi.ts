@@ -595,7 +595,7 @@ function validateAgentRunInput(value: unknown, runtimeConfig: RuntimeConfig): Ag
   }
   const researchMode = enumValue(value.research_mode, ["instant", "expert", "literature"] as const, "research_mode", "instant");
   const audienceMode = enumValue(value.audience_mode, ["clinician", "public"] as const, "audience_mode", "clinician");
-  const maxIterations = boundedInteger(value.max_iterations, "max_iterations", 1, 24, researchMode === "instant" ? 5 : 12);
+  const maxIterations = boundedInteger(value.max_iterations, "max_iterations", 1, 24, researchMode === "instant" ? 8 : 12);
   const requestTimeoutSeconds = boundedInteger(value.request_timeout_seconds, "request_timeout_seconds", 30, 900, researchMode === "instant" ? 300 : 600);
   const retrievalPolicy = enumValue(value.retrieval_policy, ["all", "mcp_only"] as const, "retrieval_policy", "all");
   const sessionId = optionalString(value.session_id ?? value.ebm_session_id, "session_id", 200);

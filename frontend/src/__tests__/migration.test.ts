@@ -18,8 +18,8 @@ beforeEach(() => {
 
 describe('回答模式预算', () => {
   it.each([
-    ['instant', false, 5, 150],
-    ['instant', true, 8, 150],
+    ['instant', false, 8, 150],
+    ['instant', true, 10, 150],
     ['expert', false, 10, 300],
     ['expert', true, 14, 300],
   ] as const)('%s deep=%s', (researchMode, deepThink, budget, timeout) => {
