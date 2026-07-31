@@ -13,6 +13,13 @@
 - Removed UI claims about upload processing, embeddings, shared libraries, and review states that the service does not implement. File import and retrieval-augmented knowledge management remain a separate future capability, rather than a simulated one.
 - Verification: root `npm run typecheck`; frontend production build; live local service health and knowledge-route checks.
 
+## 2026-07-31 — connected research workspace
+
+- Restored the research-asset route and made it a first-class desktop and mobile navigation destination; the previous redirect made the real workspace-backed library unreachable.
+- Replaced the flat research-file list with a VS Code–style explorer: reports, evidence, notes, and archived sources retain their directory structure; selected reports render as documents beside the tree.
+- Kept the explorer scoped to the active research conversation, so the chat, generated formal report, evidence files, and archived sources are one continuous workflow rather than separate product areas.
+- Verification: a real quick-mode hypertension research run completed through the active local provider, produced a formal report and 19 workspace files, then was visually reviewed in desktop conversation, desktop explorer, and mobile explorer states. The unavailable local guideline service appeared as failed tool records while remaining retrieval continued.
+
 Persistent implementation memory for context compaction/recovery. Update after each verified vertical slice.
 
 ## Current direction

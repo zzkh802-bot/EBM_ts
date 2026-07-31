@@ -7,6 +7,9 @@ import type { Reference } from '../../utils/report'
 import { copyText, safeExternalUrl } from '../../utils/browser'
 import ReportRenderer from '../report/ReportRenderer.vue'
 
+type WorkspaceFolder = { name: string; path: string; folders: Map<string, WorkspaceFolder>; files: WorkspaceFile[] }
+type WorkspaceTreeEntry = { type: 'folder'; name: string; path: string; depth: number } | { type: 'file'; file: WorkspaceFile; depth: number }
+
 const ui = useUiStore()
 const record = computed<Record<string, unknown>>(() =>
   ui.detailPayload && typeof ui.detailPayload === 'object' ? ui.detailPayload as Record<string, unknown> : {})
@@ -32,6 +35,43 @@ const workspace = computed(() => {
     emptyMessage: typeof data.message === 'string' ? data.message : '',
   }
 })
+const workspaceTree = computed<WorkspaceTreeEntry[]>(() => {
+  const root: WorkspaceFolder = { name: '', path: '', folders: new Map(), files: [] }
+  for (const file of workspace.value.files) {
+    const parts = file.path.split('/')
+    const filename = parts.pop()
+    if (!filename) continue
+    let folder = root
+    for (const part of parts) {
+      const path = folder.path ? `${folder.path}/${part}` : part
+      let child = folder.folders.get(part)
+      if (!child) {
+        child = { name: part, path, folders: new Map(), files: [] }
+        folder.folders.set(part, child)
+      }
+      folder = child
+    }
+    folder.files.push(file)
+  }
+  const priority = (name: string) => ['reports', 'notes', 'evidence', 'sources'].indexOf(name)
+  const entries: WorkspaceTreeEntry[] = []
+  const append = (folder: WorkspaceFolder, depth: number) => {
+    const folders = [...folder.folders.values()].sort((left, right) => {
+      const order = priority(left.name) - priority(right.name)
+      return order || left.name.localeCompare(right.name)
+    })
+    for (const child of folders) {
+      entries.push({ type: 'folder', name: child.name, path: child.path, depth })
+      append(child, depth + 1)
+    }
+    for (const file of [...folder.files].sort((left, right) => left.path.localeCompare(right.path))) {
+      entries.push({ type: 'file', file, depth })
+    }
+  }
+  append(root, 0)
+  return entries
+})
+const workspaceKindLabel = (kind: WorkspaceFile['kind']) => ({ report: '正式报告', research_frame: '研究框架', evidence: '证据记录', source: '来源归档' }[kind])
 const selectedWorkspaceFile = ref<WorkspaceFile | null>(null)
 const workspaceFileContent = ref('')
 const workspaceFileError = ref('')
@@ -63,7 +103,7 @@ watch(() => ui.detailPayload, (payload) => {
 
 <template>
   <div class="citation-backdrop" :hidden="!ui.detailOpen" data-citation-close @click="ui.detailOpen = false" />
-  <aside class="citation-sheet" :aria-hidden="!ui.detailOpen" aria-label="引用内容">
+  <aside class="citation-sheet" :class="{ 'workspace-sheet': ui.detailKind === 'workspace' }" :aria-hidden="!ui.detailOpen" aria-label="引用内容">
     <div class="citation-head">
       <strong>{{ ui.detailTitle || '引用内容' }}</strong>
       <button class="citation-close" type="button" aria-label="关闭引用内容" @click="ui.detailOpen = false">
@@ -95,19 +135,28 @@ watch(() => ui.detailPayload, (payload) => {
         <p v-if="workspace.loading">正在读取本次研究生成的文件…</p>
         <p v-else-if="workspace.error">{{ workspace.error }}</p>
         <p v-else-if="!workspace.files.length">{{ workspace.emptyMessage || '本次对话尚未生成可展示的研究文件。' }}</p>
-        <div v-else class="workspace-file-list">
-          <button v-for="file in workspace.files" :key="file.path" type="button" :class="{ active: selectedWorkspaceFile?.path === file.path }" @click="openWorkspaceFile(file)">
-            <span>{{ file.kind === 'research_frame' ? '研究框架' : file.kind === 'report' ? '正式报告' : file.kind === 'evidence' ? '证据记录' : '来源归档' }}</span>
-            <strong>{{ file.path }}</strong>
-          </button>
+        <div v-else class="workspace-explorer">
+          <aside class="workspace-tree" aria-label="研究文件目录">
+            <div class="workspace-tree-head"><span>研究文件</span><small>{{ workspace.files.length }} 个文件</small></div>
+            <div class="workspace-tree-root">{{ ui.detailTitle || '本次研究' }}</div>
+            <template v-for="entry in workspaceTree" :key="entry.type === 'folder' ? entry.path : entry.file.path">
+              <span v-if="entry.type === 'folder'" class="workspace-tree-folder" :style="{ paddingLeft: `${12 + entry.depth * 14}px` }">{{ entry.name }}</span>
+              <button v-else class="workspace-tree-file" :class="{ active: selectedWorkspaceFile?.path === entry.file.path }" type="button" :style="{ paddingLeft: `${12 + entry.depth * 14}px` }" @click="openWorkspaceFile(entry.file)">
+                {{ entry.file.path.split('/').at(-1) }}
+              </button>
+            </template>
+          </aside>
+          <section class="workspace-preview" aria-label="研究文件预览">
+            <div v-if="selectedWorkspaceFile" class="workspace-preview-head">
+              <span>{{ workspaceKindLabel(selectedWorkspaceFile.kind) }}</span>
+              <strong>{{ selectedWorkspaceFile.path }}</strong>
+            </div>
+            <p v-if="workspaceFileError">{{ workspaceFileError }}</p>
+            <ReportRenderer v-else-if="workspaceFileContent && selectedWorkspaceFile?.kind === 'report'" :markdown="workspaceFileContent" audience="clinician" @citation="ui.openCitation" />
+            <pre v-else-if="workspaceFileContent">{{ workspaceFileContent }}</pre>
+            <p v-else class="workspace-preview-empty">从左侧目录选择文件查看内容。</p>
+          </section>
         </div>
-        <section v-if="selectedWorkspaceFile" class="workspace-file-content">
-          <strong>{{ selectedWorkspaceFile.path }}</strong>
-          <p v-if="workspaceFileError">{{ workspaceFileError }}</p>
-          <ReportRenderer v-else-if="workspaceFileContent && selectedWorkspaceFile.kind === 'report'" :markdown="workspaceFileContent" audience="clinician" @citation="ui.openCitation" />
-          <pre v-else-if="workspaceFileContent">{{ workspaceFileContent }}</pre>
-          <p v-else>正在打开文件…</p>
-        </section>
       </template>
       <pre v-else>{{ raw }}</pre>
       <details class="archive-raw"><summary>查看 raw JSON</summary><pre>{{ raw }}</pre></details>
@@ -115,7 +164,7 @@ watch(() => ui.detailPayload, (payload) => {
     <div class="citation-actions">
       <a v-if="ui.detailKind === 'citation' && safeExternalUrl(citation.url)" class="pill-button primary" :href="safeExternalUrl(citation.url)" target="_blank" rel="noreferrer noopener">打开原文</a>
       <a v-if="ui.detailKind === 'citation' && citation.pmid" class="pill-button" :href="`https://pubmed.ncbi.nlm.nih.gov/${citation.pmid}/`" target="_blank" rel="noreferrer noopener">打开 PMID</a>
-      <button type="button" class="pill-button" @click="copyText(raw)">复制 JSON</button>
+      <button v-if="ui.detailKind !== 'workspace'" type="button" class="pill-button" @click="copyText(raw)">复制 JSON</button>
       <button type="button" data-citation-close @click="ui.detailOpen = false">关闭</button>
     </div>
   </aside>

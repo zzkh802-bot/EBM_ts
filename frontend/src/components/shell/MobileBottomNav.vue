@@ -1,15 +1,10 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
-import { useSessionsStore, useUiStore } from '../../stores'
+import { useUiStore } from '../../stores'
 const route = useRoute()
 const router = useRouter()
-const sessions = useSessionsStore()
 const ui = useUiStore()
 const isActive = (path: string) => route.path === path || route.path.startsWith(`${path}/`)
-const createResearch = () => {
-  sessions.create()
-  router.push('/evidence')
-}
 </script>
 
 <template>
@@ -22,9 +17,9 @@ const createResearch = () => {
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4h7l4 4v12H7zM14 4v4h4M9.5 14.5l2 2 4-5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" /></svg>
       <span>循证</span>
     </button>
-    <button class="nav-item" type="button" aria-label="新建研究" @click="createResearch">
-      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
-      <span>新建</span>
+    <button class="nav-item" :class="{ active: isActive('/knowledge') }" type="button" aria-label="研究资产" @click="router.push('/knowledge')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 5h5l2 2h7v12H5zM8 11h8M8 15h5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      <span>资产</span>
     </button>
   </nav>
 </template>

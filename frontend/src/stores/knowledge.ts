@@ -13,7 +13,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     const assets = await Promise.all(sessions.map(async (session) => {
       try {
         const { files } = await workspaceService.list(session.v2SessionId!)
-        return files.map((file) => ({
+        return files.filter((file) => !file.path.endsWith('/toc.md')).map((file) => ({
           ...file,
           id: `${session.id}:${file.path}`,
           sessionId: session.v2SessionId!,

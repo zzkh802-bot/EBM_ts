@@ -11,6 +11,7 @@ const search = ref('')
 
 const kindLabel = (kind: WorkspaceAsset['kind']) => ({ report: '正式报告', research_frame: '研究框架', evidence: '证据记录', source: '来源归档' }[kind])
 const formatBytes = (bytes: number) => bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`
+const locationLabel = (asset: WorkspaceAsset) => `${asset.path.split('/').slice(0, -1).join(' / ')} · ${asset.sessionTitle}`
 const rows = computed(() => {
   const query = search.value.trim().toLowerCase()
   if (!query) return knowledge.workspaceAssets
@@ -64,7 +65,7 @@ onMounted(() => { void knowledge.loadWorkspaceAssets() })
         <span class="asset-kind">{{ kindLabel(asset.kind) }}</span>
         <span class="asset-main">
           <strong>{{ asset.path.split('/').at(-1) }}</strong>
-          <small>{{ asset.sessionTitle }}</small>
+          <small>{{ locationLabel(asset) }}</small>
         </span>
         <span class="asset-meta">{{ formatBytes(asset.size) }}</span>
       </button>

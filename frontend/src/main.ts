@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import EvidencePage from './pages/EvidencePage.vue'
+import KnowledgePage from './pages/KnowledgePage.vue'
 import './styles/index.css'
 
 const router = createRouter({
@@ -10,7 +11,7 @@ const router = createRouter({
   routes: [
     { path: '/', redirect: '/evidence' },
     { path: '/evidence', component: EvidencePage },
-    { path: '/knowledge', redirect: '/evidence' },
+    { path: '/knowledge', component: KnowledgePage },
     { path: '/literature', redirect: '/evidence' },
     { path: '/:pathMatch(.*)*', redirect: '/evidence' },
   ],

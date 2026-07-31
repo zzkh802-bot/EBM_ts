@@ -212,10 +212,10 @@ const openArchive = async (message: Message) => {
 const openWorkspace = async (preferredPath = '') => {
   const sessionId = sessions.active.v2SessionId
   if (!sessionId) {
-    ui.openDetail('研究文件', { message: '本次对话尚未创建研究工作区。开始研究后，报告、研究框架和证据文件会出现在这里。' }, 'workspace')
+    ui.openDetail(sessions.active.title, { message: '本次对话尚未创建研究工作区。开始研究后，报告、研究框架和证据文件会出现在这里。' }, 'workspace')
     return
   }
-  ui.openDetail('研究文件', { session_id: sessionId, files: [], loading: true, preferred_path: preferredPath }, 'workspace')
+  ui.openDetail(sessions.active.title, { session_id: sessionId, files: [], loading: true, preferred_path: preferredPath }, 'workspace')
   try {
     ui.detailPayload = { ...(await workspaceService.list(sessionId)), preferred_path: preferredPath }
   } catch (error) {
