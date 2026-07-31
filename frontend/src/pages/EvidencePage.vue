@@ -53,8 +53,9 @@ const hasConversation = computed(() => sessions.active.messages.some((message) =
 const readFormalReport = async (sessionId: string | undefined, preferredPath?: string) => {
   if (!sessionId) return ''
   try {
+    if (preferredPath) return (await workspaceService.read(sessionId, preferredPath)).content
     const files = await workspaceService.list(sessionId)
-    const report = files.files.find((file) => file.path === preferredPath) || files.files.find((file) => file.kind === 'report')
+    const report = files.files.find((file) => file.kind === 'report')
     return report ? (await workspaceService.read(sessionId, report.path)).content : ''
   } catch {
     return ''
@@ -71,8 +72,22 @@ const loadConversationFiles = async () => {
   catch { conversationFiles.value = [] }
   finally { conversationFilesLoading.value = false }
 }
+const hydrateHistoricalReports = async () => {
+  const localSessionId = sessions.activeSessionId
+  const sessionId = sessions.active.v2SessionId
+  if (!sessionId) return
+  const missingReports = sessions.active.messages.filter((message) =>
+    message.role === 'assistant' && message.reportPath && !message.reportMarkdown)
+  await Promise.all(missingReports.map(async (message) => {
+    const markdown = await readFormalReport(sessionId, message.reportPath)
+    if (markdown) sessions.patchMessageIn(localSessionId, message.id, { reportMarkdown: markdown })
+  }))
+}
 const openConversationFile = (file: WorkspaceFile) => openWorkspace(file.path)
-watch(() => [sessions.activeSessionId, sessions.active.v2SessionId], () => { void loadConversationFiles() }, { immediate: true })
+watch(() => [sessions.activeSessionId, sessions.active.v2SessionId], () => {
+  void loadConversationFiles()
+  void hydrateHistoricalReports()
+}, { immediate: true })
 watch(() => preferences.provider, () => {
   if (modelsForProvider.value.some((item) => item.model === preferences.model)) return
   preferences.model = modelsForProvider.value[0]?.model || ''
