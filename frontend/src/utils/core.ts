@@ -63,9 +63,8 @@ export function migrateSessions(value: unknown, legacyEbmSessionId = ''): Sessio
     }))
 }
 
-export function modeIterationBudget(mode: ModeSnapshot): 5 | 8 | 10 | 14 {
-  if (mode.researchMode === 'instant') return mode.deepThink ? 10 : 8
-  return mode.deepThink ? 14 : 10
+export function modeIterationBudget(mode: ModeSnapshot): 16 | 32 {
+  return mode.researchMode === 'instant' ? 16 : 32
 }
 
 export function modeTimeoutSeconds(mode: ModeSnapshot): 150 | 300 {

@@ -61,7 +61,7 @@ export interface AgentRequest {
   stable_cache: true
   attachments: AttachmentDto[]
   ebm_session_id: string
-  max_iterations: 5 | 8 | 10 | 14
+  max_iterations: 16 | 32
   request_timeout_seconds: 150 | 300
   research_mode: ResearchMode
   audience_mode: AudienceMode
@@ -92,7 +92,7 @@ export interface AgentV2Request {
   audience_mode: AudienceMode
   deep_think: boolean
   search_enabled: boolean
-  max_iterations: 5 | 8 | 10 | 14
+  max_iterations: 16 | 32
   request_timeout_seconds: 300 | 600
   provider?: string
   model?: string

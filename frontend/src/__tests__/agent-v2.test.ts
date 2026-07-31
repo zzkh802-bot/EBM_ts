@@ -8,7 +8,7 @@ const dto: AgentRequest = {
   stable_cache: true,
   attachments: [],
   ebm_session_id: '',
-  max_iterations: 5,
+  max_iterations: 16,
   request_timeout_seconds: 150,
   research_mode: 'instant',
   audience_mode: 'clinician',

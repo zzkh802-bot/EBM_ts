@@ -47,7 +47,7 @@ Linux 部署可使用 `bash scripts/run-api.sh`。如果模型密钥由网关的
   "audience_mode": "clinician",
   "deep_think": false,
   "search_enabled": true,
-  "max_iterations": 5,
+  "max_iterations": 16,
   "request_timeout_seconds": 300,
   "retrieval_policy": "all",
   "provider": "deepseek",
