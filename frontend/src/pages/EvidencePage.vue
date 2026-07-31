@@ -35,7 +35,7 @@ const providers = computed(() => availableModels.value.filter((item, index, item
   items.findIndex((candidate) => candidate.provider === item.provider) === index,
 ))
 const modelsForProvider = computed(() => availableModels.value.filter((item) => item.provider === preferences.provider))
-const connectableProviders = computed(() => runtimeConfig.value?.models.filter((item) => !item.available && item.connection_provider) || [])
+const subscriptionProviders = computed(() => runtimeConfig.value?.models.filter((item) => item.connection_provider) || [])
 const questionInput = ref<HTMLTextAreaElement | null>(null)
 const researchModeLabel = (mode: ModeSnapshot['researchMode']) => mode === 'expert' ? '专家' : '快速'
 const audienceModeLabel = (mode: ModeSnapshot['audienceMode']) => mode === 'public' ? '普通用户版' : '医生专业版'
@@ -401,17 +401,22 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
           <div><span>检索</span><small>{{ preferences.searchEnabled ? '按需调用证据工具' : '仅使用当前会话材料' }}</small></div>
         </div>
       </section>
-      <section v-if="connectableProviders.length" class="workspace-info-card account-connect-card">
-        <div class="workspace-info-title"><span>连接账户</span></div>
-        <p>连接订阅账户后，可直接在模型选择器中使用。</p>
-        <button
-          v-for="item in connectableProviders"
-          :key="item.connection_provider"
-          class="account-connect-button"
-          type="button"
-          :disabled="accountConnection?.status === 'waiting'"
-          @click="connectAccount(item.connection_provider || '')"
-        >连接 {{ item.provider_label }}</button>
+      <section v-if="subscriptionProviders.length" class="workspace-info-card account-connect-card">
+        <div class="workspace-info-title"><span>订阅账户</span></div>
+        <p>连接后的账户可直接在模型选择器中使用。</p>
+        <div v-for="item in subscriptionProviders" :key="item.connection_provider" class="account-provider-row">
+          <div>
+            <strong>{{ item.provider_label }}</strong>
+            <small :class="{ connected: item.available }">{{ item.available ? '已连接，可直接使用' : '尚未连接' }}</small>
+          </div>
+          <button
+            class="account-connect-button"
+            :class="{ secondary: item.available }"
+            type="button"
+            :disabled="accountConnection?.status === 'waiting'"
+            @click="connectAccount(item.connection_provider || '')"
+          >{{ item.available ? '重新连接' : '连接账户' }}</button>
+        </div>
       </section>
       <section v-if="accountConnection" class="workspace-info-card account-connect-card" aria-live="polite">
         <div class="workspace-info-title"><span>账户连接</span><strong>{{ accountConnection.status === 'waiting' ? '进行中' : accountConnection.status === 'connected' ? '已连接' : '未完成' }}</strong></div>
