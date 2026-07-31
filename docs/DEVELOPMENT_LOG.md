@@ -282,3 +282,12 @@ The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening ra
 - Reframed the start screen around the research journey: clinical question → evidence retrieval and verification → report. Provider and model controls remain available, but are deliberately subordinate to the question.
 - Kept runtime transparency as progressive disclosure. The default interface shows the current research phase; each research step can be expanded to inspect its tool result and evidence context without exposing private reasoning or internal runtime branding.
 - Reviewed the stable desktop and mobile renders with the local development server. `npm --prefix frontend run build` passed.
+
+### Evidence Workbook interaction completion
+
+- Reworked the research activity feed into progressive disclosure: every tool call now presents one concise line with its state and a clipped real input/result preview; a click reveals the complete recorded input and result. Empty startup state is explicit rather than looking stalled.
+- Kept the activity feed limited to tool events and product-level milestones. It does not render private model reasoning or internal runtime identity.
+- Added a formal-report dossier only for structured reports or cited answers. It summarizes the intended audience, section count, and reference count without decorating ordinary conversational messages as reports.
+- Changed research archives to lead with the completed answer; operational metadata, statistics, evidence entries, and raw JSON remain inspectable on demand.
+- Removed the disconnected 8,000-line demo stylesheet. The application now has one active visual stylesheet (`workbook.css`) instead of competing cascades.
+- Corrected the dark-theme selectors to follow the application’s `data-theme` state and visually reviewed the isolated light, mobile, and dark renders. `npm --prefix frontend run build` passed.

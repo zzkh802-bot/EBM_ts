@@ -21,6 +21,12 @@ const tools = computed<ToolStep[]>(() => (props.tools || []).map((item, index) =
 const milestones = computed(() => props.trace.filter((item) => !item.kind?.startsWith('tool.') && item.kind !== 'runtime.session'))
 const statusText = (status: string) => ({ running: '执行中', completed: '已完成', error: '失败' })[status] || status
 const detail = (value: unknown) => typeof value === 'string' ? value : JSON.stringify(value, null, 2)
+const oneLine = (value: unknown) => detail(value).replace(/\s+/g, ' ').trim()
+const preview = (step: ToolStep) => {
+  const text = oneLine(step.result ?? step.arguments)
+  if (!text) return step.status === 'running' ? '等待研究服务返回结果' : '未返回可展示的内容'
+  return text.length > 88 ? `${text.slice(0, 88)}…` : text
+}
 const toolLabel = (step: ToolStep) => {
   if (step.presentation === 'preparation') return '准备研究规则'
   return ({
@@ -35,15 +41,18 @@ const toolLabel = (step: ToolStep) => {
 </script>
 
 <template>
-  <section v-if="tools.length || milestones.length" class="run-activity" :class="{ pending }" aria-label="研究过程">
+  <section v-if="tools.length || milestones.length || pending" class="run-activity" :class="{ pending }" aria-label="研究过程">
     <div class="run-activity-heading">
       <span>{{ pending ? '研究过程' : '本轮研究记录' }}</span>
       <small>{{ pending ? '点击任一步查看证据与结果' : `${tools.length} 个研究步骤` }}</small>
     </div>
-    <details v-for="step in tools" :key="step.id" class="run-step" :open="step.status === 'running'">
+    <p v-if="pending && !tools.length && !milestones.length" class="run-activity-empty">
+      研究服务已启动，正在界定问题与检索范围。
+    </p>
+    <details v-for="step in tools" :key="step.id" class="run-step">
       <summary>
         <span class="run-step-status" :class="step.status" />
-        <strong>{{ toolLabel(step) }}</strong>
+        <span class="run-step-copy"><strong>{{ toolLabel(step) }}</strong><span>{{ preview(step) }}</span></span>
         <small>{{ statusText(step.status) }}</small>
       </summary>
       <div class="run-step-detail">

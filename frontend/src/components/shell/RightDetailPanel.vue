@@ -46,9 +46,9 @@ const raw = computed(() => JSON.stringify(ui.detailPayload, null, 2))
         </div>
       </template>
       <template v-else-if="ui.detailKind === 'archive'">
-        <details open><summary>运行信息</summary><pre>{{ JSON.stringify(archive.run, null, 2) }}</pre></details>
-        <details v-if="archive.answer" open><summary>回答</summary><p class="pre-line">{{ archive.answer }}</p></details>
-        <details v-if="archive.stats" open><summary>统计</summary><pre>{{ JSON.stringify(archive.stats, null, 2) }}</pre></details>
+        <details><summary>运行信息</summary><pre>{{ JSON.stringify(archive.run, null, 2) }}</pre></details>
+        <details v-if="archive.answer" open><summary>本轮回答</summary><p class="pre-line">{{ archive.answer }}</p></details>
+        <details v-if="archive.stats"><summary>研究统计</summary><pre>{{ JSON.stringify(archive.stats, null, 2) }}</pre></details>
         <details v-if="archive.items"><summary>证据条目</summary><pre>{{ JSON.stringify(archive.items, null, 2) }}</pre></details>
       </template>
       <pre v-else>{{ raw }}</pre>

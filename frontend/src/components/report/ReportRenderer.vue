@@ -73,6 +73,8 @@ const sections = computed(() => {
   return result.filter((section) => section.heading || section.nodes.length)
 })
 const referenceEntries = computed(() => Object.values(displayedReferences.value).sort((a, b) => Number(a.number) - Number(b.number)))
+const sectionCount = computed(() => sections.value.filter((section) => section.heading).length)
+const showDossier = computed(() => sectionCount.value > 0 || referenceEntries.value.length > 0)
 const referenceMeta = (reference: Reference) => reference.pmid
   ? `PMID: ${reference.pmid}`
   : reference.url || '来自本轮回答解析'
@@ -80,6 +82,11 @@ const referenceMeta = (reference: Reference) => reference.pmid
 
 <template>
   <div class="evidence-report" :class="[`report-audience-${audience}`, `report-mode-${researchMode}`]">
+    <header v-if="showDossier" class="report-dossier">
+      <span>正式循证报告</span>
+      <strong>{{ audience === 'clinician' ? '面向临床专业人员' : '面向普通用户' }}</strong>
+      <small>{{ sectionCount }} 个报告章节 · {{ referenceEntries.length }} 条参考来源</small>
+    </header>
     <div class="report-markdown">
       <template v-for="(section, index) in sections" :key="index">
         <section v-if="section.heading && section.group" class="report-section-group">
