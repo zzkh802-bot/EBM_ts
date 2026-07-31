@@ -29,6 +29,7 @@ const workspace = computed(() => {
     files: Array.isArray(data.files) ? data.files as WorkspaceFile[] : [],
     loading: data.loading === true,
     error: typeof data.error === 'string' ? data.error : '',
+    emptyMessage: typeof data.message === 'string' ? data.message : '',
   }
 })
 const selectedWorkspaceFile = ref<WorkspaceFile | null>(null)
@@ -50,6 +51,14 @@ const openWorkspaceFile = async (file: WorkspaceFile) => {
     workspaceFileError.value = error instanceof Error ? error.message : '无法读取该文件。'
   }
 }
+watch(() => ui.detailPayload, (payload) => {
+  if (ui.detailKind !== 'workspace' || !payload || typeof payload !== 'object') return
+  const data = payload as Record<string, unknown>
+  const preferredPath = typeof data.preferred_path === 'string' ? data.preferred_path : ''
+  const files = Array.isArray(data.files) ? data.files as WorkspaceFile[] : []
+  const preferred = files.find((file) => file.path === preferredPath)
+  if (preferred) void openWorkspaceFile(preferred)
+})
 </script>
 
 <template>
@@ -85,7 +94,7 @@ const openWorkspaceFile = async (file: WorkspaceFile) => {
       <template v-else-if="ui.detailKind === 'workspace'">
         <p v-if="workspace.loading">正在读取本次研究生成的文件…</p>
         <p v-else-if="workspace.error">{{ workspace.error }}</p>
-        <p v-else-if="!workspace.files.length">本次对话尚未生成可展示的研究文件。</p>
+        <p v-else-if="!workspace.files.length">{{ workspace.emptyMessage || '本次对话尚未生成可展示的研究文件。' }}</p>
         <div v-else class="workspace-file-list">
           <button v-for="file in workspace.files" :key="file.path" type="button" :class="{ active: selectedWorkspaceFile?.path === file.path }" @click="openWorkspaceFile(file)">
             <span>{{ file.kind === 'research_frame' ? '研究框架' : file.kind === 'report' ? '正式报告' : file.kind === 'evidence' ? '证据记录' : '来源归档' }}</span>

@@ -4,7 +4,7 @@ import { agentService, archiveService, workspaceService } from '../services'
 import { useAgentRunStore, usePreferencesStore, useSessionsStore, useUiStore } from '../stores'
 import type { AccountConnection, Message, ModeSnapshot, RuntimeConfig } from '../types/domain'
 import { buildAgentRequest, newId, nowIso, responseText } from '../utils/core'
-import { parseReport, projectReport, reportPlainText, type Reference } from '../utils/report'
+import { parseReport, reportPlainText, type Reference } from '../utils/report'
 import { copyText } from '../utils/browser'
 import ReportRenderer from '../components/report/ReportRenderer.vue'
 import RunActivity from '../components/evidence/RunActivity.vue'
@@ -181,7 +181,7 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
 }
 
 const projectedText = (message: Message) =>
-  reportPlainText(projectReport(parseReport(message.content), message.audienceMode))
+  reportPlainText(parseReport(message.content))
 
 const copy = async (message: Message) => copyText(projectedText(message))
 const speak = (message: Message) => {
@@ -386,6 +386,10 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
               <p v-else>{{ message.content }}</p>
               <div v-if="message.attachments?.length" class="attachment-tray">
                 <span v-for="file in message.attachments" :key="file.id">{{ file.name }}</span>
+              </div>
+              <div v-if="message.role === 'assistant' && message.reportMarkdown" class="report-file-link">
+                <span>正式报告已保存到本次研究文件</span>
+                <button type="button" @click="openWorkspace(message.reportPath)">打开报告</button>
               </div>
               <div v-if="message.role === 'assistant' && !message.pending" class="message-actions">
                 <button class="message-action-primary" type="button" @click="focusQuestion">继续追问</button>

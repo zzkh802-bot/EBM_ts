@@ -306,3 +306,9 @@ The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening ra
 - Bound each submitted browser conversation to its own local session ID for every status update and final patch. Switching conversations while a run is in progress can no longer write tool progress or a final answer into the newly active conversation.
 - Added read-only workspace-file access for a research session. Users can now browse the actual generated formal reports, research frame, evidence records, and archived source Markdown from the conversation's “研究文件” entry; hidden metadata and account files are not exposed.
 - Restored the distinction between a natural chat reply and a formal report file. The chat uses the model's final answer, while the verified report stays in the session workspace. Report rendering no longer filters sections by audience or rearranges/collapses report sections; opening a report file renders its original Markdown content.
+
+### Clinical conversation surface
+
+- Separated the conversation surface from the onboarding workbench. Once a session has a user question, the static configuration rail disappears, the conversation centers on a readable clinical column, and the composer becomes a compact sticky action surface.
+- Rebalanced chat hierarchy: user questions use a restrained blue reply bubble; research replies use a quiet document surface with an explicit provenance edge; the generated formal report is shown as a real workspace-file attachment. Copy and speech actions no longer apply an audience-specific projection to the stored response.
+- Replaced the high-frequency grid/particle backdrop with a low-contrast blue-grey light field, with a corresponding dark-mode conversation treatment. Reviewed the light onboarding render and rechecked TypeScript, frontend build, and the targeted response-priority test.
