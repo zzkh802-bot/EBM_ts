@@ -672,6 +672,7 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
     PI_SKIP_VERSION_CHECK: "1",
     PI_CODING_AGENT_DIR: path.join(rootDir, "data", "pi-agent"),
     EBM_RETRIEVAL_POLICY: request.retrievalPolicy,
+    EBM_MAX_ITERATIONS: String(request.maxIterations),
   };
   const args = [
     piEntrypoint,
