@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { agentService, archiveService } from '../services'
+import { agentService, archiveService, workspaceService } from '../services'
 import { useAgentRunStore, usePreferencesStore, useSessionsStore, useUiStore } from '../stores'
 import type { AccountConnection, Message, ModeSnapshot, RuntimeConfig } from '../types/domain'
 import { buildAgentRequest, newId, nowIso, responseText } from '../utils/core'
@@ -46,6 +46,7 @@ const primaryActionLabel = computed(() => {
   if (!run.busy) return '开始研究'
   return question.value.trim() ? '加入后续追问' : '停止本轮研究'
 })
+const hasConversation = computed(() => sessions.active.messages.some((message) => message.role === 'user'))
 watch(() => preferences.provider, () => {
   if (modelsForProvider.value.some((item) => item.model === preferences.model)) return
   preferences.model = modelsForProvider.value[0]?.model || ''
@@ -118,15 +119,16 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
     return
   }
   if (!text) return
+  const localSessionId = sessions.activeSessionId
   question.value = ''
   const mode = modeOverride || { ...preferences.snapshot }
-  sessions.titleFromQuestion(text)
-  sessions.addMessage({
+  sessions.titleFromQuestionIn(localSessionId, text)
+  sessions.addMessageTo(localSessionId, {
     id: newId('msg'), role: 'user', title: '你', content: text, trace: [],
     createdAt: nowIso(), ...mode,
   })
   const pendingId = newId('msg')
-  sessions.addMessage({
+  sessions.addMessageTo(localSessionId, {
     id: pendingId, role: 'assistant', title: '循医',
     content: '正在梳理问题与检索范围…', trace: [], tools: [],
     sourceQuestion: text, pending: true, stage: 'planning', createdAt: nowIso(), ...mode,
@@ -145,6 +147,7 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
           provider: preferences.provider || undefined,
           model: preferences.model || undefined,
           onStatus: (status) => {
+            if (status.session_id) sessions.setV2SessionId(localSessionId, status.session_id)
             if (status.status === 'queued') run.setStage('planning')
             if (status.status === 'running') {
               const activeTool = status.tools?.some((item) => item.status === 'running')
@@ -152,19 +155,20 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
               run.setStage(activeTool ? 'tooling' : reportStarted ? 'generating' : 'retrieving')
             }
             if (status.status === 'cancelling') run.setStage('network_wait')
-            sessions.patchMessage(pendingId, { trace: status.agent_trace || [], tools: status.tools || [] })
+            sessions.patchMessageIn(localSessionId, pendingId, { trace: status.agent_trace || [], tools: status.tools || [] })
           },
           onNetworkRetry: () => { run.setStage('network_wait') },
         })
-    sessions.active.v2SessionId = data.session_id || sessions.active.v2SessionId
-    sessions.patchMessage(pendingId, {
+    if (data.session_id) sessions.setV2SessionId(localSessionId, data.session_id)
+    sessions.patchMessageIn(localSessionId, pendingId, {
       pending: false, stage: 'idle', content: responseText(data), trace: data.agent_trace || [],
       tools: data.tools || [],
+      reportMarkdown: data.report_markdown, reportPath: data.report_path,
       archive: data.archive, citationAudit: data.citation_audit, uploadedTexts: data.uploaded_texts,
     })
   } catch (error) {
     const stopped = error instanceof DOMException && error.name === 'AbortError'
-    sessions.patchMessage(pendingId, {
+    sessions.patchMessageIn(localSessionId, pendingId, {
       pending: false, stage: 'idle',
       content: stopped
         ? '已停止前端等待；后端任务可能仍会短暂收尾。'
@@ -205,6 +209,19 @@ const openArchive = async (message: Message) => {
     try { ui.detailPayload = await archiveService.detail(id) } catch { /* keep summary */ }
   }
 }
+const openWorkspace = async (preferredPath = '') => {
+  const sessionId = sessions.active.v2SessionId
+  if (!sessionId) {
+    ui.openDetail('研究文件', { message: '本次对话尚未创建研究工作区。开始研究后，报告、研究框架和证据文件会出现在这里。' }, 'workspace')
+    return
+  }
+  ui.openDetail('研究文件', { session_id: sessionId, files: [], loading: true, preferred_path: preferredPath }, 'workspace')
+  try {
+    ui.detailPayload = { ...(await workspaceService.list(sessionId)), preferred_path: preferredPath }
+  } catch (error) {
+    ui.detailPayload = { session_id: sessionId, files: [], error: error instanceof Error ? error.message : '无法读取研究文件。' }
+  }
+}
 const runQueued = (index: number) => {
   const text = run.queuedGuidance.splice(index, 1)[0]
   if (text) void submit(text)
@@ -231,7 +248,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
 <template>
   <div class="workspace-layout">
     <div class="workspace-center">
-      <section class="hero-dp" aria-label="循医工作台">
+      <section v-if="!hasConversation" class="hero-dp" aria-label="循医工作台">
         <div class="hero-copy">
           <span class="workspace-eyebrow">循医 · EVIDENCE WORKBOOK</span>
           <div class="hero-title">从临床问题，走到可追溯的判断。</div>
@@ -304,7 +321,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
         </button>
       </form>
 
-      <section class="research-trajectory" :class="{ active: run.busy }" aria-label="循证研究路径">
+      <section v-if="!hasConversation" class="research-trajectory" :class="{ active: run.busy }" aria-label="循证研究路径">
         <div class="trajectory-intro">
           <span>研究路径</span>
           <strong>{{ run.busy ? (stages[run.stage] || '正在推进研究') : '问题 · 证据 · 判断' }}</strong>
@@ -317,7 +334,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
       </section>
 
       <div class="app-desktop-grid">
-        <section class="feature-section" aria-label="循医场景">
+        <section v-if="!hasConversation" class="feature-section" aria-label="循医场景">
           <div class="feature-header">
             <span><strong>循证示例</strong><small>按科室选择一个完整案例，也可以在输入框中继续修改问题</small></span>
           </div>
@@ -340,6 +357,11 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
         </section>
 
         <section ref="feed" class="chat-feed" aria-label="循医对话">
+          <header v-if="hasConversation" class="conversation-context">
+            <span>当前循证对话</span>
+            <strong>{{ sessions.active.title }}</strong>
+            <button type="button" @click="openWorkspace()">研究文件</button>
+          </header>
           <article
             v-for="message in sessions.active.messages"
             :key="message.id"
@@ -376,7 +398,8 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
                     <button type="button" @click="speak(message)">朗读</button>
                     <button type="button" @click="share(message)">分享</button>
                     <button type="button" @click="retry(message)">重新运行</button>
-                    <button v-if="message.audienceMode === 'clinician'" type="button" @click="sessions.patchMessage(message.id, { showMarkdown: !message.showMarkdown })">查看 Markdown</button>
+                    <button v-if="message.audienceMode === 'clinician'" type="button" @click="sessions.patchMessage(message.id, { showMarkdown: !message.showMarkdown })">查看本条 Markdown</button>
+                    <button v-if="message.reportMarkdown" type="button" @click="openWorkspace(message.reportPath)">查看正式报告</button>
                     <button v-if="message.archive" type="button" @click="openArchive(message)">查看档案</button>
                   </div>
                 </details>

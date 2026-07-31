@@ -110,7 +110,7 @@ describe('Agent DTO', () => {
     }])
     expect(dto.attachments[0]).not.toHaveProperty('id')
     expect(dto.attachments[0]).not.toHaveProperty('dataUrl')
-    expect(responseText({ report_markdown: 'report', agent_answer: 'answer', message: 'message' })).toBe('report')
+    expect(responseText({ report_markdown: 'report', agent_answer: 'answer', message: 'message' })).toBe('answer')
     expect(responseText({ agent_answer: 'answer', message: 'message' })).toBe('answer')
   })
 })

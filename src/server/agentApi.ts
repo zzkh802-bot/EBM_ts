@@ -68,6 +68,7 @@ export type AgentExecutionResult = {
   sessionId?: string;
   message: string;
   reportMarkdown?: string;
+  reportPath?: string;
   agentTrace?: AgentTraceEvent[];
   tools?: Array<Record<string, unknown>>;
   stderr?: string;
@@ -93,6 +94,7 @@ export type AgentRunResponse = {
   message: string;
   agent_answer?: string;
   report_markdown?: string;
+  report_path?: string;
   patient_summary?: string;
   agent_trace: AgentTraceEvent[];
   tools: Array<Record<string, unknown>>;
@@ -110,6 +112,7 @@ type InternalRun = {
   sessionId?: string;
   message: string;
   reportMarkdown?: string;
+  reportPath?: string;
   agentTrace: AgentTraceEvent[];
   tools: Array<Record<string, unknown>>;
   error?: { code: string; message: string };
@@ -178,6 +181,7 @@ export class AgentRunStore {
       }
       if (result.sessionId) run.sessionId = result.sessionId;
       if (result.reportMarkdown) run.reportMarkdown = result.reportMarkdown;
+      if (result.reportPath) run.reportPath = result.reportPath;
       for (const event of result.agentTrace ?? []) this.addTrace(run, event);
       for (const tool of result.tools ?? []) this.addTool(run, tool);
       run.status = "succeeded";
@@ -232,6 +236,7 @@ export class AgentRunStore {
         agent_answer: run.message,
         patient_summary: run.message,
         ...(run.reportMarkdown ? { report_markdown: run.reportMarkdown } : {}),
+        ...(run.reportPath ? { report_path: run.reportPath } : {}),
       } : {}),
       agent_trace: [...run.agentTrace],
       tools: [...run.tools],
@@ -267,6 +272,7 @@ export type AgentApiServerOptions = {
   runtimeConfig?: RuntimeConfig | (() => Promise<RuntimeConfig>);
   accountConnections?: AccountConnectionStore;
   staticDir?: string;
+  rootDir?: string;
 };
 
 export function createAgentApiServer(options: AgentApiServerOptions): { server: Server; store: AgentRunStore } {
@@ -276,8 +282,9 @@ export function createAgentApiServer(options: AgentApiServerOptions): { server: 
     ? configuredRuntimeConfig
     : async () => configuredRuntimeConfig ?? defaultRuntimeConfig();
   const staticDir = options.staticDir ? path.resolve(options.staticDir) : undefined;
+  const rootDir = path.resolve(options.rootDir ?? process.cwd());
   const server = createServer((request, response) => {
-    void handleRequest(request, response, store, options.corsOrigin ?? "*", runtimeConfig, options.accountConnections, staticDir);
+    void handleRequest(request, response, store, options.corsOrigin ?? "*", runtimeConfig, options.accountConnections, staticDir, rootDir);
   });
   return { server, store };
 }
@@ -467,7 +474,7 @@ export function createPiCliExecutor(input: { rootDir: string }): AgentExecutor {
   };
 }
 
-async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: () => Promise<RuntimeConfig>, accountConnections?: AccountConnectionStore, staticDir?: string): Promise<void> {
+async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: () => Promise<RuntimeConfig>, accountConnections?: AccountConnectionStore, staticDir?: string, rootDir = process.cwd()): Promise<void> {
   setCors(response, corsOrigin);
   if (request.method === "OPTIONS") {
     response.writeHead(204);
@@ -483,12 +490,24 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
         ok: true,
         service: "xunyi-research-service",
         contract_version: CONTRACT_VERSION,
-        endpoints: ["GET /api/v1/runtime-config", "POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel"],
+        endpoints: ["GET /api/v1/runtime-config", "POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel", "GET /api/v1/research-sessions/{session_id}/files"],
       });
       return;
     }
     if (request.method === "GET" && pathname === "/api/v1/runtime-config") {
       sendJson(response, 200, await runtimeConfig());
+      return;
+    }
+    const workspaceMatch = /^\/api\/v1\/research-sessions\/([^/]+)\/files$/.exec(pathname);
+    if (workspaceMatch && request.method === "GET") {
+      const sessionId = decodeURIComponent(workspaceMatch[1] ?? "");
+      const requestedPath = url.searchParams.get("path");
+      if (requestedPath) {
+        sendJson(response, 200, await readWorkspaceFile(rootDir, sessionId, requestedPath));
+      } else {
+        const workspace = await sessionWorkspace(rootDir, sessionId);
+        sendJson(response, 200, { session_id: sessionId, files: await listWorkspaceFiles(workspace) });
+      }
       return;
     }
     if (accountConnections && request.method === "POST" && pathname === "/api/v1/account-connections") {
@@ -645,12 +664,90 @@ async function preparePiAgentDirectory(rootDir: string): Promise<void> {
   await mkdir(path.join(rootDir, "data", "sessions"), { recursive: true });
 }
 
-async function readLatestFinalReport(rootDir: string, sessionId: string): Promise<string | undefined> {
+type WorkspaceFile = {
+  path: string;
+  kind: "report" | "research_frame" | "evidence" | "source";
+  size: number;
+  modified_at: string;
+};
+
+function safeSessionId(sessionId: string): string {
+  if (!sessionId || path.basename(sessionId) !== sessionId) throw new ApiError(422, "invalid_session_id", "无效的研究会话标识。 ");
+  return sessionId;
+}
+
+async function sessionWorkspace(rootDir: string, sessionId: string): Promise<string> {
+  const safeId = safeSessionId(sessionId);
+  const sessionsRoot = path.join(rootDir, "data", "sessions");
+  let mapping: { directory?: unknown };
   try {
-    const sessionsRoot = path.join(rootDir, "data", "sessions");
-    const mapping = JSON.parse(await readFile(path.join(sessionsRoot, ".metadata", "workspaces", `${sessionId}.json`), "utf8")) as { directory?: unknown };
-    if (typeof mapping.directory !== "string" || !mapping.directory || path.basename(mapping.directory) !== mapping.directory) return undefined;
-    const reportsDir = path.join(sessionsRoot, mapping.directory, "reports");
+    mapping = JSON.parse(await readFile(path.join(sessionsRoot, ".metadata", "workspaces", `${safeId}.json`), "utf8")) as { directory?: unknown };
+  } catch {
+    throw new ApiError(404, "workspace_not_found", "未找到该研究会话的工作区。 ");
+  }
+  if (typeof mapping.directory !== "string" || !mapping.directory || path.basename(mapping.directory) !== mapping.directory) {
+    throw new ApiError(404, "workspace_not_found", "未找到该研究会话的工作区。 ");
+  }
+  return path.join(sessionsRoot, mapping.directory);
+}
+
+function workspaceFileKind(relativePath: string): WorkspaceFile["kind"] {
+  if (relativePath === "notes/research_frame.md") return "research_frame";
+  if (relativePath.startsWith("reports/")) return "report";
+  if (relativePath.startsWith("evidence/")) return "evidence";
+  return "source";
+}
+
+function visibleWorkspacePath(relativePath: string): boolean {
+  return relativePath === "notes/research_frame.md"
+    || relativePath === "evidence/EVIDENCE.md"
+    || /^reports\/(?!drafts\/).+\.md$/.test(relativePath)
+    || /^evidence\/ev_[a-f0-9]{16}\.md$/.test(relativePath)
+    || /^sources\/(?:read|search)\/.+\/(?:full|toc)\.md$/.test(relativePath);
+}
+
+async function listWorkspaceFiles(workspace: string): Promise<WorkspaceFile[]> {
+  const files: WorkspaceFile[] = [];
+  const walk = async (relative = ""): Promise<void> => {
+    const directory = path.join(workspace, relative);
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const child = path.posix.join(relative, entry.name);
+      if (entry.isDirectory()) await walk(child);
+      else if (entry.isFile() && visibleWorkspacePath(child)) {
+        const details = await stat(path.join(workspace, child));
+        files.push({ path: child, kind: workspaceFileKind(child), size: details.size, modified_at: details.mtime.toISOString() });
+      }
+    }
+  };
+  await Promise.all(["notes", "reports", "evidence", "sources"].map((directory) => walk(directory)));
+  return files.sort((left, right) => right.modified_at.localeCompare(left.modified_at));
+}
+
+async function readWorkspaceFile(rootDir: string, sessionId: string, relativePath: string): Promise<WorkspaceFile & { session_id: string; content: string }> {
+  if (!visibleWorkspacePath(relativePath)) throw new ApiError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
+  const workspace = await sessionWorkspace(rootDir, sessionId);
+  const absolutePath = path.resolve(workspace, relativePath);
+  if (!absolutePath.startsWith(`${workspace}${path.sep}`)) throw new ApiError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
+  let details;
+  try {
+    details = await stat(absolutePath);
+  } catch {
+    throw new ApiError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
+  }
+  if (!details.isFile()) throw new ApiError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
+  return { session_id: sessionId, path: relativePath, kind: workspaceFileKind(relativePath), size: details.size, modified_at: details.mtime.toISOString(), content: await readFile(absolutePath, "utf8") };
+}
+
+async function readLatestFinalReport(rootDir: string, sessionId: string): Promise<{ path: string; markdown: string } | undefined> {
+  try {
+    const workspace = await sessionWorkspace(rootDir, sessionId);
+    const reportsDir = path.join(workspace, "reports");
     const entries = (await readdir(reportsDir, { withFileTypes: true }))
       .filter((entry) => entry.isFile() && entry.name.endsWith(".md"));
     const candidates = await Promise.all(entries.map(async (entry) => {
@@ -658,7 +755,7 @@ async function readLatestFinalReport(rootDir: string, sessionId: string): Promis
       return { file, modified: (await stat(file)).mtimeMs };
     }));
     const latest = candidates.sort((left, right) => right.modified - left.modified)[0];
-    return latest ? (await readFile(latest.file, "utf8")).trim() : undefined;
+    return latest ? { path: path.posix.join("reports", path.basename(latest.file)), markdown: (await readFile(latest.file, "utf8")).trim() } : undefined;
   } catch {
     return undefined;
   }
@@ -808,11 +905,11 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
       const modelError = traceEvents.findLast((event) => event.kind === "model.error")?.detail;
       throw new Error(modelError || "研究引擎完成后未返回可展示的回答。");
     }
-    const reportMarkdown = sessionId ? await readLatestFinalReport(rootDir, sessionId) : undefined;
+    const report = sessionId ? await readLatestFinalReport(rootDir, sessionId) : undefined;
     return {
       ...(sessionId ? { sessionId } : {}),
       message,
-      ...(reportMarkdown ? { reportMarkdown } : {}),
+      ...(report ? { reportMarkdown: report.markdown, reportPath: report.path } : {}),
       ...(stderr ? { stderr } : {}),
     };
   } finally {
@@ -890,7 +987,7 @@ export function buildAgentPrompt(input: AgentRunInput): string {
     modeInstruction[input.researchMode],
     audienceInstruction,
     "研究模式和用户类型只改变内容的深度、范围和专业程度，不改变前端布局。所有报告使用稳定的语义结构，并按需包含：临床问题与决策、主要疗效结局、关键安全结局、管理策略、结论与建议、参考文献。重大出血、死亡、感染、禁忌等关键安全结局必须使用独立的二级或三级标题，不得埋在长段落中。不要为了凑模板输出没有内容的章节。",
-    "本轮必须生成可供前端渲染的正式循证报告：在最终回复前调用 report_write；若 report_write 只保存了 draft，则修复后调用 report_finalize。不得只在聊天消息中输出摘要而跳过正式报告文件。最终聊天消息可以简短，但正式报告必须包含本模式要求的完整内容。",
+    "本轮必须生成正式循证报告：在最终回复前调用 report_write；若 report_write 只保存了 draft，则修复后调用 report_finalize。不得只在聊天消息中输出摘要而跳过正式报告文件。最终聊天消息使用自然、简洁的中文答复，概括结论、重要边界和下一步，不复制完整报告；完整内容只保留在正式报告文件中。",
     input.deepThink ? "额外检查安全红旗、证据冲突和跨学科影响。" : "",
     retrievalInstruction,
     `本轮最大工具迭代预算为 ${input.maxIterations}（提示性约束）。`,

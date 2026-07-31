@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { Reference } from '../utils/report'
 
-export type DetailKind = 'citation' | 'archive' | 'generic'
+export type DetailKind = 'citation' | 'archive' | 'workspace' | 'generic'
 
 export const useUiStore = defineStore('ui', () => {
   const sessionDrawerOpen = ref(false)

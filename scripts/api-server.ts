@@ -12,6 +12,7 @@ const { server } = createAgentApiServer({
   runtimeConfig: () => loadRuntimeConfig(rootDir),
   accountConnections: new AccountConnectionStore(rootDir),
   staticDir: path.join(rootDir, "frontend", "dist"),
+  rootDir,
 });
 
 server.listen(port, host, () => {

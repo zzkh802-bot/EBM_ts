@@ -73,6 +73,7 @@ export interface AgentResponse {
   ok?: boolean
   session_id?: string
   report_markdown?: string
+  report_path?: string
   agent_answer?: string
   message?: string
   agent_trace?: TraceItem[]
@@ -139,6 +140,7 @@ export interface AgentV2Response {
   message?: string
   agent_answer?: string
   report_markdown?: string
+  report_path?: string
   patient_summary?: string
   agent_trace?: TraceItem[]
   tools?: Array<Record<string, unknown>>
@@ -151,6 +153,8 @@ export interface Message extends ModeSnapshot {
   role: 'user' | 'assistant'
   title: string
   content: string
+  reportMarkdown?: string
+  reportPath?: string
   createdAt: string
   trace: TraceItem[]
   tools?: Array<Record<string, unknown>>
@@ -174,6 +178,23 @@ export interface Session {
   createdAt: string
   updatedAt: string
   messages: Message[]
+}
+
+export interface WorkspaceFile {
+  path: string
+  kind: 'report' | 'research_frame' | 'evidence' | 'source'
+  size: number
+  modified_at: string
+}
+
+export interface WorkspaceFilesResponse {
+  session_id: string
+  files: WorkspaceFile[]
+}
+
+export interface WorkspaceFileResponse extends WorkspaceFile {
+  session_id: string
+  content: string
 }
 
 export type AgentStage = 'idle' | 'planning' | 'retrieving' | 'tooling' | 'generating' | 'network_wait'

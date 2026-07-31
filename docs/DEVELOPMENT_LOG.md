@@ -300,3 +300,9 @@ The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening ra
 - Corrected the subscription-account panel to show every account-capable provider rather than only unavailable ones. Connected ChatGPT subscriptions now remain visible with their usable state and a reconnect action; unavailable Claude accounts retain a connection action.
 - Restored a blue-forward visual system across the paper background, interaction states, evidence accents, and example cards. Reduced the oversized hero scale while raising undersized navigation, metadata, controls, and run-step text to a more consistent reading scale.
 - Reworked narrow-screen mode controls into two full-width rows so account, mode, and composer controls remain legible at a 430px viewport. Reviewed both desktop and mobile local renders; `npm --prefix frontend run build` passed.
+
+### Session workspaces and natural conversation
+
+- Bound each submitted browser conversation to its own local session ID for every status update and final patch. Switching conversations while a run is in progress can no longer write tool progress or a final answer into the newly active conversation.
+- Added read-only workspace-file access for a research session. Users can now browse the actual generated formal reports, research frame, evidence records, and archived source Markdown from the conversation's “研究文件” entry; hidden metadata and account files are not exposed.
+- Restored the distinction between a natural chat reply and a formal report file. The chat uses the model's final answer, while the verified report stays in the session workspace. Report rendering no longer filters sections by audience or rearranges/collapses report sections; opening a report file renders its original Markdown content.

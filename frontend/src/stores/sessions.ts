@@ -21,6 +21,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   const storedActive = readLegacyString(STORAGE_KEYS.activeSession)
   const activeSessionId = ref(sessions.value.some((s) => s.id === storedActive) ? storedActive : sessions.value[0].id)
   const active = computed(() => sessions.value.find((s) => s.id === activeSessionId.value) || sessions.value[0])
+  const byId = (id: string) => sessions.value.find((session) => session.id === id)
   watch([sessions, activeSessionId], () => {
     safeWrite(STORAGE_KEYS.sessions, sessions.value)
     safeWrite(STORAGE_KEYS.activeSession, activeSessionId.value)
@@ -35,18 +36,39 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (!sessions.value.some((session) => session.id === activeSessionId.value)) activeSessionId.value = sessions.value[0].id
   }
   const addMessage = (message: Message) => { active.value.messages.push(message); active.value.updatedAt = nowIso() }
+  const addMessageTo = (sessionId: string, message: Message) => {
+    const session = byId(sessionId)
+    if (!session) return
+    session.messages.push(message); session.updatedAt = nowIso()
+  }
   const patchMessage = (id: string, patch: Partial<Message>) => {
     const message = active.value.messages.find((item) => item.id === id)
     if (message) Object.assign(message, patch)
+  }
+  const patchMessageIn = (sessionId: string, id: string, patch: Partial<Message>) => {
+    const session = byId(sessionId)
+    const message = session?.messages.find((item) => item.id === id)
+    if (message) Object.assign(message, patch)
+    if (session) session.updatedAt = nowIso()
   }
   const titleFromQuestion = (question: string) => {
     if (active.value.title !== '新的循证对话') return
     const clean = question.replace(/\s+/g, ' ').trim()
     active.value.title = clean.length > 24 ? `${clean.slice(0, 24)}…` : clean || '附件分析'
   }
+  const titleFromQuestionIn = (sessionId: string, question: string) => {
+    const session = byId(sessionId)
+    if (!session || session.title !== '新的循证对话') return
+    const clean = question.replace(/\s+/g, ' ').trim()
+    session.title = clean.length > 24 ? `${clean.slice(0, 24)}…` : clean || '附件分析'
+  }
+  const setV2SessionId = (sessionId: string, v2SessionId: string) => {
+    const session = byId(sessionId)
+    if (session) session.v2SessionId = v2SessionId
+  }
   const clear = () => {
     sessions.value = [createSession()]
     activeSessionId.value = sessions.value[0].id
   }
-  return { sessions, activeSessionId, active, create, remove, clear, addMessage, patchMessage, titleFromQuestion }
+  return { sessions, activeSessionId, active, create, remove, clear, addMessage, addMessageTo, patchMessage, patchMessageIn, titleFromQuestion, titleFromQuestionIn, setV2SessionId }
 })

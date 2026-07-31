@@ -73,6 +73,7 @@ const toAgentResponse = (run: AgentV2Response): AgentResponse => ({
   ok: true,
   session_id: run.session_id,
   report_markdown: run.report_markdown,
+  report_path: run.report_path,
   agent_answer: run.agent_answer || run.message,
   message: run.message,
   patient_summary: run.patient_summary,

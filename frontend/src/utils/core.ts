@@ -99,4 +99,4 @@ export function buildAgentRequest(
 }
 
 export const responseText = (data: { report_markdown?: string; agent_answer?: string; message?: string }) =>
-  data.report_markdown || data.agent_answer || data.message || '本轮没有生成回答。'
+  data.agent_answer || data.message || data.report_markdown || '本轮没有生成回答。'
