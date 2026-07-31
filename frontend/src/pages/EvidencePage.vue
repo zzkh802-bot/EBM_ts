@@ -50,6 +50,16 @@ const primaryActionLabel = computed(() => {
   return question.value.trim() ? '加入后续追问' : '停止本轮研究'
 })
 const hasConversation = computed(() => sessions.active.messages.some((message) => message.role === 'user'))
+const readFormalReport = async (sessionId: string | undefined, preferredPath?: string) => {
+  if (!sessionId) return ''
+  try {
+    const files = await workspaceService.list(sessionId)
+    const report = files.files.find((file) => file.path === preferredPath) || files.files.find((file) => file.kind === 'report')
+    return report ? (await workspaceService.read(sessionId, report.path)).content : ''
+  } catch {
+    return ''
+  }
+}
 const loadConversationFiles = async () => {
   const sessionId = sessions.active.v2SessionId
   if (!sessionId) {
@@ -176,11 +186,12 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
           onNetworkRetry: () => { run.setStage('network_wait') },
         })
     if (data.session_id) sessions.setV2SessionId(localSessionId, data.session_id)
+    const reportMarkdown = data.report_markdown || await readFormalReport(data.session_id, data.report_path)
     void loadConversationFiles()
     sessions.patchMessageIn(localSessionId, pendingId, {
       pending: false, stage: 'idle', content: responseText(data), trace: data.agent_trace || [],
       tools: data.tools || [],
-      reportMarkdown: data.report_markdown, reportPath: data.report_path,
+      reportMarkdown, reportPath: data.report_path,
       archive: data.archive, citationAudit: data.citation_audit, uploadedTexts: data.uploaded_texts,
     })
   } catch (error) {
@@ -198,7 +209,7 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
 }
 
 const projectedText = (message: Message) =>
-  reportPlainText(parseReport(message.content))
+  reportPlainText(parseReport(message.reportMarkdown || message.content))
 
 const copy = async (message: Message) => copyText(projectedText(message))
 const speak = (message: Message) => {
@@ -393,20 +404,35 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
               <div v-if="message.pending" class="agent-stage">{{ stages[run.stage] || '正在调用循证引擎…' }}</div>
               <RunActivity v-if="message.role === 'assistant'" :trace="message.trace" :tools="message.tools" :pending="message.pending" />
               <ReportRenderer
-                v-if="message.role === 'assistant' && !message.pending && !message.showMarkdown"
+                v-if="message.role === 'assistant' && !message.pending && !message.showMarkdown && !message.reportMarkdown"
                 :markdown="message.content"
                 :audience="message.audienceMode"
                 :research-mode="message.researchMode"
                 @citation="openCitation"
               />
-              <pre v-else-if="message.showMarkdown && message.audienceMode === 'clinician'">{{ message.content }}</pre>
+              <pre v-else-if="message.showMarkdown && message.audienceMode === 'clinician'">{{ message.reportMarkdown || message.content }}</pre>
+              <section v-else-if="message.role === 'assistant' && message.reportMarkdown" class="final-report" aria-label="正式报告">
+                <header class="final-report-head">
+                  <div>
+                    <span>正式报告</span>
+                    <strong>本轮研究结论与依据</strong>
+                  </div>
+                  <small>已保存</small>
+                </header>
+                <ReportRenderer
+                  :markdown="message.reportMarkdown"
+                  :audience="message.audienceMode"
+                  :research-mode="message.researchMode"
+                  @citation="openCitation"
+                />
+              </section>
               <p v-else>{{ message.content }}</p>
               <div v-if="message.attachments?.length" class="attachment-tray">
                 <span v-for="file in message.attachments" :key="file.id">{{ file.name }}</span>
               </div>
               <div v-if="message.role === 'assistant' && message.reportMarkdown" class="report-file-link">
-                <span>正式报告已保存到本次研究文件</span>
-                <button type="button" @click="openWorkspace(message.reportPath)">打开报告</button>
+                <span>需要查看研究框架、证据记录或来源原文？</span>
+                <button type="button" @click="openWorkspace(message.reportPath)">查看研究文件</button>
               </div>
               <div v-if="message.role === 'assistant' && !message.pending" class="message-actions">
                 <button class="message-action-primary" type="button" @click="focusQuestion">继续追问</button>
@@ -419,8 +445,8 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
                     <button type="button" @click="speak(message)">朗读</button>
                     <button type="button" @click="share(message)">分享</button>
                     <button type="button" @click="retry(message)">重新运行</button>
-                    <button v-if="message.audienceMode === 'clinician'" type="button" @click="sessions.patchMessage(message.id, { showMarkdown: !message.showMarkdown })">查看本条 Markdown</button>
-                    <button v-if="message.reportMarkdown" type="button" @click="openWorkspace(message.reportPath)">查看正式报告</button>
+                    <button v-if="message.audienceMode === 'clinician'" type="button" @click="sessions.patchMessage(message.id, { showMarkdown: !message.showMarkdown })">{{ message.showMarkdown ? '返回阅读视图' : '查看报告 Markdown' }}</button>
+                    <button v-if="message.reportMarkdown" type="button" @click="openWorkspace(message.reportPath)">查看研究文件</button>
                     <button v-if="message.archive" type="button" @click="openArchive(message)">查看档案</button>
                   </div>
                 </details>

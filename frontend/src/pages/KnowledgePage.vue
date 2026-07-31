@@ -61,19 +61,19 @@ onMounted(() => { void knowledge.loadWorkspaceAssets() })
 </script>
 
 <template>
-  <section class="asset-page" aria-label="研究资产库">
+  <section class="asset-page" aria-label="研究报告库">
     <header class="asset-page-head">
       <div>
-        <span>研究资产库</span>
-        <h2>每次循证研究，都会留下可复核的依据。</h2>
-        <p>这里直接读取本地循医服务为各会话生成的报告、研究框架、证据记录和来源归档。</p>
+        <span>研究报告库</span>
+        <h2>正式报告在前，依据与来源在后。</h2>
+        <p>按研究回看正式报告；需要复核时，再沿着证据记录与来源归档继续查看。</p>
       </div>
       <button class="asset-refresh" type="button" :disabled="knowledge.workspaceLoading" @click="knowledge.loadWorkspaceAssets()">
-        {{ knowledge.workspaceLoading ? '正在同步…' : '刷新资产' }}
+        {{ knowledge.workspaceLoading ? '正在同步…' : '刷新报告库' }}
       </button>
     </header>
 
-    <div class="asset-summary" aria-label="资产概览">
+    <div class="asset-summary" aria-label="报告库概览">
       <span><strong>{{ reportCount }}</strong> 正式报告</span>
       <span><strong>{{ evidenceCount }}</strong> 证据记录</span>
       <span><strong>{{ sourceCount }}</strong> 来源归档</span>
@@ -81,26 +81,26 @@ onMounted(() => { void knowledge.loadWorkspaceAssets() })
 
     <div class="asset-toolbar">
       <label>
-        <span class="sr-only">搜索研究资产</span>
-        <input v-model="search" type="search" placeholder="搜索研究主题、正式报告或来源">
+        <span class="sr-only">搜索研究报告</span>
+        <input v-model="search" type="search" placeholder="搜索报告主题、标题或来源">
       </label>
-      <span>每项研究均可展开查看完整文件目录</span>
+      <span>点击一份报告即可阅读原文，并查看完整研究文件。</span>
     </div>
 
     <section v-if="knowledge.workspaceLoading" class="asset-empty">正在读取各会话的研究工作区…</section>
     <section v-else-if="!rows.length" class="asset-empty">
-      <strong>还没有研究资产</strong>
+      <strong>还没有正式报告</strong>
       <p>完成一次循证研究后，正式报告、研究框架和证据文件会自动出现在这里。</p>
       <button type="button" @click="router.push('/evidence')">开始循证研究</button>
     </section>
     <section v-else class="asset-list" aria-label="已完成循证研究">
       <button v-for="archive in rows" :key="archive.id" class="asset-project" type="button" @click="openArchive(archive)">
-        <span class="asset-project-state">已归档</span>
+        <span class="asset-project-state">{{ archive.report ? '正式报告' : '研究归档' }}</span>
         <span class="asset-main">
           <strong>{{ archive.title }}</strong>
           <small>{{ archive.report ? '正式报告已生成' : '研究文件已归档' }} · {{ archive.evidenceCount }} 条证据记录 · {{ archive.sourceCount }} 个来源</small>
         </span>
-        <span class="asset-open">打开文件</span>
+        <span class="asset-open">阅读报告</span>
       </button>
     </section>
   </section>

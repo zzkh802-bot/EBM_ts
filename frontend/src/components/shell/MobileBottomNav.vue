@@ -17,9 +17,9 @@ const isActive = (path: string) => route.path === path || route.path.startsWith(
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4h7l4 4v12H7zM14 4v4h4M9.5 14.5l2 2 4-5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" /></svg>
       <span>循证</span>
     </button>
-    <button class="nav-item" :class="{ active: isActive('/knowledge') }" type="button" aria-label="研究资产" @click="router.push('/knowledge')">
+    <button class="nav-item" :class="{ active: isActive('/knowledge') }" type="button" aria-label="研究报告库" @click="router.push('/knowledge')">
       <svg class="nav-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 5h5l2 2h7v12H5zM8 11h8M8 15h5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" /></svg>
-      <span>资产</span>
+      <span>报告库</span>
     </button>
   </nav>
 </template>

@@ -77,7 +77,7 @@ a { color: var(--evidence); }
   z-index: 12;
   inset: 0 auto 0 0;
   display: flex;
-  width: 76px;
+  width: 88px;
   flex-direction: column;
   align-items: center;
   padding: 20px 12px;
@@ -111,13 +111,13 @@ a { color: var(--evidence); }
   place-items: center;
   border-radius: 14px;
   color: var(--ink-faint);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.3;
 }
 
 .workspace-nav-item svg { width: 22px; height: 22px; }
 .workspace-nav-item:hover, .workspace-nav-item.active { color: var(--jade); background: var(--jade-soft); }
-.mobile-app { min-height: 100vh; margin-left: 76px; }
+.mobile-app { min-height: 100vh; margin-left: 88px; }
 .app-top { display: flex; max-width: 1540px; min-height: 84px; align-items: center; justify-content: space-between; padding: 0 5.4vw; margin: 0 auto; }
 .app-brand, .top-actions { display: flex; align-items: center; }
 .app-brand { gap: 9px; color: var(--ink); font-family: var(--serif); font-size: 21px; font-weight: 700; letter-spacing: .08em; }
@@ -246,6 +246,12 @@ body.chat-mode .conversation-context button { display: none; }
 .attachment-tray span { padding: 3px 7px; border: 1px solid var(--line); border-radius: 4px; color: var(--ink-soft); font-family: var(--mono); font-size: 10px; }
 .report-file-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; margin-top: 14px; border: 1px solid rgba(49, 86, 200, .18); border-radius: 10px; background: var(--evidence-soft); color: var(--ink-soft); font-size: 12px; }
 .report-file-link button { flex: 0 0 auto; border: 0; background: transparent; color: var(--evidence); font-weight: 700; }
+.final-report { padding: 2px 0 0; }
+.final-report-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; padding: 14px 0 13px; margin-bottom: 14px; border-top: 2px solid var(--jade); border-bottom: 1px solid var(--line-strong); }
+.final-report-head > div { display: grid; gap: 3px; }
+.final-report-head span { color: var(--jade); font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: .1em; }
+.final-report-head strong { color: var(--ink); font-family: var(--serif); font-size: 20px; }
+.final-report-head small { color: var(--jade); font-size: 12px; white-space: nowrap; }
 
 body.chat-mode .chat-message.user .bubble { max-width: min(72%, 620px); padding: 14px 17px; border-color: rgba(49, 86, 200, .16); border-radius: 18px 18px 4px 18px; background: #e5edff; box-shadow: 0 6px 18px rgba(44, 84, 156, .08); }
 body.chat-mode .chat-message.user .bubble > p { margin: 0; color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.7; }
@@ -527,6 +533,7 @@ body.chat-mode .conversation-files-panel .workspace-tree { max-height: calc(100v
   .chat-message.user .bubble > p { font-size: 15px; }
   .report-markdown p, .report-markdown li { font-size: 14px; line-height: 1.82; }
   .report-markdown h2 { font-size: 23px; }
+  .final-report-head { align-items: start; }
   .run-activity-heading small { max-width: 170px; text-align: right; }
   .bottom-nav { position: fixed; z-index: 20; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: repeat(3, 1fr); padding: 7px 12px calc(7px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: rgba(249, 250, 247, .88); backdrop-filter: blur(20px); }
   .nav-item { display: grid; gap: 2px; place-items: center; padding: 3px; border: 0; background: transparent; color: var(--ink-faint); font-size: 10px; }
