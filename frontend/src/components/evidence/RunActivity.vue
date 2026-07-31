@@ -36,7 +36,10 @@ const toolLabel = (step: ToolStep) => {
 
 <template>
   <section v-if="tools.length || milestones.length" class="run-activity" :class="{ pending }" aria-label="研究过程">
-    <div class="run-activity-heading"><span>{{ pending ? '研究过程' : '本轮研究记录' }}</span><small>{{ tools.length }} 个研究步骤</small></div>
+    <div class="run-activity-heading">
+      <span>{{ pending ? '研究过程' : '本轮研究记录' }}</span>
+      <small>{{ pending ? '点击任一步查看证据与结果' : `${tools.length} 个研究步骤` }}</small>
+    </div>
     <details v-for="step in tools" :key="step.id" class="run-step" :open="step.status === 'running'">
       <summary>
         <span class="run-step-status" :class="step.status" />

@@ -232,9 +232,10 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
   <div class="workspace-layout">
     <div class="workspace-center">
       <section class="hero-dp" aria-label="循医工作台">
-        <div>
-          <div class="hero-title">今天想查询什么医学问题？</div>
-          <p>基于文献、指南与临床证据，生成可追溯的循证分析。</p>
+        <div class="hero-copy">
+          <span class="workspace-eyebrow">循医 · EVIDENCE WORKBOOK</span>
+          <div class="hero-title">从临床问题，走到可追溯的判断。</div>
+          <p>将文献、指南与临床证据编织成一份可复核的研究记录。</p>
         </div>
       </section>
 
@@ -302,6 +303,18 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
           <span class="send-label">{{ primaryActionLabel }}</span>
         </button>
       </form>
+
+      <section class="research-trajectory" :class="{ active: run.busy }" aria-label="循证研究路径">
+        <div class="trajectory-intro">
+          <span>研究路径</span>
+          <strong>{{ run.busy ? (stages[run.stage] || '正在推进研究') : '问题 · 证据 · 判断' }}</strong>
+        </div>
+        <ol>
+          <li :class="{ current: run.busy && run.stage === 'planning', complete: run.busy && run.stage !== 'planning' }"><i />界定问题</li>
+          <li :class="{ current: run.busy && ['retrieving', 'tooling'].includes(run.stage), complete: run.busy && run.stage === 'generating' }"><i />检索核验</li>
+          <li :class="{ current: run.busy && run.stage === 'generating' }"><i />形成报告</li>
+        </ol>
+      </section>
 
       <div class="app-desktop-grid">
         <section class="feature-section" aria-label="循医场景">

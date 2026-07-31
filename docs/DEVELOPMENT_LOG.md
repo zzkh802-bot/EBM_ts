@@ -274,3 +274,11 @@ The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening ra
 - Wall time was 45.45 seconds; traced time 43.861 seconds; 7 turns; 6 tool calls; 0 errors; no duplicate actions; first evidence at turn 5 / 33.882 seconds. This verifies that citation-capable PubMed abstracts do not require another network retrieval.
 - The trajectory still showed one shell call used to count lines after generic Pi `read`. PubMed tool output now proactively returns each abstract's session-relative evidence path, Pi-readable path, exact complete abstract line range, and copyable bounded `read` command, with continuation for an exceptional abstract over 200 lines.
 - Repeated the real abstract-only workflow after that navigation change. It completed in 23.96 wall-clock / 22.54 traced seconds with 6 turns, 5 tool calls, 0 errors, no duplicates, and first evidence at turn 3 / 11.305 seconds. The exact chain was one `pubmed_search` → one targeted `read` → one `primary_abstract` `evidence_add` → `evidence_read` → `report_write`; there was no `pubmed_read`, shell, web, or guideline call.
+
+### Evidence Workbook interface exploration
+
+- Created the isolated `design/evidence-workbook` branch to explore a product-level visual direction without changing `main`.
+- Replaced the overlapping demo-style entry sheet with a compact, paper-like design system: serif clinical questions, sans-serif body copy, monospaced evidence metadata, muted jade/blue evidence accents, and a subtle non-white paper texture.
+- Reframed the start screen around the research journey: clinical question → evidence retrieval and verification → report. Provider and model controls remain available, but are deliberately subordinate to the question.
+- Kept runtime transparency as progressive disclosure. The default interface shows the current research phase; each research step can be expanded to inspect its tool result and evidence context without exposing private reasoning or internal runtime branding.
+- Reviewed the stable desktop and mobile renders with the local development server. `npm --prefix frontend run build` passed.
