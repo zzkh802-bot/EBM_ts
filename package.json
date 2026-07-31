@@ -11,6 +11,7 @@
     "test:network": "bash scripts/smoke-deepseek.sh",
     "trace:analyze": "tsx scripts/analyze-trace.ts --markdown",
     "test:watch": "vitest",
+    "postinstall": "patch-package",
     "ebm": "bash scripts/ebm.sh",
     "api": "tsx scripts/api-server.ts",
     "frontend:build": "npm --prefix frontend run build",
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
+    "patch-package": "^8.0.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.15"

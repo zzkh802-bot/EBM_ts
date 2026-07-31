@@ -1,0 +1,65 @@
+diff --git a/node_modules/@earendil-works/pi-ai/dist/api/openai-codex-responses.js b/node_modules/@earendil-works/pi-ai/dist/api/openai-codex-responses.js
+--- a/node_modules/@earendil-works/pi-ai/dist/api/openai-codex-responses.js
++++ b/node_modules/@earendil-works/pi-ai/dist/api/openai-codex-responses.js
+@@ -33,6 +33,7 @@
+ const CODEX_TOOL_CALL_PROVIDERS = new Set(["openai", "openai-codex", "opencode"]);
+ const WEBSOCKET_MESSAGE_TOO_BIG_CLOSE_CODE = 1009;
+ const WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE = "websocket_connection_limit_reached";
++const WEBSOCKET_SSE_FALLBACK_COOLDOWN_MS = 30_000;
+ const CODEX_RESPONSE_STATUSES = new Set([
+     "completed",
+     "incomplete",
+@@ -169,7 +170,7 @@
+             const httpTimeoutMs = normalizeTimeoutMs(options?.timeoutMs);
+             const websocketConnectTimeoutMs = normalizeTimeoutMs(options?.websocketConnectTimeoutMs);
+             const transport = options?.transport || "auto";
+-            const websocketDisabledForSession = transport !== "sse" && isWebSocketSseFallbackActive(options?.sessionId);
++            const websocketDisabledForSession = transport === "auto" && isWebSocketSseFallbackActive(options?.sessionId);
+             if (websocketDisabledForSession) {
+                 recordWebSocketSseFallback(options?.sessionId);
+             }
+@@ -211,7 +212,7 @@
+                             requestBytes: new TextEncoder().encode(bodyJson).byteLength,
+                         }));
+-                        recordWebSocketFailure(options?.sessionId, error);
+-                        if (websocketStarted) {
++                        if (websocketStarted || transport !== "auto") {
+                             throw error;
+                         }
++                        recordWebSocketFailure(options?.sessionId, error);
+                         recordWebSocketSseFallback(options?.sessionId);
+@@ -572,7 +573,7 @@
+ const SESSION_WEBSOCKET_MAX_AGE_MS = 55 * 60 * 1000;
+ const websocketSessionCache = new Map();
+ const websocketDebugStats = new Map();
+-const websocketSseFallbackSessions = new Set();
++const websocketSseFallbackSessions = new Map();
+ function getOrCreateWebSocketDebugStats(sessionId) {
+     let stats = websocketDebugStats.get(sessionId);
+     if (!stats) {
+@@ -625,7 +626,15 @@
+ }
+ registerSessionResourceCleanup(closeOpenAICodexWebSocketSessions);
+ function isWebSocketSseFallbackActive(sessionId) {
+-    return sessionId ? websocketSseFallbackSessions.has(sessionId) : false;
++    if (!sessionId)
++        return false;
++    const expiresAt = websocketSseFallbackSessions.get(sessionId);
++    if (!expiresAt)
++        return false;
++    if (expiresAt > Date.now())
++        return true;
++    websocketSseFallbackSessions.delete(sessionId);
++    return false;
+ }
+ function recordWebSocketSseFallback(sessionId) {
+     if (!sessionId)
+@@ -637,7 +646,7 @@
+ function recordWebSocketFailure(sessionId, error) {
+     if (!sessionId)
+         return;
+-    websocketSseFallbackSessions.add(sessionId);
++    websocketSseFallbackSessions.set(sessionId, Date.now() + WEBSOCKET_SSE_FALLBACK_COOLDOWN_MS);
+     const stats = getOrCreateWebSocketDebugStats(sessionId);
+     stats.websocketFailures++;
+     stats.lastWebSocketError = formatThrownValue(error);

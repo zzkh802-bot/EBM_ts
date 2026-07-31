@@ -1,5 +1,11 @@
 # Development Log
 
+## 2026-07-31 — Codex subscription transport recovery
+
+- Confirmed that a failed Codex WebSocket connection was cached as a permanent per-session SSE fallback, so recovered networks never retried the preferred transport during a long-lived terminal session.
+- Added a small, reproducible dependency patch: automatic fallback now cools down for 30 seconds before retrying WebSocket; explicitly selected WebSocket transports fail visibly instead of silently changing transport.
+- Added one transport-level regression test with a simulated WebSocket outage and no real account or credential access.
+
 Persistent implementation memory for context compaction/recovery. Update after each verified vertical slice.
 
 ## Current direction
