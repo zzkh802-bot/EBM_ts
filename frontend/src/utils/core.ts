@@ -6,6 +6,8 @@ export const STORAGE_KEYS = {
   theme: 'dp_xunyi_theme_mode',
   modes: 'dp_xunyi_preferences',
   runtime: 'dp_xunyi_runtime_model',
+  patientIntake: 'dp_xunyi_patient_intake',
+  patientIntakeActive: 'dp_xunyi_patient_intake_active',
 } as const
 
 export const newId = (prefix: string) =>

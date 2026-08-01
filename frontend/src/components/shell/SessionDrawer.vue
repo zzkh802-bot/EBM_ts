@@ -20,13 +20,13 @@ const filtered = computed(() => {
 const openSession = (id: string) => {
   sessions.activeSessionId = id
   ui.sessionDrawerOpen = false
-  router.push('/evidence')
+  router.push('/clinician/evidence')
 }
 
 const createSession = () => {
   sessions.create()
   ui.sessionDrawerOpen = false
-  router.push('/evidence')
+  router.push('/clinician/evidence')
 }
 
 const formatSessionTime = (value: string) => {

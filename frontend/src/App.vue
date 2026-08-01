@@ -8,10 +8,11 @@ const preferences = usePreferencesStore()
 const sessions = useSessionsStore()
 const ui = useUiStore()
 const route = useRoute()
+const clinicianShell = computed(() => route.meta.shell === 'clinician')
 const media = matchMedia('(prefers-color-scheme: dark)')
 
 const moduleName = computed(() => {
-  if (route.path.startsWith('/knowledge')) return 'knowledge'
+  if (route.path.startsWith('/clinician/knowledge')) return 'knowledge'
   return 'evidence'
 })
 
@@ -30,10 +31,10 @@ const syncBody = () => {
   body.className = 'app-shell'
   body.classList.toggle('theme-dark', resolvedTheme.value === 'dark')
   body.classList.toggle('theme-light', resolvedTheme.value === 'light')
-  body.classList.toggle('chat-mode', moduleName.value === 'evidence' && hasConversation.value)
+  body.classList.toggle('chat-mode', clinicianShell.value && moduleName.value === 'evidence' && hasConversation.value)
   body.classList.toggle('drawer-open', ui.sessionDrawerOpen)
   body.classList.toggle('citation-open', ui.detailOpen)
-  body.dataset.module = moduleName.value
+  body.dataset.module = clinicianShell.value ? moduleName.value : String(route.meta.shell || 'landing')
   document.documentElement.dataset.theme = resolvedTheme.value
   document.documentElement.style.colorScheme = resolvedTheme.value
 }
@@ -43,7 +44,7 @@ const onKeydown = (event: KeyboardEvent) => {
   if (event.key === 'Escape') ui.closeTopLayer()
 }
 
-watch([moduleName, hasConversation, resolvedTheme, () => ui.sessionDrawerOpen, () => ui.detailOpen], syncBody, { immediate: true })
+watch([moduleName, clinicianShell, hasConversation, resolvedTheme, () => ui.sessionDrawerOpen, () => ui.detailOpen], syncBody, { immediate: true })
 
 onMounted(() => {
   preferences.applyTheme()
@@ -59,5 +60,6 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <AppShell />
+  <AppShell v-if="clinicianShell" />
+  <RouterView v-else />
 </template>

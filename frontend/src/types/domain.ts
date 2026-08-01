@@ -107,6 +107,30 @@ export interface Message extends ModeSnapshot {
   showMarkdown?: boolean
 }
 
+export interface PatientMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  createdAt: string
+  pending?: boolean
+}
+
+export interface PatientIntakeSession {
+  id: string
+  title: string
+  remoteSessionId: string | null
+  createdAt: string
+  updatedAt: string
+  messages: PatientMessage[]
+  visitSummary?: string
+}
+
+export interface PatientIntakeResponse {
+  contract_version: string
+  session_id: string
+  reply: string
+}
+
 export interface Session {
   id: string
   title: string

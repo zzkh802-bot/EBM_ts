@@ -11,7 +11,7 @@ const route = useRoute()
 const serviceStatus = ref('检测中')
 
 const workspaceLabel = computed(() => {
-  if (route.path.startsWith('/knowledge')) return '研究报告库'
+  if (route.path.startsWith('/clinician/knowledge')) return '研究报告库'
   return '循证工作台'
 })
 

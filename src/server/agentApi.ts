@@ -6,6 +6,7 @@ import path from "node:path";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { initResearchFrame } from "../tools/researchFrame.js";
 import { piSessionDirectory } from "../extensions/sessionPath.js";
+import { PatientIntakeError, type PatientIntakeExecutor, validatePatientIntakeInput } from "./patientIntake.js";
 
 const CONTRACT_VERSION = "xunyi-research/v1";
 const MAX_REQUEST_BYTES = 1_048_576;
@@ -289,6 +290,7 @@ export class AgentRunStore {
 
 export type AgentApiServerOptions = {
   executor: AgentExecutor;
+  patientIntakeExecutor?: PatientIntakeExecutor;
   corsOrigin?: string;
   maxCompletedRuns?: number;
   runtimeConfig?: RuntimeConfig | (() => Promise<RuntimeConfig>);
@@ -306,7 +308,7 @@ export function createAgentApiServer(options: AgentApiServerOptions): { server: 
   const staticDir = options.staticDir ? path.resolve(options.staticDir) : undefined;
   const rootDir = path.resolve(options.rootDir ?? process.cwd());
   const server = createServer((request, response) => {
-    void handleRequest(request, response, store, options.corsOrigin ?? "*", runtimeConfig, options.accountConnections, staticDir, rootDir);
+    void handleRequest(request, response, store, options.corsOrigin ?? "*", runtimeConfig, options.accountConnections, options.patientIntakeExecutor, staticDir, rootDir);
   });
   return { server, store };
 }
@@ -496,7 +498,7 @@ export function createPiCliExecutor(input: { rootDir: string }): AgentExecutor {
   };
 }
 
-async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: () => Promise<RuntimeConfig>, accountConnections?: AccountConnectionStore, staticDir?: string, rootDir = process.cwd()): Promise<void> {
+async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: () => Promise<RuntimeConfig>, accountConnections?: AccountConnectionStore, patientIntakeExecutor?: PatientIntakeExecutor, staticDir?: string, rootDir = process.cwd()): Promise<void> {
   setCors(response, corsOrigin);
   if (request.method === "OPTIONS") {
     response.writeHead(204);
@@ -512,12 +514,26 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
         ok: true,
         service: "xunyi-research-service",
         contract_version: CONTRACT_VERSION,
-        endpoints: ["GET /api/v1/runtime-config", "POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel", "GET /api/v1/research-sessions/{session_id}/files"],
+        endpoints: ["GET /api/v1/runtime-config", "POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel", "POST /api/v1/patient-intake/messages", "POST /api/v1/patient-intake/summary", "GET /api/v1/research-sessions/{session_id}/files"],
       });
       return;
     }
     if (request.method === "GET" && pathname === "/api/v1/runtime-config") {
       sendJson(response, 200, await runtimeConfig());
+      return;
+    }
+    if (request.method === "POST" && (pathname === "/api/v1/patient-intake/messages" || pathname === "/api/v1/patient-intake/summary")) {
+      if (!patientIntakeExecutor) throw new ApiError(503, "patient_intake_unavailable", "就诊准备服务暂未启用。");
+      const input = validatePatientIntakeInput(await readJsonBody(request), await runtimeConfig());
+      const intent = pathname.endsWith("/summary") ? "summary" : "conversation";
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120_000);
+      try {
+        const result = await patientIntakeExecutor({ ...input, intent }, controller.signal);
+        sendJson(response, 200, { contract_version: CONTRACT_VERSION, session_id: result.sessionId, reply: result.reply });
+      } finally {
+        clearTimeout(timeout);
+      }
       return;
     }
     const workspaceMatch = /^\/api\/v1\/research-sessions\/([^/]+)\/files$/.exec(pathname);
@@ -592,7 +608,11 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     ) return;
     throw new ApiError(404, "not_found", "未找到接口。");
   } catch (error) {
-    const apiError = error instanceof ApiError ? error : new ApiError(500, "internal_error", errorMessage(error));
+    const apiError = error instanceof ApiError
+      ? error
+      : error instanceof PatientIntakeError
+        ? new ApiError(error.status, error.code, error.message)
+        : new ApiError(500, "internal_error", errorMessage(error));
     sendJson(response, apiError.status, { ok: false, contract_version: CONTRACT_VERSION, error: { code: apiError.code, message: apiError.message } });
   }
 }

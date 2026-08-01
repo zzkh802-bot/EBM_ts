@@ -1,5 +1,6 @@
 import path from "node:path";
 import { AccountConnectionStore, createAgentApiServer, createPiCliExecutor, loadRuntimeConfig } from "../src/server/agentApi.js";
+import { createPiPatientIntakeExecutor } from "../src/server/patientIntake.js";
 
 const rootDir = path.resolve(import.meta.dirname, "..");
 const port = parsePort(process.env.DP_XUNYI_TS_PORT, 8787);
@@ -8,6 +9,7 @@ const corsOrigin = process.env.DP_XUNYI_TS_CORS_ORIGIN?.trim() || "*";
 
 const { server } = createAgentApiServer({
   executor: createPiCliExecutor({ rootDir }),
+  patientIntakeExecutor: createPiPatientIntakeExecutor({ rootDir }),
   corsOrigin,
   runtimeConfig: () => loadRuntimeConfig(rootDir),
   accountConnections: new AccountConnectionStore(rootDir),
