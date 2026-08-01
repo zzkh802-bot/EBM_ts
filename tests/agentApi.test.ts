@@ -23,32 +23,34 @@ async function eventually<T>(read: () => Promise<T>, predicate: (value: T) => bo
 describe("循医研究服务 API", () => {
   const promptInput = (overrides: Partial<AgentRunInput> = {}): AgentRunInput => ({
     question: "测试临床问题",
-    researchMode: "instant",
     audienceMode: "clinician",
-    deepThink: false,
+    thinkingLevel: "high",
     searchEnabled: true,
     retrievalPolicy: "all",
-    maxIterations: 5,
-    requestTimeoutSeconds: 300,
+    maxIterations: 32,
+    requestTimeoutSeconds: 600,
     provider: "deepseek",
     model: "deepseek-v4-flash",
     ...overrides,
   });
 
-  it("keeps report structure stable while modes change content depth", () => {
-    const instant = buildAgentPrompt(promptInput());
-    const expert = buildAgentPrompt(promptInput({ researchMode: "expert" }));
+  it("delegates clinician report structure to the writing skill independently of thinking level", () => {
+    const low = buildAgentPrompt(promptInput({ thinkingLevel: "low" }));
+    const maximum = buildAgentPrompt(promptInput({ thinkingLevel: "max" }));
     const publicPrompt = buildAgentPrompt(promptInput({ audienceMode: "public" }));
-    for (const prompt of [instant, expert, publicPrompt]) {
-      expect(prompt).toContain("研究模式和用户类型只改变内容的深度")
-      expect(prompt).toContain("关键安全结局")
-      expect(prompt).toContain("必须使用独立的二级或三级标题")
+    for (const prompt of [low, maximum, publicPrompt]) {
       expect(prompt).toContain("在最终回复前调用 report_write")
       expect(prompt).toContain("不得只在聊天消息中输出摘要")
+      expect(prompt).toContain("clinical-report-writing skill")
+      expect(prompt).toContain("调用 report_write 前自检")
+      expect(prompt).not.toContain("完整呈现 PICO")
+      expect(prompt).not.toContain("保留 PICO")
+      expect(prompt).not.toContain("临床场景概述、循证问题、证据基础与证据状态")
+      expect(prompt).not.toContain("必须使用独立的二级或三级标题")
     }
-    expect(instant).toContain("最少必要")
-    expect(expert).toContain("指南推荐等级")
-    expect(publicPrompt).toContain("省略 PICO、GRADE")
+    expect(low).not.toContain("最少必要")
+    expect(maximum).not.toContain("指南推荐等级")
+    expect(publicPrompt).toContain("不呈现专业证据框架")
   });
 
   it("creates an async run and exposes the completed normalized response", async () => {
@@ -57,6 +59,7 @@ describe("循医研究服务 API", () => {
       receivedInput = input;
       hooks.setSessionId("pi-session-1");
       hooks.onTrace({ kind: "tool.completed", label: "PubMed", timestamp: new Date().toISOString() });
+      hooks.onProgress({ text: "正在核对最新治疗建议。", timestamp: new Date().toISOString() });
       hooks.onTool({ id: "tool-1", name: "pubmed_search", status: "running" });
       hooks.onTool({ id: "tool-1", name: "pubmed_search", status: "completed", result: "已找到候选文献。" });
       return { message: "这是可追溯的循证回答。", reportMarkdown: "# 完整循证报告\n\n正文。" };
@@ -66,7 +69,7 @@ describe("循医研究服务 API", () => {
       const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question: "类风湿关节炎患者该如何升级治疗？", research_mode: "instant" }),
+        body: JSON.stringify({ question: "类风湿关节炎患者该如何升级治疗？", thinking_level: "xhigh" }),
       });
       expect(created.status).toBe(202);
       const accepted = await created.json() as { run_id: string; status: string; contract_version: string };
@@ -79,11 +82,39 @@ describe("循医研究服务 API", () => {
       );
       expect(result).toMatchObject({ status: "succeeded", session_id: "pi-session-1", message: "这是可追溯的循证回答。" });
       expect(result.report_markdown).toContain("完整循证报告");
-      expect(result.summary.request_timeout_seconds).toBe(300);
+      expect(result.summary.request_timeout_seconds).toBe(600);
       expect(result.summary.retrieval_policy).toBe("all");
+      expect(result.summary.thinking_level).toBe("xhigh");
+      expect(receivedInput?.thinkingLevel).toBe("xhigh");
       expect(receivedInput?.retrievalPolicy).toBe("all");
       expect(result.agent_trace.some((event: { kind: string }) => event.kind === "tool.completed")).toBe(true);
+      expect(result.progress_updates).toEqual([expect.objectContaining({ text: "正在核对最新治疗建议。" })]);
       expect(result.tools).toEqual([{ id: "tool-1", name: "pubmed_search", status: "completed", result: "已找到候选文献。" }]);
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
+  });
+
+  it.each(["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const)("passes Pi thinking level %s through without a research-mode mapping", async (thinkingLevel) => {
+    let receivedInput: Parameters<AgentExecutor>[0] | undefined;
+    const { api, baseUrl } = await startApi(async (input) => {
+      receivedInput = input;
+      return { message: "完成。" };
+    });
+    try {
+      const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: "测试直接传递推理强度", thinking_level: thinkingLevel }),
+      });
+      const accepted = await created.json() as { run_id: string };
+      const result = await eventually(
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        (value) => value.status === "succeeded",
+      );
+      expect(receivedInput?.thinkingLevel).toBe(thinkingLevel);
+      expect(result.summary.thinking_level).toBe(thinkingLevel);
     } finally {
       api.server.close();
       await once(api.server, "close");
@@ -120,6 +151,34 @@ describe("循医研究服务 API", () => {
         (value) => value.status === "succeeded",
       );
       expect(receivedInput).toMatchObject({ provider: "xinqiong", model: "deepseek-v4-flash" });
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
+  });
+
+  it("forwards a known research session so follow-up questions keep their evidence context", async () => {
+    let receivedInput: Parameters<AgentExecutor>[0] | undefined;
+    const { api, baseUrl } = await startApi(async (input) => {
+      receivedInput = input;
+      return {
+        ...(input.sessionId ? { sessionId: input.sessionId } : {}),
+        message: "已沿用既有研究上下文。",
+      };
+    });
+    try {
+      const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: "请基于上次报告补充长期随访建议", session_id: "pi-session-follow-up" }),
+      });
+      const accepted = await created.json() as { run_id: string };
+      const result = await eventually(
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        (value) => value.status === "succeeded",
+      );
+      expect(receivedInput?.sessionId).toBe("pi-session-follow-up");
+      expect(result.session_id).toBe("pi-session-follow-up");
     } finally {
       api.server.close();
       await once(api.server, "close");

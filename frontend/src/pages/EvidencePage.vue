@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { agentService, archiveService, workspaceService } from '../services'
+import { agentService, workspaceService } from '../services'
 import { useAgentRunStore, usePreferencesStore, useSessionsStore, useUiStore } from '../stores'
-import type { AccountConnection, Message, ModeSnapshot, RuntimeConfig, WorkspaceFile } from '../types/domain'
-import { buildAgentRequest, newId, nowIso, responseText } from '../utils/core'
+import type { AccountConnection, ClinicianDocument, Message, ModeSnapshot, RuntimeConfig } from '../types/domain'
+import { buildResearchRunRequest, newId, nowIso, responseText } from '../utils/core'
 import { parseReport, reportPlainText, type Reference } from '../utils/report'
 import { copyText } from '../utils/browser'
 import ReportRenderer from '../components/report/ReportRenderer.vue'
 import RunActivity from '../components/evidence/RunActivity.vue'
-import WorkspaceFileTree from '../components/evidence/WorkspaceFileTree.vue'
 import { goodCases } from '../data/goodCases'
 
 const preferences = usePreferencesStore()
@@ -20,8 +19,12 @@ const feed = ref<HTMLElement | null>(null)
 const runtimeConfig = ref<RuntimeConfig | null>(null)
 const runtimeConfigError = ref('')
 const accountConnection = ref<AccountConnection | null>(null)
-const conversationFiles = ref<WorkspaceFile[]>([])
+const conversationFiles = ref<ClinicianDocument[]>([])
 const conversationFilesLoading = ref(false)
+const selectedConversationFile = ref<ClinicianDocument | null>(null)
+const conversationFileContent = ref('')
+const conversationFileError = ref('')
+const conversationFileLoading = ref(false)
 const connectionInput = ref('')
 let connectionTimer: number | undefined
 const stages = {
@@ -40,16 +43,22 @@ const providers = computed(() => availableModels.value.filter((item, index, item
 const modelsForProvider = computed(() => availableModels.value.filter((item) => item.provider === preferences.provider))
 const subscriptionProviders = computed(() => runtimeConfig.value?.models.filter((item) => item.connection_provider) || [])
 const questionInput = ref<HTMLTextAreaElement | null>(null)
-const researchModeLabel = (mode: ModeSnapshot['researchMode']) => mode === 'expert' ? '专家' : '快速'
 const audienceModeLabel = (mode: ModeSnapshot['audienceMode']) => mode === 'public' ? '普通用户版' : '医生专业版'
-const modeSummary = computed(() => preferences.researchMode === 'expert'
-  ? '专家模式会进行更完整的检索、核验与正式报告生成。'
-  : '快速模式聚焦关键结论与直接支持它的证据。')
+const thinkingLevelLabel = (level: ModeSnapshot['thinkingLevel']) => ({
+  off: 'off · 关闭', minimal: 'minimal · 极低', low: 'low · 低', medium: 'medium · 中',
+  high: 'high · 高', xhigh: 'xhigh · 极高', max: 'max · 最大',
+}[level])
 const primaryActionLabel = computed(() => {
   if (!run.busy) return '开始研究'
   return question.value.trim() ? '加入后续追问' : '停止本轮研究'
 })
 const hasConversation = computed(() => sessions.active.messages.some((message) => message.role === 'user'))
+const researchCount = computed(() => sessions.active.messages.filter((message) => message.role === 'user').length)
+const sessionStatusLabel = computed(() => ({ draft: '待开始', active: '正在研究', complete: '可继续追踪' })[sessions.active.status])
+const documentKindLabel = (kind: ClinicianDocument['kind']) => kind === 'report' ? '最终报告' : '研究框架'
+const documentTitle = (file: ClinicianDocument) => file.path.split('/').at(-1)?.replace(/\.md$/, '') || documentKindLabel(file.kind)
+let conversationReadSequence = 0
+let conversationListSequence = 0
 const readFormalReport = async (sessionId: string | undefined, preferredPath?: string) => {
   if (!sessionId) return ''
   try {
@@ -62,19 +71,31 @@ const readFormalReport = async (sessionId: string | undefined, preferredPath?: s
   }
 }
 const loadConversationFiles = async () => {
-  const sessionId = sessions.active.v2SessionId
+  const sessionId = sessions.active.researchSessionId
   if (!sessionId) {
     conversationFiles.value = []
     return
   }
+  const request = ++conversationListSequence
   conversationFilesLoading.value = true
-  try { conversationFiles.value = (await workspaceService.list(sessionId)).files }
-  catch { conversationFiles.value = [] }
-  finally { conversationFilesLoading.value = false }
+  try {
+    const files = (await workspaceService.list(sessionId)).files
+    if (request !== conversationListSequence) return
+    conversationFiles.value = files
+    if (selectedConversationFile.value && !files.some((file) => file.path === selectedConversationFile.value?.path)) {
+      closeConversationFile()
+    }
+  } catch {
+    if (request !== conversationListSequence) return
+    conversationFiles.value = []
+    closeConversationFile()
+  } finally {
+    if (request === conversationListSequence) conversationFilesLoading.value = false
+  }
 }
 const hydrateHistoricalReports = async () => {
   const localSessionId = sessions.activeSessionId
-  const sessionId = sessions.active.v2SessionId
+  const sessionId = sessions.active.researchSessionId
   if (!sessionId) return
   const missingReports = sessions.active.messages.filter((message) =>
     message.role === 'assistant' && message.reportPath && !message.reportMarkdown)
@@ -83,8 +104,31 @@ const hydrateHistoricalReports = async () => {
     if (markdown) sessions.patchMessageIn(localSessionId, message.id, { reportMarkdown: markdown })
   }))
 }
-const openConversationFile = (file: WorkspaceFile) => openWorkspace(file.path)
-watch(() => [sessions.activeSessionId, sessions.active.v2SessionId], () => {
+const openConversationFile = async (file: ClinicianDocument) => {
+  const sessionId = sessions.active.researchSessionId
+  if (!sessionId) return
+  const request = ++conversationReadSequence
+  selectedConversationFile.value = file
+  conversationFileContent.value = ''
+  conversationFileError.value = ''
+  conversationFileLoading.value = true
+  try {
+    const content = (await workspaceService.read(sessionId, file.path)).content
+    if (request === conversationReadSequence) conversationFileContent.value = content
+  } catch (error) {
+    if (request === conversationReadSequence) conversationFileError.value = error instanceof Error ? error.message : '无法读取该文档。'
+  } finally {
+    if (request === conversationReadSequence) conversationFileLoading.value = false
+  }
+}
+const closeConversationFile = () => {
+  conversationReadSequence += 1
+  selectedConversationFile.value = null
+  conversationFileContent.value = ''
+  conversationFileError.value = ''
+}
+watch(() => [sessions.activeSessionId, sessions.active.researchSessionId], () => {
+  closeConversationFile()
   void loadConversationFiles()
   void hydrateHistoricalReports()
 }, { immediate: true })
@@ -150,8 +194,6 @@ watch(() => sessions.active.messages.length, async () => {
   feed.value?.scrollTo({ top: feed.value.scrollHeight, behavior: 'smooth' })
 })
 
-const backendInstruction = '请统一使用中文回答。遵循“检索-核验-合成”，每条关键医学判断给出直接支持的引用编号；如有急症或红旗风险先做安全分层。'
-
 async function submit(input = question.value, modeOverride?: ModeSnapshot) {
   const text = input.trim()
   if (run.busy) {
@@ -163,7 +205,7 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
   const localSessionId = sessions.activeSessionId
   question.value = ''
   const mode = modeOverride || { ...preferences.snapshot }
-  sessions.titleFromQuestionIn(localSessionId, text)
+  sessions.beginResearchIn(localSessionId, text)
   sessions.addMessageTo(localSessionId, {
     id: newId('msg'), role: 'user', title: '你', content: text, trace: [],
     createdAt: nowIso(), ...mode,
@@ -176,19 +218,19 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
   })
   const signal = run.start()
   try {
-    const dto = buildAgentRequest(
+    const dto = buildResearchRunRequest(
       text,
-      `${backendInstruction}\n\n${text}`,
-      [],
-      '',
+      sessions.active.researchSessionId,
       mode,
+      preferences.provider || undefined,
+      preferences.model || undefined,
     )
-    const data = await agentService.runV2(dto, signal, {
-          sessionId: sessions.active.v2SessionId || undefined,
-          provider: preferences.provider || undefined,
-          model: preferences.model || undefined,
+    const data = await agentService.run(dto, signal, {
           onStatus: (status) => {
-            if (status.session_id) sessions.setV2SessionId(localSessionId, status.session_id)
+            if (status.session_id) {
+              sessions.setResearchSessionId(localSessionId, status.session_id)
+              void loadConversationFiles()
+            }
             if (status.status === 'queued') run.setStage('planning')
             if (status.status === 'running') {
               const activeTool = status.tools?.some((item) => item.status === 'running')
@@ -196,19 +238,26 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
               run.setStage(activeTool ? 'tooling' : reportStarted ? 'generating' : 'retrieving')
             }
             if (status.status === 'cancelling') run.setStage('network_wait')
-            sessions.patchMessageIn(localSessionId, pendingId, { trace: status.agent_trace || [], tools: status.tools || [] })
+            sessions.patchMessageIn(localSessionId, pendingId, {
+              trace: status.agent_trace || [],
+              progressUpdates: status.progress_updates || [],
+              tools: status.tools || [],
+              runStartedAt: status.started_at,
+              runCompletedAt: status.completed_at,
+            })
           },
           onNetworkRetry: () => { run.setStage('network_wait') },
         })
-    if (data.session_id) sessions.setV2SessionId(localSessionId, data.session_id)
+    if (data.session_id) sessions.setResearchSessionId(localSessionId, data.session_id)
     const reportMarkdown = data.report_markdown || await readFormalReport(data.session_id, data.report_path)
     void loadConversationFiles()
     sessions.patchMessageIn(localSessionId, pendingId, {
       pending: false, stage: 'idle', content: responseText(data), trace: data.agent_trace || [],
-      tools: data.tools || [],
+      progressUpdates: data.progress_updates || [], tools: data.tools || [],
+      runStartedAt: data.started_at, runCompletedAt: data.completed_at,
       reportMarkdown, reportPath: data.report_path,
-      archive: data.archive, citationAudit: data.citation_audit, uploadedTexts: data.uploaded_texts,
     })
+    sessions.completeResearchIn(localSessionId)
   } catch (error) {
     const stopped = error instanceof DOMException && error.name === 'AbortError'
     sessions.patchMessageIn(localSessionId, pendingId, {
@@ -218,6 +267,7 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
         : `网络或后端连接异常：${error instanceof Error ? error.message : String(error)}`,
       trace: [{ kind: stopped ? 'run.interrupted' : 'error', label: stopped ? '用户中断' : '请求异常' }],
     })
+    sessions.completeResearchIn(localSessionId)
   } finally {
     run.finish()
   }
@@ -239,31 +289,15 @@ const share = async (message: Message) => {
   else await copyText(text)
 }
 const retry = (message: Message, detail = '') => submit(`${detail}${message.sourceQuestion || ''}`, {
-  researchMode: message.researchMode, audienceMode: message.audienceMode,
-  deepThink: message.deepThink, searchEnabled: message.searchEnabled,
+  audienceMode: message.audienceMode, thinkingLevel: message.thinkingLevel, searchEnabled: message.searchEnabled,
 })
 const openCitation = (reference: Reference) => ui.openCitation(reference)
-const openArchive = async (message: Message) => {
-  const archive = message.archive
-  if (!archive) return
-  ui.openDetail('证据档案', { run: archive, answer: message.content }, 'archive')
-  const id = archive.archive_id || archive.run_id || archive.id
-  if (id !== undefined) {
-    try { ui.detailPayload = await archiveService.detail(id) } catch { /* keep summary */ }
-  }
-}
 const openWorkspace = async (preferredPath = '') => {
-  const sessionId = sessions.active.v2SessionId
-  if (!sessionId) {
-    ui.openDetail(sessions.active.title, { message: '本次对话尚未创建研究工作区。开始研究后，报告、研究框架和证据文件会出现在这里。' }, 'workspace')
-    return
-  }
-  ui.openDetail(sessions.active.title, { session_id: sessionId, files: [], loading: true, preferred_path: preferredPath }, 'workspace')
-  try {
-    ui.detailPayload = { ...(await workspaceService.list(sessionId)), preferred_path: preferredPath }
-  } catch (error) {
-    ui.detailPayload = { session_id: sessionId, files: [], error: error instanceof Error ? error.message : '无法读取研究文件。' }
-  }
+  if (!conversationFiles.value.length) await loadConversationFiles()
+  const target = conversationFiles.value.find((file) => file.path === preferredPath)
+    || conversationFiles.value.find((file) => file.kind === 'report')
+    || conversationFiles.value[0]
+  if (target) await openConversationFile(target)
 }
 const runQueued = (index: number) => {
   const text = run.queuedGuidance.splice(index, 1)[0]
@@ -284,12 +318,11 @@ const handlePrimaryAction = () => {
   }
   void submit()
 }
-const toggleDeepThink = () => { if (!run.busy) preferences.deepThink = !preferences.deepThink }
 const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !preferences.searchEnabled }
 </script>
 
 <template>
-  <div class="workspace-layout">
+  <div class="workspace-layout" :class="{ 'document-open': Boolean(selectedConversationFile) }">
     <div class="workspace-center">
       <section v-if="!hasConversation" class="hero-dp" aria-label="循医工作台">
         <div class="hero-copy">
@@ -302,14 +335,6 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
       <form class="ask-bar" aria-label="循医输入区" @submit.prevent="submit()">
         <div class="mode-toolbar" aria-label="回答模式">
           <div class="mode-group">
-            <span class="mode-group-label">工作模式</span>
-            <fieldset class="mode-segment">
-              <legend class="sr-only">循证工作模式</legend>
-              <button class="mode-button" :class="{ active: preferences.researchMode === 'instant' }" type="button" :aria-pressed="preferences.researchMode === 'instant'" :disabled="run.busy" @click="preferences.setResearchMode('instant')">快速</button>
-              <button class="mode-button" :class="{ active: preferences.researchMode === 'expert' }" type="button" :aria-pressed="preferences.researchMode === 'expert'" :disabled="run.busy" @click="preferences.setResearchMode('expert')">专家</button>
-            </fieldset>
-          </div>
-          <div class="mode-group">
             <span class="mode-group-label">回答对象</span>
             <fieldset class="mode-segment">
               <legend class="sr-only">回答对象</legend>
@@ -319,8 +344,8 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
           </div>
         </div>
         <div class="mode-context" aria-live="polite">
-          <strong>{{ researchModeLabel(preferences.researchMode) }}模式</strong>
-          <span>{{ modeSummary }}</span>
+          <strong>完整循证工作流</strong>
+          <span>推理强度只控制模型的思考深度；检索、核验和正式报告保持一致。</span>
         </div>
         <div class="composer-body">
           <div class="queue-tray" :hidden="!run.queuedGuidance.length">
@@ -352,7 +377,18 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
               <option v-for="item in modelsForProvider" :key="item.model" :value="item.model">{{ item.model_label }}</option>
             </select>
           </label>
-          <button class="composer-option" type="button" :aria-pressed="preferences.deepThink" :class="{ active: preferences.deepThink }" :disabled="run.busy" @click="toggleDeepThink">深度思考</button>
+          <label class="runtime-select thinking-select">
+            <span>推理强度</span>
+            <select v-model="preferences.thinkingLevel" :disabled="run.busy">
+              <option value="off">off · 关闭</option>
+              <option value="minimal">minimal · 极低</option>
+              <option value="low">low · 低</option>
+              <option value="medium">medium · 中</option>
+              <option value="high">high · 高</option>
+              <option value="xhigh">xhigh · 极高</option>
+              <option value="max">max · 最大</option>
+            </select>
+          </label>
           <button class="composer-option" type="button" :aria-pressed="preferences.searchEnabled" :class="{ active: preferences.searchEnabled }" :disabled="run.busy" @click="toggleSearch">证据检索</button>
           <span v-if="runtimeConfigError" class="runtime-error">{{ runtimeConfigError }}</span>
         </div>
@@ -401,9 +437,12 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
 
         <section ref="feed" class="chat-feed" aria-label="循医对话">
           <header v-if="hasConversation" class="conversation-context">
-            <span>当前循证对话</span>
-            <strong>{{ sessions.active.title }}</strong>
-            <button type="button" @click="openWorkspace()">研究文件</button>
+            <div class="conversation-context-copy">
+              <span>长期追踪问题</span>
+              <strong>{{ sessions.active.clinicalQuestion || sessions.active.title }}</strong>
+              <small><i :class="sessions.active.status" aria-hidden="true" />{{ sessionStatusLabel }} · 第 {{ researchCount }} 次研究</small>
+            </div>
+            <button type="button" @click="openWorkspace()">查看本题文档</button>
           </header>
           <article
             v-for="message in sessions.active.messages"
@@ -414,40 +453,47 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
             <div class="bubble">
               <div class="message-heading">
                 <strong>{{ message.title }}</strong>
-                <span v-if="message.role === 'assistant'" class="message-mode">{{ researchModeLabel(message.researchMode) }} · {{ audienceModeLabel(message.audienceMode) }}</span>
+                <span v-if="message.role === 'assistant'" class="message-mode">{{ thinkingLevelLabel(message.thinkingLevel) }} · {{ audienceModeLabel(message.audienceMode) }}</span>
               </div>
               <div v-if="message.pending" class="agent-stage">{{ stages[run.stage] || '正在调用循证引擎…' }}</div>
-              <RunActivity v-if="message.role === 'assistant'" :trace="message.trace" :tools="message.tools" :pending="message.pending" />
+              <RunActivity
+                v-if="message.role === 'assistant'"
+                :trace="message.trace"
+                :progress-updates="message.progressUpdates"
+                :tools="message.tools"
+                :pending="message.pending"
+                :started-at="message.runStartedAt"
+                :completed-at="message.runCompletedAt"
+              />
               <ReportRenderer
                 v-if="message.role === 'assistant' && !message.pending && !message.showMarkdown && !message.reportMarkdown"
                 :markdown="message.content"
                 :audience="message.audienceMode"
-                :research-mode="message.researchMode"
                 @citation="openCitation"
               />
               <pre v-else-if="message.showMarkdown && message.audienceMode === 'clinician'">{{ message.reportMarkdown || message.content }}</pre>
               <section v-else-if="message.role === 'assistant' && message.reportMarkdown" class="final-report" aria-label="正式报告">
                 <header class="final-report-head">
                   <div>
-                    <span>正式报告</span>
+                    <span>最终报告</span>
                     <strong>本轮研究结论与依据</strong>
                   </div>
                   <small>已保存</small>
                 </header>
+                <section class="model-answer" aria-label="本轮回答摘要">
+                  <span>本轮回答摘要</span>
+                  <p>{{ message.content }}</p>
+                </section>
                 <ReportRenderer
                   :markdown="message.reportMarkdown"
                   :audience="message.audienceMode"
-                  :research-mode="message.researchMode"
                   @citation="openCitation"
                 />
               </section>
               <p v-else>{{ message.content }}</p>
-              <div v-if="message.attachments?.length" class="attachment-tray">
-                <span v-for="file in message.attachments" :key="file.id">{{ file.name }}</span>
-              </div>
               <div v-if="message.role === 'assistant' && message.reportMarkdown" class="report-file-link">
-                <span>需要查看研究框架、证据记录或来源原文？</span>
-                <button type="button" @click="openWorkspace(message.reportPath)">查看研究文件</button>
+                <span>可在右侧打开最终报告或研究框架。</span>
+                <button type="button" @click="openWorkspace(message.reportPath)">打开最终报告</button>
               </div>
               <div v-if="message.role === 'assistant' && !message.pending" class="message-actions">
                 <button class="message-action-primary" type="button" @click="focusQuestion">继续追问</button>
@@ -461,8 +507,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
                     <button type="button" @click="share(message)">分享</button>
                     <button type="button" @click="retry(message)">重新运行</button>
                     <button v-if="message.audienceMode === 'clinician'" type="button" @click="sessions.patchMessage(message.id, { showMarkdown: !message.showMarkdown })">{{ message.showMarkdown ? '返回阅读视图' : '查看报告 Markdown' }}</button>
-                    <button v-if="message.reportMarkdown" type="button" @click="openWorkspace(message.reportPath)">查看研究文件</button>
-                    <button v-if="message.archive" type="button" @click="openArchive(message)">查看档案</button>
+                    <button v-if="message.reportMarkdown" type="button" @click="openWorkspace(message.reportPath)">打开最终报告</button>
                   </div>
                 </details>
               </div>
@@ -475,11 +520,42 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
 
     <aside v-if="hasConversation" class="conversation-files-panel" aria-label="本次研究文件">
       <div class="conversation-files-head">
-        <span>本次研究</span>
+        <span>本题文档</span>
       </div>
       <p v-if="conversationFilesLoading">正在同步研究文件…</p>
-      <p v-else-if="!conversationFiles.length">研究开始后，报告、证据和来源会在这里出现。</p>
-      <WorkspaceFileTree v-else :files="conversationFiles" :title="sessions.active.title" @select="openConversationFile" />
+      <p v-else-if="!conversationFiles.length">研究完成后，最终报告和研究框架会出现在这里。</p>
+      <nav v-else class="conversation-document-list" aria-label="本题可读文档">
+        <button
+          v-for="file in conversationFiles"
+          :key="file.path"
+          type="button"
+          :class="{ active: selectedConversationFile?.path === file.path }"
+          @click="openConversationFile(file)"
+        >
+          <span>{{ documentKindLabel(file.kind) }}</span>
+          <strong>{{ documentTitle(file) }}</strong>
+        </button>
+      </nav>
+    </aside>
+
+    <aside v-if="hasConversation && selectedConversationFile" class="session-document-panel" aria-label="本题文档预览">
+      <header class="session-document-head">
+        <div>
+          <span>{{ documentKindLabel(selectedConversationFile.kind) }}</span>
+          <strong>{{ documentTitle(selectedConversationFile) }}</strong>
+        </div>
+        <button type="button" aria-label="关闭文档预览" @click="closeConversationFile">关闭</button>
+      </header>
+      <div class="session-document-body">
+        <p v-if="conversationFileLoading" class="document-state">正在打开文档…</p>
+        <p v-else-if="conversationFileError" class="document-state error">{{ conversationFileError }}</p>
+        <ReportRenderer
+          v-else-if="conversationFileContent"
+          :markdown="conversationFileContent"
+          audience="clinician"
+          @citation="openCitation"
+        />
+      </div>
     </aside>
 
     <aside v-else class="workspace-info-panel" aria-label="工作台信息">
@@ -533,8 +609,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
       <section class="workspace-info-card">
         <div class="workspace-info-title"><span>当前工作模式</span></div>
         <div class="workspace-mode-list">
-          <div><span>研究模式</span><strong>{{ researchModeLabel(preferences.researchMode) }}</strong></div>
-          <div><span>深度思考</span><strong>{{ preferences.deepThink ? '开启' : '关闭' }}</strong></div>
+          <div><span>推理强度</span><strong>{{ thinkingLevelLabel(preferences.thinkingLevel) }}</strong></div>
           <div><span>证据检索</span><strong :class="{ 'mode-on': preferences.searchEnabled }">{{ preferences.searchEnabled ? '开启' : '关闭' }}</strong></div>
           <div><span>回答对象</span><strong>{{ audienceModeLabel(preferences.audienceMode) }}</strong></div>
         </div>

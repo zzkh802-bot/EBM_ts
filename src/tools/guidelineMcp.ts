@@ -22,21 +22,21 @@ export type GuidelineSearchItem = {
   publicationDate?: string;
   department?: string;
   departments?: string[];
-  departmentScope?: string;
   documentKind?: string;
-  score?: number;
   viewId?: string;
   viewType?: string;
-  textChannel?: string;
-  vectorChannel?: string;
-  retrievalScores?: Record<string, unknown>;
-  excerpt?: string;
+  abstract?: string;
+  matchedViewContent?: string;
+  availableViewTypes?: string[];
+  fallbackMatch?: boolean;
 };
 
 export type GuidelineRetrieveItem = GuidelineSearchItem & {
   chunkId?: string;
   section?: string;
   chunkType?: string;
+  rankingScore?: number;
+  candidateMaterial?: string;
   sourcePath?: string;
   lineStart?: number;
   lineEnd?: number;
@@ -47,7 +47,7 @@ export type GuidelineResult =
   | { ok: false; error: { code: "mcp_error"; message: string } };
 
 export type GuidelineReadResult =
-  | { ok: true; archive: SourceArchiveRecord }
+  | { ok: true; archive: SourceArchiveRecord; document: GuidelineSearchItem }
   | { ok: false; error: { code: "mcp_error"; message: string } };
 
 export type GuidelineRetrieveResult =
@@ -97,7 +97,12 @@ export class GuidelineMcpClient implements GuidelineClient {
         .join("\n")
       : "";
     if (result.isError === true) throw new Error(`MCP ${name} failed: ${text || "unknown tool error"}`);
-    const effectiveText = text || (result.structuredContent === undefined ? "" : JSON.stringify(result.structuredContent));
+    // The current guideline MCP exposes the same payload twice: `structuredContent`
+    // is the machine contract; `content[].text` is a presentation-compatible copy.
+    // Prefer the former so document-level `result` arrays never depend on joining
+    // several JSON strings. Keep text as a compatibility fallback for older servers.
+    const structuredText = result.structuredContent === undefined ? "" : JSON.stringify(result.structuredContent);
+    const effectiveText = structuredText || text;
     if (!effectiveText.trim()) throw new Error(`MCP ${name} returned no readable content`);
     return { text: effectiveText, raw: result };
   }
@@ -181,7 +186,7 @@ function recordsFromParsedGuidelineSearch(parsed: unknown): Array<Record<string,
   if (Array.isArray(parsed)) return parsed.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object" && !Array.isArray(item)));
   if (!parsed || typeof parsed !== "object") return undefined;
   const record = parsed as Record<string, unknown>;
-  for (const key of ["results", "data", "items"]) {
+  for (const key of ["result", "results", "data", "items"]) {
     if (Array.isArray(record[key])) return recordsFromParsedGuidelineSearch(record[key]);
   }
   return [record];
@@ -256,15 +261,9 @@ export function cleanMcpExcerpt(value: string): string {
     .trim();
 }
 
-function compactText(value: unknown, maxLength: number): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const compact = cleanMcpExcerpt(value);
-  return compact ? compact.slice(0, maxLength) : undefined;
-}
-
 function displayTitle(item: Record<string, unknown>, index: number): string {
   const candidate = String(item.title ?? item.name ?? "").replace(/\s+/g, " ").trim();
-  if (candidate && !/^(?:guideline|open access|document)$/i.test(candidate)) return candidate.slice(0, 180);
+  if (candidate && !/^(?:guideline|open access|document)$/i.test(candidate)) return candidate;
   const institution = typeof item.source_institution === "string" ? item.source_institution.trim() : "";
   return `${institution || "Guideline"} result ${index + 1}`;
 }
@@ -273,28 +272,10 @@ function numberValue(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-function firstTextValue(value: unknown, preferredKey?: string): string | undefined {
-  if (typeof value === "string") return value;
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    const record = value as Record<string, unknown>;
-    if (preferredKey && typeof record[preferredKey] === "string" && record[preferredKey].trim()) return record[preferredKey];
-    for (const key of ["recommendation_summary", "pico_questions", "conclusion", "scope_population", "table_titles", "title_abstract", "heading_tree"]) {
-      if (typeof record[key] === "string" && record[key].trim()) return record[key];
-    }
-    return Object.values(record).find((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
-  }
+function viewText(value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (value && typeof value === "object") return JSON.stringify(value, null, 2);
   return undefined;
-}
-
-function searchExcerpt(item: Record<string, unknown>): string | undefined {
-  const viewType = typeof item.view_type === "string" ? item.view_type : undefined;
-  return compactText(
-    [
-      firstTextValue(item.document_views, viewType),
-      item.abstract,
-    ].find((value) => typeof value === "string" && value.trim()),
-    700,
-  );
 }
 
 function searchCardsFromText(text: string): GuidelineSearchItem[] {
@@ -309,23 +290,26 @@ function searchCardsFromText(text: string): GuidelineSearchItem[] {
       const departments = item.clinical_departments.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0).map((entry) => entry.trim());
       if (departments.length) card.departments = departments;
     }
-    if (typeof item.department_scope === "string" && item.department_scope.trim()) card.departmentScope = item.department_scope.trim();
     if (typeof item.document_kind === "string" && item.document_kind.trim()) card.documentKind = item.document_kind.trim();
     if (typeof item.view_id === "string" && item.view_id.trim()) card.viewId = item.view_id.trim();
     if (typeof item.view_type === "string" && item.view_type.trim()) card.viewType = item.view_type.trim();
-    if (typeof item.text_channel === "string" && item.text_channel.trim()) card.textChannel = item.text_channel.trim();
-    if (typeof item.vector_channel === "string" && item.vector_channel.trim()) card.vectorChannel = item.vector_channel.trim();
-    if (item.retrieval_scores && typeof item.retrieval_scores === "object" && !Array.isArray(item.retrieval_scores)) card.retrievalScores = item.retrieval_scores as Record<string, unknown>;
-    const score = numberValue(item.score);
-    if (score !== undefined) card.score = score;
-    const excerpt = searchExcerpt(item);
-    if (excerpt) card.excerpt = excerpt;
+    if (typeof item.abstract === "string" && item.abstract.trim()) card.abstract = item.abstract.trim();
+    if (item.document_views && typeof item.document_views === "object" && !Array.isArray(item.document_views)) {
+      const views = item.document_views as Record<string, unknown>;
+      const viewTypes = Object.keys(views);
+      if (viewTypes.length) card.availableViewTypes = viewTypes;
+      if (card.viewType) {
+        const matched = viewText(views[card.viewType]);
+        if (matched) card.matchedViewContent = matched;
+      }
+    }
+    if (item.is_fallback === true) card.fallbackMatch = true;
     return card;
   });
 }
 
 function retrievePriority(card: GuidelineRetrieveItem): number {
-  let priority = card.score ?? 0;
+  let priority = card.rankingScore ?? 0;
   if (card.chunkType === "recommendation") priority += 0.01;
   if (/recommend/i.test(card.section ?? "")) priority += 0.005;
   if (/further research/i.test(card.section ?? "")) priority -= 0.02;
@@ -339,13 +323,16 @@ function retrieveCardsFromText(text: string): GuidelineRetrieveItem[] {
     const card: GuidelineRetrieveItem = { ...base };
     if (typeof item.chunk_id === "string" && item.chunk_id.trim()) card.chunkId = item.chunk_id.trim();
     if (typeof item.chunk_type === "string" && item.chunk_type.trim()) card.chunkType = item.chunk_type.trim();
+    const score = numberValue(item.score);
+    if (score !== undefined) card.rankingScore = score;
     const section = Array.isArray(item.section_path)
       ? item.section_path.filter((entry) => typeof entry === "string" && entry.trim()).join(" > ")
       : typeof item.heading === "string" ? item.heading : undefined;
     if (section?.trim()) card.section = section.trim().slice(0, 240);
-    const rawExcerpt = [item.source_quote_context, item.content, item.retrieval_text, item.rerank_text_preview].find((value) => typeof value === "string" && value.trim());
-    const excerpt = typeof rawExcerpt === "string" ? cleanMcpExcerpt(rawExcerpt) : undefined;
-    if (excerpt) card.excerpt = excerpt;
+    // A retrieved record is candidate material, not validated evidence. `content`
+    // is the complete returned material; source_quote_context is only a truncated
+    // presentation preview in the current MCP and must not replace it.
+    if (typeof item.content === "string" && item.content.trim()) card.candidateMaterial = item.content.trim();
     return card;
   }).sort((a, b) => retrievePriority(b) - retrievePriority(a));
   const counts = new Map<string, number>();
@@ -371,15 +358,13 @@ function renderGuidelineSearch(query: string, text: string): string {
     if (card.publicationDate) lines.push(`- Publication date: ${card.publicationDate}`);
     if (card.department) lines.push(`- Department: ${card.department}`);
     if (card.departments?.length) lines.push(`- Departments: ${card.departments.join(", ")}`);
-    if (card.departmentScope) lines.push(`- Department scope: ${card.departmentScope}`);
     if (card.documentKind) lines.push(`- Document kind: ${card.documentKind}`);
     if (card.viewType) lines.push(`- Matched view type: ${card.viewType}`);
     if (card.viewId) lines.push(`- Matched view ID: ${card.viewId}`);
-    if (card.textChannel) lines.push(`- Text channel: ${card.textChannel}`);
-    if (card.vectorChannel) lines.push(`- Vector channel: ${card.vectorChannel}`);
-    if (card.score !== undefined) lines.push(`- Search score: ${card.score}`);
-    if (card.retrievalScores) lines.push(`- Retrieval scores: ${JSON.stringify(card.retrievalScores)}`);
-    if (card.excerpt) lines.push("", "### Matched view excerpt", "", card.excerpt);
+    if (card.fallbackMatch) lines.push("- Retrieval note: fallback match; verify relevance before reading.");
+    if (card.abstract) lines.push("", "### Abstract", "", card.abstract);
+    if (card.availableViewTypes?.length) lines.push(`- Available document views: ${card.availableViewTypes.join(", ")}`);
+    if (card.matchedViewContent) lines.push("", "### Matched view content", "", card.matchedViewContent);
     lines.push("");
   });
   if (!cards.length) lines.push("No guideline records matched this query.", "");
@@ -446,30 +431,9 @@ function ragChunkArchiveTitle(card: GuidelineRetrieveItem): string {
     .join(" ");
 }
 
-function renderRagChunkSource(card: GuidelineRetrieveItem): string {
-  return [
-    `# ${card.title}`,
-    "",
-    "## Source metadata",
-    "",
-    ...(card.docId ? [`- Document ID: ${card.docId}`] : []),
-    ...(card.chunkId ? [`- Chunk ID: ${card.chunkId}`] : []),
-    ...(card.institution ? [`- Institution: ${card.institution}`] : []),
-    ...(card.publicationDate ? [`- Publication date: ${card.publicationDate}`] : []),
-    ...(card.section ? [`- Section: ${card.section}`] : []),
-    ...(card.chunkType ? [`- Chunk type: ${card.chunkType}`] : []),
-    "",
-    "## Retrieved guideline chunk",
-    "",
-    card.excerpt ?? "",
-    "",
-  ].join("\n");
-}
-
 function retrievedChunkWindow(record: SourceArchiveRecord): { lineStart: number; lineEnd: number } {
   const lines = record.content.split("\n");
-  const heading = lines.findIndex((line) => line.trim() === "## Retrieved guideline chunk");
-  let first = heading >= 0 ? heading + 1 : 0;
+  let first = 0;
   while (first < lines.length && !lines[first]!.trim()) first += 1;
   let last = lines.length - 1;
   while (last >= first && !lines[last]!.trim()) last -= 1;
@@ -487,8 +451,7 @@ function renderGuidelineRetrieve(query: string, text: string): string {
     if (card.publicationDate) lines.push(`- Publication date: ${card.publicationDate}`);
     if (card.section) lines.push(`- Section: ${card.section}`);
     if (card.chunkType) lines.push(`- Chunk type: ${card.chunkType}`);
-    if (card.score !== undefined) lines.push(`- Retrieval score: ${card.score}`);
-    if (card.excerpt) lines.push("", "### Retrieved excerpt", "", card.excerpt);
+    if (card.candidateMaterial) lines.push("", "### Candidate material", "", card.candidateMaterial);
     lines.push("");
   });
   if (!cards.length) lines.push("No guideline chunks matched this query.", "");
@@ -547,12 +510,19 @@ export async function retrieveGuidelines(input: {
         layout: "file",
         ...(item.docId ? { sourceUrl: `mcp://guideline/${item.docId}${item.chunkId ? `#${encodeURIComponent(item.chunkId)}` : ""}` } : {}),
         title: ragChunkArchiveTitle(item),
-        content: renderRagChunkSource(item),
+        // Keep the citation source itself to the returned material. Provenance is
+        // already carried by archive frontmatter (title + mcp:// doc/chunk URL),
+        // so duplicating Markdown metadata only shifts the evidence line range.
+        content: item.candidateMaterial ?? "",
       });
       const window = retrievedChunkWindow(chunkArchive);
       item.sourcePath = chunkArchive.path;
       item.lineStart = window.lineStart;
       item.lineEnd = window.lineEnd;
+      // The model must see the same normalized body that evidence_add will read.
+      // archiveSource may decode entities and wrap long lines, so retaining the
+      // pre-archive MCP string would make its visible text diverge from offsets.
+      item.candidateMaterial = chunkArchive.content;
     }
     const content = renderGuidelineRetrieve(input.query, result.text);
     return {
@@ -626,6 +596,7 @@ export async function readGuideline(input: {
       ...(input.maxChars === undefined ? {} : { max_chars: input.maxChars }),
     }, input.signal);
     const document = extractGuidelineDocument(result.text);
+    const metadata = searchCardsFromText(result.text)[0] ?? { title: document.title ?? input.title ?? input.docId ?? "guideline" };
     const archive = await archiveSource({
       sessionDir: input.sessionDir,
       kind: "read",
@@ -633,7 +604,7 @@ export async function readGuideline(input: {
       content: document.content,
     });
     await rewriteGuidelineToc(input.sessionDir, archive);
-    return { ok: true, archive };
+    return { ok: true, archive, document: metadata };
   } catch (error) {
     return { ok: false, error: { code: "mcp_error", message: error instanceof Error ? error.message : String(error) } };
   }

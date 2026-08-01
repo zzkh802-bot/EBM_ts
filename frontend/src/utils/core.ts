@@ -1,12 +1,11 @@
-import type { AgentRequest, AttachmentData, ModeSnapshot, Session } from '../types/domain'
+import type { AgentRunRequest, ModeSnapshot, Session } from '../types/domain'
 
 export const STORAGE_KEYS = {
-  sessions: 'dp_xunyi_sessions_v1',
-  activeSession: 'dp_xunyi_active_session_v1',
-  knowledge: 'dp_xunyi_knowledge_items_v1',
-  theme: 'dp_xunyi_theme_mode_v1',
-  modes: 'xunyi_answer_modes_v1',
-  legacySession: 'ebm_session_id',
+  sessions: 'dp_xunyi_sessions',
+  activeSession: 'dp_xunyi_active_session',
+  theme: 'dp_xunyi_theme_mode',
+  modes: 'dp_xunyi_preferences',
+  runtime: 'dp_xunyi_runtime_model',
 } as const
 
 export const newId = (prefix: string) =>
@@ -25,76 +24,27 @@ export function safeRead<T>(key: string, fallback: T): T {
 
 export function safeWrite(key: string, value: unknown) {
   try {
-    localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value))
+    localStorage.setItem(key, JSON.stringify(value))
   } catch {
     // Storage may be disabled in privacy contexts.
   }
 }
 
-export function readLegacyString(key: string, fallback = '') {
-  const raw = localStorage.getItem(key)
-  if (raw === null) return fallback
-  try {
-    const parsed = JSON.parse(raw)
-    if (typeof parsed === 'string') {
-      safeWrite(key, parsed)
-      return parsed
-    }
-  } catch {
-    // Expected for the original raw-string storage format.
-  }
-  return raw
-}
-
-export function migrateSessions(value: unknown, legacyEbmSessionId = ''): Session[] {
-  if (!Array.isArray(value)) return []
-  return value
-    .filter((item): item is Record<string, unknown> =>
-      Boolean(item && typeof item === 'object' && item.id && Array.isArray(item.messages)))
-    .map((item, index) => ({
-      ...item,
-      id: String(item.id),
-      title: String(item.title || '新的循证对话'),
-      createdAt: String(item.createdAt || nowIso()),
-      updatedAt: String(item.updatedAt || nowIso()),
-      ebmSessionId: String(item.ebmSessionId || item.ebm_session_id || (index === 0 ? legacyEbmSessionId : '') || '') || null,
-      v2SessionId: String(item.v2SessionId || item.v2_session_id || '') || null,
-      messages: item.messages as Session['messages'],
-    }))
-}
-
-export function modeIterationBudget(mode: ModeSnapshot): 16 | 32 {
-  return mode.researchMode === 'instant' ? 16 : 32
-}
-
-export function modeTimeoutSeconds(mode: ModeSnapshot): 150 | 300 {
-  return mode.researchMode === 'instant' ? 150 : 300
-}
-
-export function buildAgentRequest(
+export function buildResearchRunRequest(
   question: string,
-  backendQuestion: string,
-  attachments: AttachmentData[],
-  ebmSessionId: string,
+  sessionId: string | null,
   mode: ModeSnapshot,
-): AgentRequest {
+  provider?: string,
+  model?: string,
+): AgentRunRequest {
   return {
-    question: backendQuestion,
-    stable_question: question,
-    stable_cache: true,
-    attachments: attachments.map(({ name, size, type, dataUrl }) => ({
-      name,
-      size,
-      type,
-      content_base64: dataUrl,
-    })),
-    ebm_session_id: ebmSessionId,
-    max_iterations: modeIterationBudget(mode),
-    request_timeout_seconds: modeTimeoutSeconds(mode),
-    research_mode: mode.researchMode,
+    question,
+    ...(sessionId ? { session_id: sessionId } : {}),
     audience_mode: mode.audienceMode,
-    deep_think: mode.deepThink,
+    thinking_level: mode.thinkingLevel,
     search_enabled: mode.searchEnabled,
+    ...(provider ? { provider } : {}),
+    ...(model ? { model } : {}),
   }
 }
 

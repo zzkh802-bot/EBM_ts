@@ -4,6 +4,8 @@ import { access, copyFile, mkdir, readFile, readdir, stat } from "node:fs/promis
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { initResearchFrame } from "../tools/researchFrame.js";
+import { piSessionDirectory } from "../extensions/sessionPath.js";
 
 const CONTRACT_VERSION = "xunyi-research/v1";
 const MAX_REQUEST_BYTES = 1_048_576;
@@ -11,7 +13,7 @@ const MAX_TRACE_EVENTS = 240;
 const MAX_TOOL_EVENTS = 160;
 
 export type AgentRunStatus = "queued" | "running" | "cancelling" | "succeeded" | "failed" | "cancelled";
-export type ResearchMode = "instant" | "expert" | "literature";
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 export type AudienceMode = "clinician" | "public";
 export type RetrievalPolicy = "all" | "mcp_only";
 
@@ -22,12 +24,17 @@ export type AgentTraceEvent = {
   timestamp: string;
 };
 
+/** A user-facing note emitted by Pi before it performs one or more tool calls. */
+export type ResearchProgressUpdate = {
+  text: string;
+  timestamp: string;
+};
+
 export type AgentRunInput = {
   question: string;
   sessionId?: string;
-  researchMode: ResearchMode;
   audienceMode: AudienceMode;
-  deepThink: boolean;
+  thinkingLevel: ThinkingLevel;
   searchEnabled: boolean;
   retrievalPolicy: RetrievalPolicy;
   maxIterations: number;
@@ -70,6 +77,7 @@ export type AgentExecutionResult = {
   reportMarkdown?: string;
   reportPath?: string;
   agentTrace?: AgentTraceEvent[];
+  progressUpdates?: ResearchProgressUpdate[];
   tools?: Array<Record<string, unknown>>;
   stderr?: string;
 };
@@ -78,6 +86,7 @@ export type AgentExecutionHooks = {
   signal: AbortSignal;
   setSessionId: (sessionId: string) => void;
   onTrace: (event: AgentTraceEvent) => void;
+  onProgress: (update: ResearchProgressUpdate) => void;
   onTool: (event: Record<string, unknown>) => void;
 };
 
@@ -97,6 +106,7 @@ export type AgentRunResponse = {
   report_path?: string;
   patient_summary?: string;
   agent_trace: AgentTraceEvent[];
+  progress_updates: ResearchProgressUpdate[];
   tools: Array<Record<string, unknown>>;
   summary: Record<string, unknown>;
   error?: { code: string; message: string };
@@ -114,6 +124,7 @@ type InternalRun = {
   reportMarkdown?: string;
   reportPath?: string;
   agentTrace: AgentTraceEvent[];
+  progressUpdates: ResearchProgressUpdate[];
   tools: Array<Record<string, unknown>>;
   error?: { code: string; message: string };
   controller: AbortController;
@@ -133,6 +144,7 @@ export class AgentRunStore {
       createdAt: new Date().toISOString(),
       message: "任务已创建，等待循证研究服务运行。",
       agentTrace: [trace("run.queued", "任务已创建", "等待研究引擎启动")],
+      progressUpdates: [],
       tools: [],
       controller: new AbortController(),
     };
@@ -165,7 +177,7 @@ export class AgentRunStore {
     run.status = "running";
     run.startedAt = new Date().toISOString();
     run.message = "循证研究服务正在检索和生成回答。";
-    this.addTrace(run, trace("run.started", "任务已启动", `${run.input.researchMode} 模式`));
+    this.addTrace(run, trace("run.started", "任务已启动", `推理强度：${run.input.thinkingLevel}`));
     try {
       const result = await this.executor(run.input, {
         signal: run.controller.signal,
@@ -173,6 +185,7 @@ export class AgentRunStore {
           run.sessionId = sessionId;
         },
         onTrace: (event) => this.addTrace(run, event),
+        onProgress: (update) => this.addProgress(run, update),
         onTool: (event) => this.addTool(run, event),
       });
       if (run.controller.signal.aborted) {
@@ -183,6 +196,7 @@ export class AgentRunStore {
       if (result.reportMarkdown) run.reportMarkdown = result.reportMarkdown;
       if (result.reportPath) run.reportPath = result.reportPath;
       for (const event of result.agentTrace ?? []) this.addTrace(run, event);
+      for (const update of result.progressUpdates ?? []) this.addProgress(run, update);
       for (const tool of result.tools ?? []) this.addTool(run, tool);
       run.status = "succeeded";
       run.completedAt = new Date().toISOString();
@@ -221,6 +235,14 @@ export class AgentRunStore {
     if (run.tools.length > MAX_TOOL_EVENTS) run.tools.splice(0, run.tools.length - MAX_TOOL_EVENTS);
   }
 
+  private addProgress(run: InternalRun, update: ResearchProgressUpdate): void {
+    const text = update.text.trim();
+    if (!text) return;
+    const previous = run.progressUpdates.at(-1);
+    if (previous?.text === text) return;
+    run.progressUpdates.push({ text, timestamp: update.timestamp });
+  }
+
   private toResponse(run: InternalRun): AgentRunResponse {
     const completed = run.status === "succeeded";
     return {
@@ -239,11 +261,11 @@ export class AgentRunStore {
         ...(run.reportPath ? { report_path: run.reportPath } : {}),
       } : {}),
       agent_trace: [...run.agentTrace],
+      progress_updates: [...run.progressUpdates],
       tools: [...run.tools],
       summary: {
-        research_mode: run.input.researchMode,
         audience_mode: run.input.audienceMode,
-        deep_think: run.input.deepThink,
+        thinking_level: run.input.thinkingLevel,
         search_enabled: run.input.searchEnabled,
         retrieval_policy: run.input.retrievalPolicy,
         max_iterations: run.input.maxIterations,
@@ -612,12 +634,12 @@ function validateAgentRunInput(value: unknown, runtimeConfig: RuntimeConfig): Ag
   if (Array.isArray(attachments) && attachments.length > 0) {
     throw new ApiError(422, "attachments_not_supported", "TypeScript 适配层首版尚未接入文件上传；请先移除附件，或继续使用旧 Python 后端处理附件。");
   }
-  const researchMode = enumValue(value.research_mode, ["instant", "expert", "literature"] as const, "research_mode", "instant");
   const audienceMode = enumValue(value.audience_mode, ["clinician", "public"] as const, "audience_mode", "clinician");
-  const maxIterations = boundedInteger(value.max_iterations, "max_iterations", 1, 32, researchMode === "instant" ? 16 : 32);
-  const requestTimeoutSeconds = boundedInteger(value.request_timeout_seconds, "request_timeout_seconds", 30, 900, researchMode === "instant" ? 300 : 600);
+  const thinkingLevel = enumValue(value.thinking_level, ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const, "thinking_level", "high");
+  const maxIterations = 32;
+  const requestTimeoutSeconds = 600;
   const retrievalPolicy = enumValue(value.retrieval_policy, ["all", "mcp_only"] as const, "retrieval_policy", "all");
-  const sessionId = optionalString(value.session_id ?? value.ebm_session_id, "session_id", 200);
+  const sessionId = optionalString(value.session_id, "session_id", 200);
   const provider = optionalString(value.provider, "provider", 80) ?? runtimeConfig.default_provider;
   const model = optionalString(value.model, "model", 160) ?? runtimeConfig.models.find((item) => item.provider === provider)?.model ?? runtimeConfig.default_model;
   const selected = runtimeConfig.models.find((item) => item.provider === provider && item.model === model);
@@ -626,9 +648,8 @@ function validateAgentRunInput(value: unknown, runtimeConfig: RuntimeConfig): Ag
   return {
     question,
     ...(sessionId ? { sessionId } : {}),
-    researchMode,
     audienceMode,
-    deepThink: optionalBoolean(value.deep_think, "deep_think", false),
+    thinkingLevel,
     searchEnabled: optionalBoolean(value.search_enabled, "search_enabled", true),
     retrievalPolicy,
     maxIterations,
@@ -776,6 +797,7 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
     "--mode", "json",
     "--approve",
     "--model", `${request.provider}/${request.model}`,
+    "--thinking", request.thinkingLevel,
     "--session-dir", path.join(rootDir, "data", "pi-sessions"),
     "--no-extensions",
     "--extension", path.join(rootDir, ".pi", "extensions", "ebm-providers.ts"),
@@ -786,7 +808,7 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
   ];
   if (request.retrievalPolicy === "mcp_only") args.push("--exclude-tools", "bash");
   if (request.sessionId) args.push("--session", request.sessionId);
-  else args.push("--name", `循医-${new Date().toISOString().slice(0, 10)}`);
+  else args.push("--name", sessionWorkspaceLabel(request.question));
   args.push(buildAgentPrompt(request));
 
   const child = spawn(process.execPath, args, { cwd: rootDir, env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
@@ -825,6 +847,14 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
       sessionId = event.id;
       hooks.setSessionId(sessionId);
       addTrace(trace("runtime.session", "研究会话已创建", sessionId));
+      void initResearchFrame({
+        sessionDir: piSessionDirectory(rootDir, sessionId),
+        userQuestion: request.question,
+      }).then(() => {
+        addTrace(trace("research_frame.ready", "研究框架已就绪", "可在本题文档中查看并随研究进展更新。"));
+      }).catch((error) => {
+        addTrace(trace("research_frame.error", "研究框架暂不可用", errorMessage(error)));
+      });
       return;
     }
     if (event.type === "tool_execution_start") {
@@ -834,7 +864,7 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
       const preparation = isPreparationRead(rootDir, name, argumentsValue);
       if (preparation && id) preparationToolCalls.add(id);
       addTool({
-        ...(id ? { id } : {}), name, status: "running",
+        ...(id ? { id } : {}), name, status: "running", started_at: new Date().toISOString(),
         ...(preparation ? { presentation: "preparation" } : argumentsValue === undefined ? {} : { arguments: argumentsValue }),
       });
       addTrace(trace("tool.started", preparation ? "准备研究规则" : `调用工具：${name}`, preparation ? "" : toolArgumentsSummary(argumentsValue)));
@@ -846,7 +876,7 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
       const preparation = Boolean(id && preparationToolCalls.delete(id));
       const result = preparation ? "已加载研究规则。" : summarizeToolResult(event.result);
       addTool({
-        ...(id ? { id } : {}), name, status: event.isError === true ? "error" : "completed",
+        ...(id ? { id } : {}), name, status: event.isError === true ? "error" : "completed", completed_at: new Date().toISOString(),
         ...(preparation ? { presentation: "preparation" } : {}),
         ...(result ? { result } : {}),
       });
@@ -859,7 +889,12 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
     }
     if (event.type === "message_end" && isRecord(event.message) && event.message.role === "assistant") {
       const text = contentText(event.message.content);
-      if (text) latestAnswer = text;
+      if (text) {
+        latestAnswer = text;
+        if (event.message.stopReason === "toolUse") {
+          hooks.onProgress({ text, timestamp: new Date().toISOString() });
+        }
+      }
       else if (typeof event.message.errorMessage === "string") addTrace(trace("model.error", "模型服务请求失败", modelErrorSummary(event.message.errorMessage)));
       return;
     }
@@ -918,6 +953,11 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
   }
 }
 
+function sessionWorkspaceLabel(question: string): string {
+  const compact = question.replace(/\s+/g, " ").trim();
+  return Array.from(compact).slice(0, 64).join("") || "临床研究";
+}
+
 function defaultRuntimeConfig(): RuntimeConfig {
   return {
     default_provider: "deepseek",
@@ -969,14 +1009,9 @@ async function projectEnv(rootDir: string): Promise<Record<string, string>> {
 }
 
 export function buildAgentPrompt(input: AgentRunInput): string {
-  const modeInstruction: Record<ResearchMode, string> = {
-    instant: "只保留临床决策所需的关键疗效、安全结局、适用边界和简短建议，以最少必要的可追溯证据支持结论，避免不必要的扩展检索。",
-    expert: "完整呈现 PICO、指南推荐等级、研究设计、效应量、适用性、证据冲突、不确定性和详细安全边界。",
-    literature: "以文献/指南阅读、证据摘录和引用可核验性为重点。",
-  };
   const audienceInstruction = input.audienceMode === "public"
-    ? "使用清晰中文面向普通用户，不给个体化处方；省略 PICO、GRADE、检索方法和不必要的统计术语，保留通俗的获益、风险、行动建议及何时应就医。"
-    : "使用面向临床人员的中文，保留 PICO、证据等级、效应量和适用边界。";
+    ? "使用清晰中文面向普通用户，不给个体化处方；不呈现专业证据框架、检索方法和不必要的统计术语，保留通俗的获益、风险、行动建议及何时应就医。"
+    : "使用面向临床人员的中文；按临床决策需要呈现证据等级、效应量和适用边界。";
   const retrievalInstruction = input.retrievalPolicy === "mcp_only"
     ? "本轮是隔离的 MCP-only 集成测试：只使用 guideline_mcp_search、guideline_mcp_retrieve、guideline_mcp_read 及证据/报告工具；禁止 PubMed、公共网页和本地来源库检索。若指南证据不足，明确报告证据缺口，不得改用其他检索来源。最终面向用户的报告不得出现 MCP、RAG、工具调用、内部文件路径或内部 evidence ID。"
     : input.searchEnabled
@@ -984,11 +1019,11 @@ export function buildAgentPrompt(input: AgentRunInput): string {
       : "用户要求不进行外部检索；只使用当前会话中的既有材料。";
   return [
     "你是循医的循证研究服务。请输出中文、可追溯且不过度断言的循证回答。",
-    modeInstruction[input.researchMode],
     audienceInstruction,
-    "研究模式和用户类型只改变内容的深度、范围和专业程度，不改变前端布局。所有报告使用稳定的语义结构，并按需包含：临床问题与决策、主要疗效结局、关键安全结局、管理策略、结论与建议、参考文献。重大出血、死亡、感染、禁忌等关键安全结局必须使用独立的二级或三级标题，不得埋在长段落中。不要为了凑模板输出没有内容的章节。",
-    "本轮必须生成正式循证报告：在最终回复前调用 report_write；若 report_write 只保存了 draft，则修复后调用 report_finalize。不得只在聊天消息中输出摘要而跳过正式报告文件。最终聊天消息使用自然、简洁的中文答复，概括结论、重要边界和下一步，不复制完整报告；完整内容只保留在正式报告文件中。",
-    input.deepThink ? "额外检查安全红旗、证据冲突和跨学科影响。" : "",
+    "医生版正式报告必须遵循 clinical-report-writing skill：以临床总决策拆出最少的、能改变选择的循证子问题；每个分析小节先给出裁决，再解释证据如何支持或限制它，并回到当前病例的适用条件。报告标题与结构由该 skill 和实际临床决策决定，不得按文献逐篇罗列，不得把内部工具、文件路径或检索日志写给医生。",
+    "调用 report_write 前自检：每个关键子问题都说明了待裁决主张、直接或间接证据、证据能与不能推出什么、对病例意味着什么；关键医学判断、阈值、疗效或安全性数字紧跟编号引用；正文引用与参考文献编号完全对应。",
+    "本轮必须生成正式循证报告：在最终回复前调用 report_write；若 report_write 只保存了 draft，则修复后调用 report_finalize。不得只在聊天消息中输出摘要而跳过正式报告文件。最终聊天消息使用自然、简洁的中文答复，概括结论、重要边界和下一步，不复制完整报告；该摘要会与正式报告同时展示。",
+    "研究过程中，如下一步值得向医生说明，可在工具调用前用一句简短中文说明正在核对的临床事项。不要暴露工具参数、内部路径，也不要把未经核验的中间发现写成结论；无需为了展示而凑数量，也不要重复已经说明的进展。",
     retrievalInstruction,
     `本轮最大工具迭代预算为 ${input.maxIterations}（提示性约束）。`,
     "临床问题：",
@@ -1042,12 +1077,6 @@ function enumValue<T extends string>(value: unknown, choices: readonly T[], labe
   if (value === undefined || value === null || value === "") return fallback;
   if (typeof value !== "string" || !choices.includes(value as T)) throw new ApiError(422, "invalid_request", `${label} 必须是 ${choices.join(" / ")} 之一。`);
   return value as T;
-}
-
-function boundedInteger(value: unknown, label: string, min: number, max: number, fallback: number): number {
-  if (value === undefined || value === null || value === "") return fallback;
-  if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > max) throw new ApiError(422, "invalid_request", `${label} 必须是 ${min} 到 ${max} 之间的整数。`);
-  return value;
 }
 
 function optionalBoolean(value: unknown, label: string, fallback: boolean): boolean {

@@ -9,14 +9,14 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   const workspaceLoading = ref(false)
   const loadWorkspaceAssets = async () => {
     workspaceLoading.value = true
-    const sessions = useSessionsStore().sessions.filter((session) => session.v2SessionId)
+    const sessions = useSessionsStore().sessions.filter((session) => session.researchSessionId)
     const assets = await Promise.all(sessions.map(async (session) => {
       try {
-        const { files } = await workspaceService.list(session.v2SessionId!)
+        const { files } = await workspaceService.list(session.researchSessionId!)
         return files.filter((file) => !file.path.endsWith('/toc.md')).map((file) => ({
           ...file,
           id: `${session.id}:${file.path}`,
-          sessionId: session.v2SessionId!,
+          sessionId: session.researchSessionId!,
           sessionTitle: session.title,
           sessionUpdatedAt: session.updatedAt,
         }))

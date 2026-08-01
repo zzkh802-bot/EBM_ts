@@ -1,28 +1,12 @@
-export type ResearchMode = 'instant' | 'expert'
+export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 export type AudienceMode = 'clinician' | 'public'
 export type ThemeMode = 'light' | 'dark' | 'system'
-export type BackendVersion = 'v1' | 'v2'
+export type ResearchSessionStatus = 'draft' | 'active' | 'complete'
 
 export interface ModeSnapshot {
-  researchMode: ResearchMode
   audienceMode: AudienceMode
-  deepThink: boolean
+  thinkingLevel: ThinkingLevel
   searchEnabled: boolean
-}
-
-export interface AttachmentData {
-  id: string
-  name: string
-  size: number
-  type: string
-  dataUrl: string
-}
-
-export interface AttachmentDto {
-  name: string
-  size: number
-  type: string
-  content_base64: string
 }
 
 export interface TraceItem {
@@ -37,64 +21,19 @@ export interface TraceItem {
   timestamp?: string
 }
 
-export interface CitationAudit {
-  ok?: boolean
-  status?: string
-  summary?: string
-  issues?: Array<Record<string, unknown>>
-  [key: string]: unknown
+export interface ResearchProgressUpdate {
+  text: string
+  timestamp: string
 }
 
-export interface ArchiveRef {
-  id?: string
-  archive_id?: string | number
-  run_id?: string
-  title?: string
-  backend?: string
-  created_at?: string
-  [key: string]: unknown
-}
+export type AgentRunStatus = 'queued' | 'running' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled'
 
-export interface AgentRequest {
-  question: string
-  stable_question: string
-  stable_cache: true
-  attachments: AttachmentDto[]
-  ebm_session_id: string
-  max_iterations: 16 | 32
-  request_timeout_seconds: 150 | 300
-  research_mode: ResearchMode
-  audience_mode: AudienceMode
-  deep_think: boolean
-  search_enabled: boolean
-}
-
-export interface AgentResponse {
-  ok?: boolean
-  session_id?: string
-  report_markdown?: string
-  report_path?: string
-  agent_answer?: string
-  message?: string
-  agent_trace?: TraceItem[]
-  citation_audit?: CitationAudit | null
-  archive?: ArchiveRef | null
-  uploaded_texts?: Array<Record<string, unknown>>
-  tools?: Array<Record<string, unknown>>
-  [key: string]: unknown
-}
-
-export type AgentV2Status = 'queued' | 'running' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled'
-
-export interface AgentV2Request {
+export interface AgentRunRequest {
   question: string
   session_id?: string
-  research_mode: ResearchMode
   audience_mode: AudienceMode
-  deep_think: boolean
+  thinking_level: ThinkingLevel
   search_enabled: boolean
-  max_iterations: 16 | 32
-  request_timeout_seconds: 300 | 600
   provider?: string
   model?: string
 }
@@ -129,10 +68,10 @@ export interface RuntimeConfig {
   models: RuntimeModel[]
 }
 
-export interface AgentV2Response {
+export interface AgentRunResponse {
   contract_version: string
   run_id: string
-  status: AgentV2Status
+  status: AgentRunStatus
   created_at?: string
   started_at?: string
   completed_at?: string
@@ -143,6 +82,7 @@ export interface AgentV2Response {
   report_path?: string
   patient_summary?: string
   agent_trace?: TraceItem[]
+  progress_updates?: ResearchProgressUpdate[]
   tools?: Array<Record<string, unknown>>
   summary?: Record<string, unknown>
   error?: { code: string; message: string }
@@ -157,24 +97,23 @@ export interface Message extends ModeSnapshot {
   reportPath?: string
   createdAt: string
   trace: TraceItem[]
+  progressUpdates?: ResearchProgressUpdate[]
   tools?: Array<Record<string, unknown>>
-  attachments?: AttachmentData[]
-  archive?: ArchiveRef | null
-  citationAudit?: CitationAudit | null
-  uploadedTexts?: Array<Record<string, unknown>>
+  runStartedAt?: string
+  runCompletedAt?: string
   sourceQuestion?: string
   pending?: boolean
   stage?: AgentStage
-  feedback?: 'up' | 'down' | ''
   showMarkdown?: boolean
-  backendVersion?: BackendVersion
 }
 
 export interface Session {
   id: string
   title: string
-  ebmSessionId: string | null
-  v2SessionId: string | null
+  researchSessionId: string | null
+  clinicalQuestion: string
+  status: ResearchSessionStatus
+  lastRunAt: string | null
   createdAt: string
   updatedAt: string
   messages: Message[]
@@ -192,12 +131,22 @@ export interface WorkspaceFilesResponse {
   files: WorkspaceFile[]
 }
 
+export type ClinicianDocumentKind = 'report' | 'research_frame'
+
+export interface ClinicianDocument extends Omit<WorkspaceFile, 'kind'> {
+  kind: ClinicianDocumentKind
+}
+
+export interface ClinicianDocumentsResponse extends Omit<WorkspaceFilesResponse, 'files'> {
+  files: ClinicianDocument[]
+}
+
 export interface WorkspaceFileResponse extends WorkspaceFile {
   session_id: string
   content: string
 }
 
-export interface WorkspaceAsset extends WorkspaceFile {
+export interface WorkspaceAsset extends ClinicianDocument {
   id: string
   sessionId: string
   sessionTitle: string
@@ -205,63 +154,3 @@ export interface WorkspaceAsset extends WorkspaceFile {
 }
 
 export type AgentStage = 'idle' | 'planning' | 'retrieving' | 'tooling' | 'generating' | 'network_wait'
-
-export interface KnowledgeItem {
-  id: string
-  name: string
-  size: number
-  type: string
-  scope: 'personal' | 'public'
-  status: string
-  updatedAt: string
-}
-
-export interface ArchiveRun extends ArchiveRef {
-  id?: string
-  archive_id: string | number
-  question?: string
-  answer_preview?: string
-  item_count?: number
-  backend?: string
-  status?: string
-  created_at?: string
-  report_markdown?: string
-}
-
-export interface LiteratureReliability {
-  score?: number
-  level?: 'high' | 'moderate' | 'screening' | string
-  label?: string
-  reasons?: string[]
-}
-
-export interface LiteratureItem {
-  pmid?: string
-  doi?: string
-  url?: string
-  title?: string
-  article_title?: string
-  summary?: string
-  abstract?: string
-  zh?: string
-  journal?: string
-  source?: string
-  venue?: string
-  date?: string
-  publication_date?: string
-  year?: string | number
-  tags?: string[]
-  publication_types?: string[]
-  mesh_terms?: string[]
-  source_database?: string
-  retrieval_api?: string
-  reliability?: LiteratureReliability
-}
-
-export interface LiteratureSearchResponse {
-  ok?: boolean
-  message?: string
-  items?: LiteratureItem[]
-  panel?: { sources?: { pubmed?: { items?: LiteratureItem[] } } }
-  result?: { panel?: { sources?: { pubmed?: { items?: LiteratureItem[] } } } }
-}

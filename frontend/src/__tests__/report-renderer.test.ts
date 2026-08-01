@@ -30,35 +30,32 @@ describe('报告清晰渲染', () => {
 ## 核心参考文献
 1. Guideline. PMID: 25106063`
 
-  it('使用重点卡片、行动卡片和折叠参考文献', () => {
+  it('按语义层级渲染报告与始终可见的标准参考文献', () => {
     const wrapper = mount(ReportRenderer, { props: { markdown, audience: 'clinician' } })
     expect(wrapper.find('.report-markdown').exists()).toBe(true)
-    expect(wrapper.find('.report-section-card.authority').text()).toContain('结论摘要')
-    expect(wrapper.find('.report-section-card.action').text()).toContain('血压管理三要点')
+    expect(wrapper.find('h2').text()).toContain('结论摘要')
+    expect(wrapper.text()).toContain('血压管理三要点')
     expect(wrapper.find('.reference-panel').text()).toContain('1 条')
     expect(wrapper.find('.reference-card').text()).toContain('PMID: 25106063')
+    expect(wrapper.find('details.reference-panel').exists()).toBe(false)
   })
 
-  it('Instant 与 Expert 使用相同的前端展示策略', () => {
-    const instant = mount(ReportRenderer, { props: { markdown, audience: 'clinician', researchMode: 'instant' } })
-    const expert = mount(ReportRenderer, { props: { markdown, audience: 'clinician', researchMode: 'expert' } })
-    const instantSections = instant.findAll('details.report-fold')
-    const expertSections = expert.findAll('details.report-fold')
-    expect(instantSections).toHaveLength(expertSections.length)
-    expect(instantSections.map((section) => section.attributes('open')))
-      .toEqual(expertSections.map((section) => section.attributes('open')))
-    expect(instantSections.every((section) => section.attributes('open') === undefined)).toBe(true)
+  it('展示后端自动追加的标准书目，而不是把它当作工作区文件', () => {
+    const backendGenerated = `## 综合判断\n\n推荐治疗 [1]\n\n## 参考文献\n\n1. [1] Smith J, Wang L, et al. A randomized clinical trial. N Engl J Med. 2024;390:10-20. PMID: 12345678`
+    const wrapper = mount(ReportRenderer, { props: { markdown: backendGenerated, audience: 'clinician' } })
+    const bibliography = wrapper.find('.reference-card')
+    expect(bibliography.text()).toContain('Smith J, Wang L, et al. A randomized clinical trial.')
+    expect(bibliography.text()).not.toContain('[1] [1]')
   })
 
-  it('把 H3 疗效与安全结局拆成独立区块并保留表格', () => {
+  it('保留疗效、安全结局与表格的语义内容', () => {
     const wrapper = mount(ReportRenderer, { props: { markdown, audience: 'clinician' } })
-    expect(wrapper.find('.report-section-group').text()).toContain('详细证据分析')
-    expect(wrapper.findAll('details.report-fold').some((section) => section.text().includes('主要疗效结局'))).toBe(true)
-    expect(wrapper.find('.report-section-card.safety').text()).toContain('重大出血风险')
-    expect(wrapper.find('.report-section-card.safety table').text()).toContain('RR 1.25')
+    expect(wrapper.findAll('h3').map((node) => node.text())).toContain('主要疗效结局')
+    expect(wrapper.findAll('h3').map((node) => node.text())).toContain('重大出血风险')
+    expect(wrapper.find('.report-table-wrap table').text()).toContain('RR 1.25')
   })
 
-  it('不会把线上 IgA 摘要错误压成单张折叠卡', () => {
+  it('完整保留后端正式报告的多级标题，不强行折叠章节', () => {
     const actualV2Shape = `现在已有足够的证据来源，可以直接给出综合回答。
 
 ---
@@ -92,17 +89,15 @@ describe('报告清晰渲染', () => {
 ## 参考文献
 
 1. Guideline. PMID: 35579642`
-    const wrapper = mount(ReportRenderer, { props: { markdown: actualV2Shape, audience: 'clinician', researchMode: 'instant' } })
-    expect(wrapper.find('.report-section-group').text()).toContain('IgA 肾病持续性蛋白尿的治疗选择')
-    expect(wrapper.find('.report-section-card.authority').text()).toContain('核心结论')
-    expect(wrapper.findAll('.report-section-card.safety').some((section) => section.text().includes('感染风险对比'))).toBe(true)
-    expect(wrapper.find('.report-section-card.action').text()).toContain('综合决策路径')
-    expect(wrapper.findAll('details.report-fold').length).toBeGreaterThanOrEqual(3)
+    const wrapper = mount(ReportRenderer, { props: { markdown: actualV2Shape, audience: 'clinician' } })
+    expect(wrapper.find('.report-markdown').text()).toContain('IgA 肾病持续性蛋白尿的治疗选择')
+    expect(wrapper.findAll('h3').map((node) => node.text())).toEqual(expect.arrayContaining(['核心结论', '4. 感染风险对比', '5. 综合决策路径']))
+    expect(wrapper.findAll('details.report-fold')).toHaveLength(0)
     expect(wrapper.find('.reference-panel').text()).toContain('1 条')
   })
 
   it('普通用户版略去过度专业的段落', () => {
-    const wrapper = mount(ReportRenderer, { props: { markdown, audience: 'public', researchMode: 'instant' } })
+    const wrapper = mount(ReportRenderer, { props: { markdown, audience: 'public' } })
     expect(wrapper.text()).toContain('患者当前可接受治疗')
     expect(wrapper.text()).toContain('血压管理三要点')
     expect(wrapper.text()).not.toContain('专业检索方法')

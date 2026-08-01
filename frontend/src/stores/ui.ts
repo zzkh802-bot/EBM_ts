@@ -2,16 +2,16 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { Reference } from '../utils/report'
 
-export type DetailKind = 'citation' | 'archive' | 'workspace' | 'generic'
+export type DetailKind = 'citation'
 
 export const useUiStore = defineStore('ui', () => {
   const sessionDrawerOpen = ref(false)
   const themeMenuOpen = ref(false)
   const detailOpen = ref(false)
   const detailTitle = ref('')
-  const detailKind = ref<DetailKind>('generic')
+  const detailKind = ref<DetailKind>('citation')
   const detailPayload = ref<unknown>(null)
-  const openDetail = (title: string, payload: unknown, kind: DetailKind = 'generic') => {
+  const openDetail = (title: string, payload: unknown, kind: DetailKind) => {
     detailTitle.value = title; detailPayload.value = payload; detailKind.value = kind; detailOpen.value = true
   }
   const openCitation = (reference: Reference) => openDetail(`引用 [${reference.number}]`, reference, 'citation')

@@ -142,6 +142,7 @@ export function extractReferences(markdown: string): Record<string, Reference> {
   }
   for (const entry of entries) {
     const content = entry.lines.join(' ').replace(/\s+/g, ' ').trim()
+      .replace(new RegExp(`^\\[${entry.number}\\]\\s+`), '')
     if (!content) continue
     const pmid = content.match(/PMID[:\s]+(\d{6,9})/i)?.[1] || ''
     refs[entry.number] = {

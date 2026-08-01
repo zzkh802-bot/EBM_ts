@@ -12,7 +12,6 @@ const media = matchMedia('(prefers-color-scheme: dark)')
 
 const moduleName = computed(() => {
   if (route.path.startsWith('/knowledge')) return 'knowledge'
-  if (route.path.startsWith('/literature')) return 'literature'
   return 'evidence'
 })
 
@@ -36,7 +35,6 @@ const syncBody = () => {
   body.classList.toggle('citation-open', ui.detailOpen)
   body.dataset.module = moduleName.value
   body.dataset.audience = preferences.audienceMode
-  body.dataset.researchMode = preferences.researchMode
   document.documentElement.dataset.theme = resolvedTheme.value
   document.documentElement.style.colorScheme = resolvedTheme.value
 }
@@ -46,7 +44,7 @@ const onKeydown = (event: KeyboardEvent) => {
   if (event.key === 'Escape') ui.closeTopLayer()
 }
 
-watch([moduleName, hasConversation, resolvedTheme, () => ui.sessionDrawerOpen, () => ui.detailOpen, () => preferences.audienceMode, () => preferences.researchMode], syncBody, { immediate: true })
+watch([moduleName, hasConversation, resolvedTheme, () => ui.sessionDrawerOpen, () => ui.detailOpen, () => preferences.audienceMode], syncBody, { immediate: true })
 
 onMounted(() => {
   preferences.applyTheme()

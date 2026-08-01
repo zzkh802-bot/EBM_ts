@@ -1,68 +1,124 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { TraceItem } from '../../types/domain'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import type { ResearchProgressUpdate, TraceItem } from '../../types/domain'
 
 const props = defineProps<{
   trace: TraceItem[]
+  progressUpdates?: ResearchProgressUpdate[]
   tools?: Array<Record<string, unknown>>
   pending?: boolean
+  startedAt?: string
+  completedAt?: string
 }>()
 
-type ToolStep = { id: string; name: string; status: string; arguments?: unknown; result?: unknown; presentation?: string }
+const currentTime = ref(Date.now())
+let clock: number | undefined
 
-const tools = computed<ToolStep[]>(() => (props.tools || []).map((item, index) => ({
-  id: String(item.id || `${item.name || 'tool'}-${index}`),
-  name: typeof item.name === 'string' ? item.name : '工具调用',
-  status: typeof item.status === 'string' ? item.status : 'completed',
-  arguments: item.arguments,
-  result: item.result,
-  presentation: typeof item.presentation === 'string' ? item.presentation : undefined,
-})))
-const milestones = computed(() => props.trace.filter((item) => !item.kind?.startsWith('tool.') && item.kind !== 'runtime.session'))
-const statusText = (status: string) => ({ running: '执行中', completed: '已完成', error: '失败' })[status] || status
-const detail = (value: unknown) => typeof value === 'string' ? value : JSON.stringify(value, null, 2)
-const oneLine = (value: unknown) => detail(value).replace(/\s+/g, ' ').trim()
-const preview = (step: ToolStep) => {
-  const text = oneLine(step.result ?? step.arguments)
-  if (!text) return step.status === 'running' ? '等待研究服务返回结果' : '未返回可展示的内容'
-  return text.length > 88 ? `${text.slice(0, 88)}…` : text
+onMounted(() => {
+  clock = window.setInterval(() => { currentTime.value = Date.now() }, 1_000)
+})
+onUnmounted(() => {
+  if (clock) window.clearInterval(clock)
+})
+
+const toolLabels: Record<string, string> = {
+  guideline_mcp_search: '检索临床指南',
+  guideline_mcp_retrieve: '定位指南章节',
+  guideline_mcp_read: '阅读指南原文',
+  source_library_search: '检索本地资料库',
+  pubmed_search: '检索医学文献',
+  pubmed_read: '阅读文献原文',
+  pubmed_similar: '扩展相似文献',
+  web_search: '检索公开资料',
+  web_read: '阅读来源原文',
+  evidence_add: '登记关键证据',
+  evidence_read: '复核已登记证据',
+  evidence_list: '核对证据清单',
+  research_frame_init: '建立研究框架',
+  research_frame_update: '更新研究框架',
+  research_frame_scratchpad_append: '记录研究判断',
+  report_write: '生成正式报告',
+  report_finalize: '核验并发布报告',
+  read: '读取研究材料',
 }
-const toolLabel = (step: ToolStep) => {
-  if (step.presentation === 'preparation') return '准备研究规则'
-  return ({
-  web_search: '检索网页资料', web_read: '阅读网页全文',
-  pubmed_search: '检索 PubMed 文献', pubmed_read: '阅读文献全文',
-  guideline_mcp_search: '检索临床指南', guideline_mcp_read: '阅读指南原文',
-  evidence_add: '记录关键证据', evidence_list: '核对已记录证据', evidence_read: '核验证据片段',
-  report_write: '生成正式报告', report_finalize: '核验并定稿报告',
-  read: '阅读研究材料', write: '整理研究材料', edit: '修订研究材料',
-}[step.name] || '执行研究步骤')
+
+const parseTime = (value?: string) => {
+  const timestamp = value ? Date.parse(value) : Number.NaN
+  return Number.isFinite(timestamp) ? timestamp : undefined
 }
+
+const formatDuration = (milliseconds?: number) => {
+  if (milliseconds === undefined || !Number.isFinite(milliseconds) || milliseconds < 0) return '—'
+  const seconds = Math.max(0, Math.floor(milliseconds / 1_000))
+  if (seconds < 60) return `${seconds} 秒`
+  const minutes = Math.floor(seconds / 60)
+  return `${minutes} 分 ${seconds % 60} 秒`
+}
+
+const startedAt = computed(() => parseTime(props.startedAt))
+const finishedAt = computed(() => parseTime(props.completedAt))
+const elapsed = computed(() => formatDuration((finishedAt.value ?? currentTime.value) - (startedAt.value ?? currentTime.value)))
+const progressUpdates = computed(() => (props.progressUpdates || []).filter((update) => update.text.trim()))
+const errors = computed(() => props.trace.filter((item) =>
+  ['run.cancelled', 'run.failed', 'model.error', 'research_frame.error'].includes(item.kind || ''),
+))
+const toolActivity = computed(() => (props.tools || [])
+  .filter((tool) => tool.presentation !== 'preparation')
+  .map((tool, index) => {
+    const name = typeof tool.name === 'string' ? tool.name : 'tool'
+    const started = parseTime(typeof tool.started_at === 'string' ? tool.started_at : undefined)
+    const completed = parseTime(typeof tool.completed_at === 'string' ? tool.completed_at : undefined)
+    const status = typeof tool.status === 'string' ? tool.status : 'completed'
+    const endedAt = completed ?? (status === 'running' ? currentTime.value : undefined)
+    return {
+      id: typeof tool.id === 'string' ? tool.id : `${name}-${index}`,
+      label: toolLabels[name] || name.replaceAll('_', ' '),
+      status,
+      duration: formatDuration(started === undefined || endedAt === undefined ? undefined : endedAt - started),
+    }
+  }))
+const activeTool = computed(() => toolActivity.value.find((tool) => tool.status === 'running'))
+const latestUpdate = computed(() => progressUpdates.value.at(-1)?.text)
+const completed = computed(() => !props.pending && !errors.value.length)
+const title = computed(() => errors.value.length ? '本轮研究未完成' : completed.value ? '本轮研究已完成' : '研究进行中')
+const fallbackCopy = computed(() => {
+  if (errors.value.length) return errors.value.at(-1)?.detail || errors.value.at(-1)?.label || '研究服务未能完成本轮任务。'
+  if (activeTool.value) return `正在${activeTool.value.label}。`
+  return props.pending ? '正在梳理临床问题并准备下一步研究。' : '已形成可回看的研究记录。'
+})
+const hasActivity = computed(() => Boolean(props.pending || errors.value.length || progressUpdates.value.length || toolActivity.value.length))
+const offsetFromStart = (timestamp: string) => formatDuration((parseTime(timestamp) ?? currentTime.value) - (startedAt.value ?? currentTime.value))
 </script>
 
 <template>
-  <section v-if="tools.length || milestones.length || pending" class="run-activity" :class="{ pending }" aria-label="研究过程">
-    <div class="run-activity-heading">
-      <span>{{ pending ? '研究过程' : '本轮研究记录' }}</span>
-      <small>{{ pending ? '点击任一步查看证据与结果' : `${tools.length} 个研究步骤` }}</small>
+  <section v-if="hasActivity" class="research-progress" :class="{ error: errors.length, complete: completed }" aria-label="研究进展">
+    <div class="research-progress-head">
+      <span>{{ title }}</span>
+      <small>{{ elapsed }}</small>
     </div>
-    <p v-if="pending && !tools.length && !milestones.length" class="run-activity-empty">
-      研究服务已启动，正在界定问题与检索范围。
-    </p>
-    <details v-for="step in tools" :key="step.id" class="run-step">
+
+    <p class="research-progress-current">{{ latestUpdate || fallbackCopy }}</p>
+
+    <ol v-if="progressUpdates.length" class="research-progress-notes" aria-label="模型研究进展">
+      <li v-for="update in progressUpdates" :key="`${update.timestamp}-${update.text}`">
+        <i aria-hidden="true" />
+        <span>{{ update.text }}</span>
+        <small>{{ offsetFromStart(update.timestamp) }}</small>
+      </li>
+    </ol>
+
+    <details v-if="toolActivity.length" class="research-progress-tools">
       <summary>
-        <span class="run-step-status" :class="step.status" />
-        <span class="run-step-copy"><strong>{{ toolLabel(step) }}</strong><span>{{ preview(step) }}</span></span>
-        <small>{{ statusText(step.status) }}</small>
+        <span>{{ activeTool ? `正在${activeTool.label}` : `研究操作 · ${toolActivity.length} 项` }}</span>
+        <small>{{ activeTool?.duration || '查看详情' }}</small>
       </summary>
-      <div class="run-step-detail">
-        <template v-if="step.arguments !== undefined"><span>输入</span><pre>{{ detail(step.arguments) }}</pre></template>
-        <template v-if="step.result !== undefined"><span>结果</span><pre>{{ detail(step.result) }}</pre></template>
-      </div>
-    </details>
-    <details v-for="(item, index) in milestones" :key="`${item.kind}-${index}`" class="run-step trace">
-      <summary><span class="run-step-status" /><strong>{{ item.label || '运行状态' }}</strong><small>{{ item.timestamp?.slice(11, 19) }}</small></summary>
-      <p v-if="item.detail">{{ item.detail }}</p>
+      <ol>
+        <li v-for="tool in toolActivity" :key="tool.id" :class="tool.status">
+          <i aria-hidden="true" />
+          <span>{{ tool.label }}</span>
+          <small>{{ tool.duration }}</small>
+        </li>
+      </ol>
     </details>
   </section>
 </template>

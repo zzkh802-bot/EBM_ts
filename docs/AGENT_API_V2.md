@@ -43,19 +43,16 @@ Linux 部署可使用 `bash scripts/run-api.sh`。如果模型密钥由网关的
 {
   "question": "类风湿关节炎患者甲氨蝶呤疗效不佳后如何升级治疗？",
   "session_id": "可选：上次返回的会话 ID",
-  "research_mode": "instant",
   "audience_mode": "clinician",
-  "deep_think": false,
+  "thinking_level": "high",
   "search_enabled": true,
-  "max_iterations": 16,
-  "request_timeout_seconds": 300,
   "retrieval_policy": "all",
   "provider": "deepseek",
   "model": "deepseek-v4-flash"
 }
 ```
 
-成功时返回 HTTP 202，包含 `run_id`、`poll_url` 和 `cancel_url`。`max_iterations` 是研究步骤的提示性预算；`request_timeout_seconds` 会中断超时任务。
+成功时返回 HTTP 202，包含 `run_id`、`poll_url` 和 `cancel_url`。服务统一使用完整循证研究预算；`thinking_level` 直接传给 Pi，可选值为 `off`、`minimal`、`low`、`medium`、`high`、`xhigh` 或 `max`。
 
 `retrieval_policy` 默认为 `all`。集成基准可设为 `mcp_only`，此时 Agent 子进程不会注册 PubMed、公共 Web 或本地来源库工具，只保留指南 MCP 与证据/报告工具。
 

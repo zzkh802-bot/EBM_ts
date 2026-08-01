@@ -43,6 +43,17 @@ describe("research frame", () => {
     expect(first.content).toContain("Does BP 165/95 mmHg block alteplase");
   });
 
+  it("reuses the first frame when startup and the agent initialize it together", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-frame-"));
+    const [startup, tool] = await Promise.all([
+      initResearchFrame({ sessionDir, userQuestion: "Should anticoagulation be resumed?" }),
+      initResearchFrame({ sessionDir, userQuestion: "A concurrent tool call" }),
+    ]);
+
+    expect(startup.content).toBe(tool.content);
+    await expect(readFile(path.join(sessionDir, "notes", "research_frame.md"), "utf8")).resolves.toBe(startup.content);
+  });
+
   it("accepts free section content but rejects missing or reordered fixed headings", () => {
     const valid = validFrame("observation -> belief -> next action");
     expect(researchFrameValidationError(valid)).toBe("");
