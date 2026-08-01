@@ -1,4 +1,4 @@
-import type { AgentRunRequest, ModeSnapshot, Session } from '../types/domain'
+import type { AgentRunRequest, ModeSnapshot } from '../types/domain'
 
 export const STORAGE_KEYS = {
   sessions: 'dp_xunyi_sessions',
@@ -8,6 +8,7 @@ export const STORAGE_KEYS = {
   runtime: 'dp_xunyi_runtime_model',
   patientIntake: 'dp_xunyi_patient_intake',
   patientIntakeActive: 'dp_xunyi_patient_intake_active',
+  patientProfiles: 'dp_xunyi_patient_profiles',
 } as const
 
 export const newId = (prefix: string) =>

@@ -1,7 +1,10 @@
 import { once } from "node:events";
+import { mkdtemp, readFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildAgentPrompt, createAgentApiServer, type AgentExecutor, type AgentRunInput, type RuntimeConfig } from "../src/server/agentApi.js";
-import { buildPatientIntakePrompt } from "../src/server/patientIntake.js";
+import { buildPatientIntakePrompt, type PatientIntakeInput } from "../src/server/patientIntake.js";
 
 async function startApi(executor: AgentExecutor, runtimeConfig?: RuntimeConfig) {
   const api = createAgentApiServer({ executor, ...(runtimeConfig ? { runtimeConfig } : {}) });
@@ -125,12 +128,21 @@ describe("循医研究服务 API", () => {
   });
 
   it("runs patient preparation through its own no-tool executor contract", async () => {
-    let received: { message: string; sessionId?: string; intent: string } | undefined;
+    let received: PatientIntakeInput | undefined;
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-patient-api-"));
+    const runtimeConfig: RuntimeConfig = {
+      default_provider: "deepseek", default_model: "deepseek-v4-flash",
+      models: [{ provider: "deepseek", provider_label: "DeepSeek", model: "deepseek-v4-flash", model_label: "DeepSeek V4 Flash", available: true }],
+    };
     const patientApi = createAgentApiServer({
       executor: async () => ({ message: "研究完成。" }),
+      rootDir,
+      runtimeConfig,
       patientIntakeExecutor: async (input) => {
         received = input;
-        return { sessionId: input.sessionId || "patient-session-1", reply: input.intent === "summary" ? "## 此次就诊想解决什么\n\n睡眠问题" : "我明白了。" };
+        return { sessionId: input.sessionId || "patient-session-1", reply: input.intent === "summary"
+          ? "## 此次就诊想解决什么\n\n睡眠问题\n\n## 发生经过\n\n两周\n\n## 目前的感受与影响\n\n尚未说明\n\n## 已有检查、用药和相关情况\n\n尚未说明\n\n## 我想请医生帮助回答\n\n如何改善\n\n## 还没说清楚的地方\n\n尚未说明"
+          : "我明白了。" };
       },
     });
     patientApi.server.listen(0, "127.0.0.1");
@@ -138,18 +150,25 @@ describe("循医研究服务 API", () => {
     const address = patientApi.server.address();
     if (!address || typeof address === "string") throw new Error("Expected a TCP test server");
     const patientUrl = `http://127.0.0.1:${address.port}`;
+    const body = {
+      client_session_id: "visit-1", mode: "visit_preparation", thinking_enabled: true,
+      profile: { id: "profile-1", revision: "2026-08-01T12:00:00.000Z", name: "我", sex: "unspecified", allergies: "", pregnancy: "not_applicable", memory: "" },
+    };
     try {
       const reply = await fetch(`${patientUrl}/api/v1/patient-intake/messages`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: "最近总是睡不好" }),
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, message: "最近总是睡不好" }),
       });
       expect(reply.status).toBe(200);
-      expect(await reply.json()).toMatchObject({ session_id: "patient-session-1", reply: "我明白了。" });
+      expect(await reply.json()).toMatchObject({ contract_version: "xunyi-patient/v1", session_id: "visit-1", reply: "我明白了。" });
       expect(received).toMatchObject({ message: "最近总是睡不好", intent: "conversation" });
       const summary = await fetch(`${patientUrl}/api/v1/patient-intake/summary`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: "请整理本次就诊说明", session_id: "patient-session-1" }),
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, message: "请整理本次就诊说明" }),
       });
       expect(summary.status).toBe(200);
       expect(received).toMatchObject({ sessionId: "patient-session-1", intent: "summary" });
+      const archived = await summary.json() as { report_path: string };
+      expect(archived.report_path).toContain("reports/report-001.md");
+      expect(await readFile(path.join(rootDir, archived.report_path), "utf8")).toContain("睡眠问题");
     } finally {
       patientApi.server.close();
       await once(patientApi.server, "close");
@@ -157,9 +176,14 @@ describe("循医研究服务 API", () => {
   });
 
   it("keeps patient preparation prompt focused on expression rather than diagnosis or retrieval", () => {
-    const prompt = buildPatientIntakePrompt({ message: "胸口有些不舒服", intent: "conversation", provider: "deepseek", model: "deepseek-v4-flash" });
+    const input: PatientIntakeInput = {
+      message: "胸口有些不舒服", clientSessionId: "visit-1", intent: "conversation", mode: "visit_preparation",
+      thinkingEnabled: true, profile: { id: "profile-1", revision: "r1", name: "我", sex: "unspecified", allergies: "", pregnancy: "not_applicable", memory: "" },
+      provider: "deepseek", model: "deepseek-v4-flash",
+    };
+    const prompt = buildPatientIntakePrompt(input);
     expect(prompt).toBe("胸口有些不舒服");
-    expect(buildPatientIntakePrompt({ message: "ignored", intent: "summary", provider: "deepseek", model: "deepseek-v4-flash" })).toContain("用户明确提供的信息");
+    expect(buildPatientIntakePrompt({ ...input, message: "ignored", intent: "summary" })).toContain("用户明确提供的信息");
   });
 
   it.each(["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const)("passes Pi thinking level %s through without a research-mode mapping", async (thinkingLevel) => {

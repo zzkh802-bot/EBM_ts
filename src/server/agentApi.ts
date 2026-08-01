@@ -6,9 +6,10 @@ import path from "node:path";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { initResearchFrame } from "../tools/researchFrame.js";
 import { piSessionDirectory } from "../extensions/sessionPath.js";
-import { PatientIntakeError, type PatientIntakeExecutor, validatePatientIntakeInput } from "./patientIntake.js";
+import { PatientIntakeError, type PatientIntakeExecutor, PatientWorkspace, validatePatientIntakeInput } from "./patientIntake.js";
 
 const CONTRACT_VERSION = "xunyi-research/v1";
+const PATIENT_CONTRACT_VERSION = "xunyi-patient/v1";
 const MAX_REQUEST_BYTES = 1_048_576;
 const MAX_TRACE_EVENTS = 240;
 const MAX_TOOL_EVENTS = 160;
@@ -307,8 +308,9 @@ export function createAgentApiServer(options: AgentApiServerOptions): { server: 
     : async () => configuredRuntimeConfig ?? defaultRuntimeConfig();
   const staticDir = options.staticDir ? path.resolve(options.staticDir) : undefined;
   const rootDir = path.resolve(options.rootDir ?? process.cwd());
+  const patientWorkspace = new PatientWorkspace(rootDir);
   const server = createServer((request, response) => {
-    void handleRequest(request, response, store, options.corsOrigin ?? "*", runtimeConfig, options.accountConnections, options.patientIntakeExecutor, staticDir, rootDir);
+    void handleRequest(request, response, store, options.corsOrigin ?? "*", runtimeConfig, options.accountConnections, options.patientIntakeExecutor, patientWorkspace, staticDir, rootDir);
   });
   return { server, store };
 }
@@ -498,7 +500,7 @@ export function createPiCliExecutor(input: { rootDir: string }): AgentExecutor {
   };
 }
 
-async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: () => Promise<RuntimeConfig>, accountConnections?: AccountConnectionStore, patientIntakeExecutor?: PatientIntakeExecutor, staticDir?: string, rootDir = process.cwd()): Promise<void> {
+async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: () => Promise<RuntimeConfig>, accountConnections?: AccountConnectionStore, patientIntakeExecutor?: PatientIntakeExecutor, patientWorkspace = new PatientWorkspace(process.cwd()), staticDir?: string, rootDir = process.cwd()): Promise<void> {
   setCors(response, corsOrigin);
   if (request.method === "OPTIONS") {
     response.writeHead(204);
@@ -529,8 +531,11 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 120_000);
       try {
-        const result = await patientIntakeExecutor({ ...input, intent }, controller.signal);
-        sendJson(response, 200, { contract_version: CONTRACT_VERSION, session_id: result.sessionId, reply: result.reply });
+        const result = await patientWorkspace.execute(input, intent, patientIntakeExecutor, controller.signal);
+        sendJson(response, 200, {
+          contract_version: PATIENT_CONTRACT_VERSION, session_id: input.clientSessionId, reply: result.reply,
+          ...(result.reportPath ? { report_path: result.reportPath } : {}),
+        });
       } finally {
         clearTimeout(timeout);
       }
@@ -613,7 +618,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       : error instanceof PatientIntakeError
         ? new ApiError(error.status, error.code, error.message)
         : new ApiError(500, "internal_error", errorMessage(error));
-    sendJson(response, apiError.status, { ok: false, contract_version: CONTRACT_VERSION, error: { code: apiError.code, message: apiError.message } });
+    const responseContract = pathname.startsWith("/api/v1/patient-intake/") ? PATIENT_CONTRACT_VERSION : CONTRACT_VERSION;
+    sendJson(response, apiError.status, { ok: false, contract_version: responseContract, error: { code: apiError.code, message: apiError.message } });
   }
 }
 
