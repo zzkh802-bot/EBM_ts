@@ -43,15 +43,17 @@ describe("research frame", () => {
     expect(first.content).toContain("Does BP 165/95 mmHg block alteplase");
   });
 
-  it("reuses the first frame when startup and the agent initialize it together", async () => {
+  it("publishes one complete frame when startup and tool initialization race", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-frame-"));
-    const [startup, tool] = await Promise.all([
-      initResearchFrame({ sessionDir, userQuestion: "Should anticoagulation be resumed?" }),
-      initResearchFrame({ sessionDir, userQuestion: "A concurrent tool call" }),
-    ]);
+    const frames = await Promise.all(Array.from({ length: 12 }, (_, index) => initResearchFrame({
+      sessionDir,
+      userQuestion: index === 0 ? "Should anticoagulation be resumed?" : `Concurrent tool call ${index}`,
+    })));
+    const [first] = frames;
 
-    expect(startup.content).toBe(tool.content);
-    await expect(readFile(path.join(sessionDir, "notes", "research_frame.md"), "utf8")).resolves.toBe(startup.content);
+    expect(first?.content).toContain("# Research Frame");
+    expect(frames.every((frame) => frame.content === first?.content)).toBe(true);
+    await expect(readFile(path.join(sessionDir, "notes", "research_frame.md"), "utf8")).resolves.toBe(first?.content);
   });
 
   it("accepts free section content but rejects missing or reordered fixed headings", () => {

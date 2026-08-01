@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { link, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { normalizeMarkdown } from "./markdown.js";
 import { formatBeijingTimestamp } from "./time.js";
@@ -115,14 +116,18 @@ export async function initResearchFrame(input: ResearchFrameInput): Promise<Rese
     const content = `${frameTemplate(input)}\n`;
     const error = researchFrameValidationError(content);
     if (error) throw new Error(error);
+    const temporary = `${abs}.${randomUUID()}.tmp`;
+    await writeFile(temporary, content, "utf8");
     try {
-      await writeFile(abs, content, { encoding: "utf8", flag: "wx" });
+      await link(temporary, abs);
       return { path: FRAME_PATH, content };
     } catch (writeError) {
       // The server prepares the canvas as the session starts, while the agent may
       // invoke this tool at the same time. In that race, reuse the winner's file.
       if (!(writeError instanceof Error && "code" in writeError && writeError.code === "EEXIST")) throw writeError;
       return { path: FRAME_PATH, content: await readFile(abs, "utf8") };
+    } finally {
+      await unlink(temporary).catch(() => undefined);
     }
   }
 }
