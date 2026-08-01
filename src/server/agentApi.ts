@@ -638,11 +638,10 @@ function validateAgentRunInput(value: unknown, runtimeConfig: RuntimeConfig): Ag
   const thinkingLevel = enumValue(value.thinking_level, ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const, "thinking_level", "high");
   const maxIterations = 32;
   const requestTimeoutSeconds = 600;
-  const requestedRetrievalPolicy = enumValue(value.retrieval_policy, ["all", "mcp_only"] as const, "retrieval_policy", "all");
-  // The clinician workstation may use the full evidence workflow. Reserve the
-  // public API mode for the future patient surface, where retrieval is limited
-  // to the curated guideline MCP regardless of a client-supplied override.
-  const retrievalPolicy = audienceMode === "public" ? "mcp_only" : requestedRetrievalPolicy;
+  // This endpoint runs the clinician research workflow. Keep audience_mode in
+  // the wire contract for compatibility, but do not mistake it for the future
+  // patient intake workflow: that flow will have its own no-tool endpoint.
+  const retrievalPolicy = enumValue(value.retrieval_policy, ["all", "mcp_only"] as const, "retrieval_policy", "all");
   const sessionId = optionalString(value.session_id, "session_id", 200);
   const provider = optionalString(value.provider, "provider", 80) ?? runtimeConfig.default_provider;
   const model = optionalString(value.model, "model", 160) ?? runtimeConfig.models.find((item) => item.provider === provider)?.model ?? runtimeConfig.default_model;

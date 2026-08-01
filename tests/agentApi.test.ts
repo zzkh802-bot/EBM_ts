@@ -97,7 +97,7 @@ describe("循医研究服务 API", () => {
     }
   });
 
-  it("reserves public API calls for the curated guideline MCP policy", async () => {
+  it("keeps the reserved audience field separate from the research retrieval policy", async () => {
     let receivedInput: Parameters<AgentExecutor>[0] | undefined;
     const { api, baseUrl } = await startApi(async (input) => {
       receivedInput = input;
@@ -115,8 +115,8 @@ describe("循医研究服务 API", () => {
         (value) => value.status === "succeeded",
       );
       expect(receivedInput?.audienceMode).toBe("public");
-      expect(receivedInput?.retrievalPolicy).toBe("mcp_only");
-      expect(result.summary).toMatchObject({ audience_mode: "public", retrieval_policy: "mcp_only" });
+      expect(receivedInput?.retrievalPolicy).toBe("all");
+      expect(result.summary).toMatchObject({ audience_mode: "public", retrieval_policy: "all" });
     } finally {
       api.server.close();
       await once(api.server, "close");
