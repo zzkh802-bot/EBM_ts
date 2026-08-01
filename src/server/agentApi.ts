@@ -638,7 +638,11 @@ function validateAgentRunInput(value: unknown, runtimeConfig: RuntimeConfig): Ag
   const thinkingLevel = enumValue(value.thinking_level, ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const, "thinking_level", "high");
   const maxIterations = 32;
   const requestTimeoutSeconds = 600;
-  const retrievalPolicy = enumValue(value.retrieval_policy, ["all", "mcp_only"] as const, "retrieval_policy", "all");
+  const requestedRetrievalPolicy = enumValue(value.retrieval_policy, ["all", "mcp_only"] as const, "retrieval_policy", "all");
+  // The clinician workstation may use the full evidence workflow. Reserve the
+  // public API mode for the future patient surface, where retrieval is limited
+  // to the curated guideline MCP regardless of a client-supplied override.
+  const retrievalPolicy = audienceMode === "public" ? "mcp_only" : requestedRetrievalPolicy;
   const sessionId = optionalString(value.session_id, "session_id", 200);
   const provider = optionalString(value.provider, "provider", 80) ?? runtimeConfig.default_provider;
   const model = optionalString(value.model, "model", 160) ?? runtimeConfig.models.find((item) => item.provider === provider)?.model ?? runtimeConfig.default_model;
@@ -1009,11 +1013,9 @@ async function projectEnv(rootDir: string): Promise<Record<string, string>> {
 }
 
 export function buildAgentPrompt(input: AgentRunInput): string {
-  const audienceInstruction = input.audienceMode === "public"
-    ? "使用清晰中文面向普通用户，不给个体化处方；不呈现专业证据框架、检索方法和不必要的统计术语，保留通俗的获益、风险、行动建议及何时应就医。"
-    : "使用面向临床人员的中文；按临床决策需要呈现证据等级、效应量和适用边界。";
+  const audienceInstruction = "使用面向临床人员的中文；按临床决策需要呈现证据等级、效应量和适用边界。";
   const retrievalInstruction = input.retrievalPolicy === "mcp_only"
-    ? "本轮是隔离的 MCP-only 集成测试：只使用 guideline_mcp_search、guideline_mcp_retrieve、guideline_mcp_read 及证据/报告工具；禁止 PubMed、公共网页和本地来源库检索。若指南证据不足，明确报告证据缺口，不得改用其他检索来源。最终面向用户的报告不得出现 MCP、RAG、工具调用、内部文件路径或内部 evidence ID。"
+    ? "本轮仅使用指南库：只使用 guideline_mcp_search、guideline_mcp_retrieve、guideline_mcp_read 及证据/报告工具；禁止 PubMed、公共网页和本地来源库检索。若指南证据不足，明确报告证据缺口，不得改用其他检索来源。最终面向用户的报告不得出现 MCP、RAG、工具调用、内部文件路径或内部 evidence ID。"
     : input.searchEnabled
       ? "可按需使用已配置的检索工具。"
       : "用户要求不进行外部检索；只使用当前会话中的既有材料。";

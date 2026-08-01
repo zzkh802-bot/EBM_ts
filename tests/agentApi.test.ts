@@ -37,7 +37,7 @@ describe("循医研究服务 API", () => {
   it("delegates clinician report structure to the writing skill independently of thinking level", () => {
     const low = buildAgentPrompt(promptInput({ thinkingLevel: "low" }));
     const maximum = buildAgentPrompt(promptInput({ thinkingLevel: "max" }));
-    const publicPrompt = buildAgentPrompt(promptInput({ audienceMode: "public" }));
+    const publicPrompt = buildAgentPrompt(promptInput({ audienceMode: "public", retrievalPolicy: "mcp_only" }));
     for (const prompt of [low, maximum, publicPrompt]) {
       expect(prompt).toContain("在最终回复前调用 report_write")
       expect(prompt).toContain("不得只在聊天消息中输出摘要")
@@ -50,7 +50,8 @@ describe("循医研究服务 API", () => {
     }
     expect(low).not.toContain("最少必要")
     expect(maximum).not.toContain("指南推荐等级")
-    expect(publicPrompt).toContain("不呈现专业证据框架")
+    expect(publicPrompt).toContain("面向临床人员")
+    expect(publicPrompt).toContain("本轮仅使用指南库")
   });
 
   it("creates an async run and exposes the completed normalized response", async () => {
@@ -90,6 +91,32 @@ describe("循医研究服务 API", () => {
       expect(result.agent_trace.some((event: { kind: string }) => event.kind === "tool.completed")).toBe(true);
       expect(result.progress_updates).toEqual([expect.objectContaining({ text: "正在核对最新治疗建议。" })]);
       expect(result.tools).toEqual([{ id: "tool-1", name: "pubmed_search", status: "completed", result: "已找到候选文献。" }]);
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
+  });
+
+  it("reserves public API calls for the curated guideline MCP policy", async () => {
+    let receivedInput: Parameters<AgentExecutor>[0] | undefined;
+    const { api, baseUrl } = await startApi(async (input) => {
+      receivedInput = input;
+      return { message: "完成。" };
+    });
+    try {
+      const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: "患者端问题", audience_mode: "public", retrieval_policy: "all" }),
+      });
+      const accepted = await created.json() as { run_id: string };
+      const result = await eventually(
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        (value) => value.status === "succeeded",
+      );
+      expect(receivedInput?.audienceMode).toBe("public");
+      expect(receivedInput?.retrievalPolicy).toBe("mcp_only");
+      expect(result.summary).toMatchObject({ audience_mode: "public", retrieval_policy: "mcp_only" });
     } finally {
       api.server.close();
       await once(api.server, "close");

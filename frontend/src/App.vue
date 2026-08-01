@@ -34,7 +34,6 @@ const syncBody = () => {
   body.classList.toggle('drawer-open', ui.sessionDrawerOpen)
   body.classList.toggle('citation-open', ui.detailOpen)
   body.dataset.module = moduleName.value
-  body.dataset.audience = preferences.audienceMode
   document.documentElement.dataset.theme = resolvedTheme.value
   document.documentElement.style.colorScheme = resolvedTheme.value
 }
@@ -44,7 +43,7 @@ const onKeydown = (event: KeyboardEvent) => {
   if (event.key === 'Escape') ui.closeTopLayer()
 }
 
-watch([moduleName, hasConversation, resolvedTheme, () => ui.sessionDrawerOpen, () => ui.detailOpen, () => preferences.audienceMode], syncBody, { immediate: true })
+watch([moduleName, hasConversation, resolvedTheme, () => ui.sessionDrawerOpen, () => ui.detailOpen], syncBody, { immediate: true })
 
 onMounted(() => {
   preferences.applyTheme()

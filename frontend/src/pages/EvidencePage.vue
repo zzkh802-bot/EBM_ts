@@ -43,7 +43,6 @@ const providers = computed(() => availableModels.value.filter((item, index, item
 const modelsForProvider = computed(() => availableModels.value.filter((item) => item.provider === preferences.provider))
 const subscriptionProviders = computed(() => runtimeConfig.value?.models.filter((item) => item.connection_provider) || [])
 const questionInput = ref<HTMLTextAreaElement | null>(null)
-const audienceModeLabel = (mode: ModeSnapshot['audienceMode']) => mode === 'public' ? '普通用户版' : '医生专业版'
 const thinkingLevelLabel = (level: ModeSnapshot['thinkingLevel']) => ({
   off: 'off · 关闭', minimal: 'minimal · 极低', low: 'low · 低', medium: 'medium · 中',
   high: 'high · 高', xhigh: 'xhigh · 极高', max: 'max · 最大',
@@ -333,18 +332,8 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
       </section>
 
       <form class="ask-bar" aria-label="循医输入区" @submit.prevent="submit()">
-        <div class="mode-toolbar" aria-label="回答模式">
-          <div class="mode-group">
-            <span class="mode-group-label">回答对象</span>
-            <fieldset class="mode-segment">
-              <legend class="sr-only">回答对象</legend>
-              <button class="mode-button" :class="{ active: preferences.audienceMode === 'clinician' }" type="button" :aria-pressed="preferences.audienceMode === 'clinician'" :disabled="run.busy" @click="preferences.audienceMode = 'clinician'">医生专业版</button>
-              <button class="mode-button" :class="{ active: preferences.audienceMode === 'public' }" type="button" :aria-pressed="preferences.audienceMode === 'public'" :disabled="run.busy" @click="preferences.audienceMode = 'public'">普通用户版</button>
-            </fieldset>
-          </div>
-        </div>
         <div class="mode-context" aria-live="polite">
-          <strong>完整循证工作流</strong>
+          <strong>临床循证工作流</strong>
           <span>推理强度只控制模型的思考深度；检索、核验和正式报告保持一致。</span>
         </div>
         <div class="composer-body">
@@ -453,7 +442,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
             <div class="bubble">
               <div class="message-heading">
                 <strong>{{ message.title }}</strong>
-                <span v-if="message.role === 'assistant'" class="message-mode">{{ thinkingLevelLabel(message.thinkingLevel) }} · {{ audienceModeLabel(message.audienceMode) }}</span>
+                <span v-if="message.role === 'assistant'" class="message-mode">{{ thinkingLevelLabel(message.thinkingLevel) }}</span>
               </div>
               <div v-if="message.pending" class="agent-stage">{{ stages[run.stage] || '正在调用循证引擎…' }}</div>
               <RunActivity
@@ -471,7 +460,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
                 :audience="message.audienceMode"
                 @citation="openCitation"
               />
-              <pre v-else-if="message.showMarkdown && message.audienceMode === 'clinician'">{{ message.reportMarkdown || message.content }}</pre>
+              <pre v-else-if="message.showMarkdown">{{ message.reportMarkdown || message.content }}</pre>
               <section v-else-if="message.role === 'assistant' && message.reportMarkdown" class="final-report" aria-label="正式报告">
                 <header class="final-report-head">
                   <div>
@@ -506,7 +495,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
                     <button type="button" @click="speak(message)">朗读</button>
                     <button type="button" @click="share(message)">分享</button>
                     <button type="button" @click="retry(message)">重新运行</button>
-                    <button v-if="message.audienceMode === 'clinician'" type="button" @click="sessions.patchMessage(message.id, { showMarkdown: !message.showMarkdown })">{{ message.showMarkdown ? '返回阅读视图' : '查看报告 Markdown' }}</button>
+                    <button type="button" @click="sessions.patchMessage(message.id, { showMarkdown: !message.showMarkdown })">{{ message.showMarkdown ? '返回阅读视图' : '查看报告 Markdown' }}</button>
                     <button v-if="message.reportMarkdown" type="button" @click="openWorkspace(message.reportPath)">打开最终报告</button>
                   </div>
                 </details>
@@ -611,7 +600,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
         <div class="workspace-mode-list">
           <div><span>推理强度</span><strong>{{ thinkingLevelLabel(preferences.thinkingLevel) }}</strong></div>
           <div><span>证据检索</span><strong :class="{ 'mode-on': preferences.searchEnabled }">{{ preferences.searchEnabled ? '开启' : '关闭' }}</strong></div>
-          <div><span>回答对象</span><strong>{{ audienceModeLabel(preferences.audienceMode) }}</strong></div>
+          <div><span>工作台</span><strong>医生专业版</strong></div>
         </div>
       </section>
       <div class="workspace-trust-note">

@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import type { AudienceMode, ModeSnapshot, RuntimeConfig, ThemeMode, ThinkingLevel } from '../types/domain'
+import type { ModeSnapshot, RuntimeConfig, ThemeMode, ThinkingLevel } from '../types/domain'
 import { safeRead, safeWrite, STORAGE_KEYS } from '../utils/core'
 
 export const defaultModes: ModeSnapshot = {
@@ -11,7 +11,6 @@ const thinkingLevels: ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'hig
 
 export const usePreferencesStore = defineStore('preferences', () => {
   const stored = safeRead<Partial<ModeSnapshot>>(STORAGE_KEYS.modes, {})
-  const audienceMode = ref<AudienceMode>(stored.audienceMode === 'public' ? 'public' : 'clinician')
   const thinkingLevel = ref<ThinkingLevel>(thinkingLevels.includes(stored.thinkingLevel as ThinkingLevel)
     ? stored.thinkingLevel as ThinkingLevel
     : 'high')
@@ -22,7 +21,9 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const rawTheme = safeRead<ThemeMode>(STORAGE_KEYS.theme, 'system')
   const themeMode = ref<ThemeMode>(['light', 'dark', 'system'].includes(rawTheme) ? rawTheme as ThemeMode : 'system')
   const snapshot = computed<ModeSnapshot>(() => ({
-    audienceMode: audienceMode.value, thinkingLevel: thinkingLevel.value, searchEnabled: searchEnabled.value,
+    // The only shipped workspace is for clinicians. Keep the API field so a future
+    // patient-facing surface can opt into its own policy without reviving a UI toggle.
+    audienceMode: 'clinician', thinkingLevel: thinkingLevel.value, searchEnabled: searchEnabled.value,
   }))
   const applyTheme = () => {
     const dark = themeMode.value === 'dark' ||
@@ -39,5 +40,5 @@ export const usePreferencesStore = defineStore('preferences', () => {
     provider.value = config.default_provider
     model.value = config.default_model
   }
-  return { audienceMode, thinkingLevel, searchEnabled, provider, model, themeMode, snapshot, applyTheme, applyRuntimeConfig }
+  return { thinkingLevel, searchEnabled, provider, model, themeMode, snapshot, applyTheme, applyRuntimeConfig }
 })
