@@ -14,6 +14,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
+import { contentText } from "@earendil-works/pi-ai";
 import { clampThinkingLevel, cleanupSessionResources, getSupportedThinkingLevels, isContextOverflow, isRetryableAssistantError, modelsAreEqual, resetApiProviders, streamSimple, } from "@earendil-works/pi-ai/compat";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.js";
 import { stripFrontmatter } from "../utils/frontmatter.js";
@@ -35,6 +36,7 @@ import { buildSystemPrompt } from "./system-prompt.js";
 import { createLocalBashOperations } from "./tools/bash.js";
 import { createAllToolDefinitions } from "./tools/index.js";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.js";
+import { addUsageToTotals, createUsageTotals } from "./usage-totals.js";
 /**
  * Parse a skill block from message text.
  * Returns null if the text doesn't contain a skill block.
@@ -100,7 +102,7 @@ export class AgentSession {
     _retryAbortController = undefined;
     _retryAttempt = 0;
     // Bash execution state
-    _bashAbortController = undefined;
+    _bashAbortControllers = new Set();
     _pendingBashMessages = [];
     // Extension system
     _extensionRunner;
@@ -172,7 +174,7 @@ export class AgentSession {
             }
             throw error;
         }
-        if (result?.auth.apiKey) {
+        if (result && (result.auth.apiKey || result.auth.headers)) {
             return {
                 apiKey: result.auth.apiKey,
                 headers: withoutDeletedHeaders(result.auth.headers),
@@ -188,7 +190,7 @@ export class AgentSession {
         throw new Error(formatNoApiKeyFoundMessage(model.provider));
     }
     async _getSummarizationRequestAuth(model) {
-        if (this.agent.streamFn === streamSimple) {
+        if (this.agent.streamFunction === streamSimple) {
             return this._getRequiredRequestAuth(model);
         }
         try {
@@ -243,6 +245,7 @@ export class AgentSession {
                 content: result.content,
                 details: result.details,
                 isError,
+                usage: result.usage,
             });
             if (!hookResult) {
                 return undefined;
@@ -251,6 +254,7 @@ export class AgentSession {
                 content: hookResult.content,
                 details: hookResult.details,
                 isError: hookResult.isError ?? isError,
+                usage: hookResult.usage,
             };
         };
     }
@@ -325,7 +329,7 @@ export class AgentSession {
         // This ensures the UI sees the updated queue state
         if (event.type === "message_start" && event.message.role === "user") {
             this._overflowRecoveryAttempted = false;
-            const messageText = this._getUserMessageText(event.message);
+            const messageText = contentText(event.message.content, "");
             if (messageText) {
                 // Check steering queue first
                 const steeringIndex = this._steeringMessages.indexOf(messageText);
@@ -393,16 +397,6 @@ export class AgentSession {
             }
         }
         return false;
-    }
-    /** Extract text content from a message */
-    _getUserMessageText(message) {
-        if (message.role !== "user")
-            return "";
-        const content = message.content;
-        if (typeof content === "string")
-            return content;
-        const textBlocks = content.filter((c) => c.type === "text");
-        return textBlocks.map((c) => c.text).join("");
     }
     /** Find the last assistant message in agent state (including aborted ones) */
     _findLastAssistantMessage() {
@@ -1414,26 +1408,29 @@ export class AgentSession {
             let summary;
             let firstKeptEntryId;
             let tokensBefore;
+            let usage;
             let details;
             if (extensionCompaction) {
                 // Extension provided compaction content
                 summary = extensionCompaction.summary;
                 firstKeptEntryId = extensionCompaction.firstKeptEntryId;
                 tokensBefore = extensionCompaction.tokensBefore;
+                usage = extensionCompaction.usage;
                 details = extensionCompaction.details;
             }
             else {
                 // Generate compaction result
-                const result = await compact(preparation, this.model, apiKey, headers, customInstructions, this._compactionAbortController.signal, this.thinkingLevel, this.agent.streamFn, env);
+                const result = await compact(preparation, this.model, apiKey, headers, customInstructions, this._compactionAbortController.signal, this.thinkingLevel, this.agent.streamFunction, env, this.settingsManager.getRetrySettings(), this._summarizationRetryCallbacks({ source: "compaction", reason: "manual" }));
                 summary = result.summary;
                 firstKeptEntryId = result.firstKeptEntryId;
                 tokensBefore = result.tokensBefore;
+                usage = result.usage;
                 details = result.details;
             }
             if (this._compactionAbortController.signal.aborted) {
                 throw new Error("Compaction cancelled");
             }
-            this.sessionManager.appendCompaction(summary, firstKeptEntryId, tokensBefore, details, fromExtension);
+            this.sessionManager.appendCompaction(summary, firstKeptEntryId, tokensBefore, details, fromExtension, usage);
             const newEntries = this.sessionManager.getEntries();
             const sessionContext = this.sessionManager.buildSessionContext();
             this.agent.state.messages = sessionContext.messages;
@@ -1454,6 +1451,7 @@ export class AgentSession {
                 firstKeptEntryId,
                 tokensBefore,
                 estimatedTokensAfter,
+                usage,
                 details,
             };
             this._emit({
@@ -1600,13 +1598,8 @@ export class AgentSession {
             let apiKey;
             let headers;
             let env;
-            if (this.agent.streamFn === streamSimple) {
-                const authResult = await this._modelRuntime.getAuth(this.model);
-                if (!authResult?.auth.apiKey)
-                    return false;
-                apiKey = authResult.auth.apiKey;
-                headers = withoutDeletedHeaders(authResult.auth.headers);
-                env = authResult.env;
+            if (this.agent.streamFunction === streamSimple) {
+                ({ apiKey, headers, env } = await this._getRequiredRequestAuth(this.model));
             }
             else {
                 ({ apiKey, headers, env } = await this._getSummarizationRequestAuth(this.model));
@@ -1649,20 +1642,23 @@ export class AgentSession {
             let summary;
             let firstKeptEntryId;
             let tokensBefore;
+            let usage;
             let details;
             if (extensionCompaction) {
                 // Extension provided compaction content
                 summary = extensionCompaction.summary;
                 firstKeptEntryId = extensionCompaction.firstKeptEntryId;
                 tokensBefore = extensionCompaction.tokensBefore;
+                usage = extensionCompaction.usage;
                 details = extensionCompaction.details;
             }
             else {
                 // Generate compaction result
-                const compactResult = await compact(preparation, this.model, apiKey, headers, undefined, this._autoCompactionAbortController.signal, this.thinkingLevel, this.agent.streamFn, env);
+                const compactResult = await compact(preparation, this.model, apiKey, headers, undefined, this._autoCompactionAbortController.signal, this.thinkingLevel, this.agent.streamFunction, env, this.settingsManager.getRetrySettings(), this._summarizationRetryCallbacks({ source: "compaction", reason }));
                 summary = compactResult.summary;
                 firstKeptEntryId = compactResult.firstKeptEntryId;
                 tokensBefore = compactResult.tokensBefore;
+                usage = compactResult.usage;
                 details = compactResult.details;
             }
             if (this._autoCompactionAbortController.signal.aborted) {
@@ -1675,7 +1671,7 @@ export class AgentSession {
                 });
                 return false;
             }
-            this.sessionManager.appendCompaction(summary, firstKeptEntryId, tokensBefore, details, fromExtension);
+            this.sessionManager.appendCompaction(summary, firstKeptEntryId, tokensBefore, details, fromExtension, usage);
             const newEntries = this.sessionManager.getEntries();
             const sessionContext = this.sessionManager.buildSessionContext();
             this.agent.state.messages = sessionContext.messages;
@@ -1696,6 +1692,7 @@ export class AgentSession {
                 firstKeptEntryId,
                 tokensBefore,
                 estimatedTokensAfter,
+                usage,
                 details,
             };
             this._emit({ type: "compaction_end", reason, result, aborted: false, willRetry });
@@ -1895,6 +1892,7 @@ export class AgentSession {
             setThinkingLevel: (level) => this.setThinkingLevel(level),
         }, {
             getModel: () => this.model,
+            getScopedModels: () => this._scopedModels,
             isIdle: () => this.isIdle,
             isProjectTrusted: () => this.settingsManager.isProjectTrusted(),
             getSignal: () => this.agent.signal,
@@ -1927,6 +1925,10 @@ export class AgentSession {
         }, {
             registerProvider: (name, config) => {
                 this._modelRuntime.registerProvider(name, config);
+                this._refreshCurrentModelFromRegistry();
+            },
+            registerNativeProvider: (provider) => {
+                this._modelRuntime.registerNativeProvider(provider);
                 this._refreshCurrentModelFromRegistry();
             },
             unregisterProvider: (name) => {
@@ -2083,6 +2085,34 @@ export class AgentSession {
         return isRetryableAssistantError(message);
     }
     /**
+     * Retry policy + callbacks shared by compaction and branch-summary summarization calls.
+     * Uses the same `settings.retry` budget/backoff as agent-turn retries so a single transient
+     * stream drop no longer fails the whole operation. `source` carries the context
+     * the TUI needs to render the retry and recreate the underlying indicator.
+     */
+    _summarizationRetryCallbacks(source) {
+        return {
+            onRetryScheduled: (attempt, maxAttempts, delayMs, errorMessage) => {
+                this._emit({
+                    type: "summarization_retry_scheduled",
+                    attempt,
+                    maxAttempts,
+                    delayMs,
+                    errorMessage,
+                });
+            },
+            onRetryAttemptStart: () => {
+                this._emit({
+                    type: "summarization_retry_attempt_start",
+                    ...source,
+                });
+            },
+            onRetryFinished: () => {
+                this._emit({ type: "summarization_retry_finished" });
+            },
+        };
+    }
+    /**
      * Prepare a retryable error for continuation with exponential backoff.
      * @returns true if the caller should continue the agent, false otherwise
      */
@@ -2161,24 +2191,29 @@ export class AgentSession {
      * @param command The bash command to execute
      * @param onChunk Optional streaming callback for output
      * @param options.excludeFromContext If true, command output won't be sent to LLM (!! prefix)
+     * @param options.id Optional identifier included in bash execution update events
      * @param options.operations Custom BashOperations for remote execution
      */
     async executeBash(command, onChunk, options) {
-        this._bashAbortController = new AbortController();
+        const abortController = new AbortController();
+        this._bashAbortControllers.add(abortController);
         // Apply command prefix if configured (e.g., "shopt -s expand_aliases" for alias support)
         const prefix = this.settingsManager.getShellCommandPrefix();
         const shellPath = this.settingsManager.getShellPath();
         const resolvedCommand = prefix ? `${prefix}\n${command}` : command;
         try {
             const result = await executeBashWithOperations(resolvedCommand, this.sessionManager.getCwd(), options?.operations ?? createLocalBashOperations({ shellPath }), {
-                onChunk,
-                signal: this._bashAbortController.signal,
+                onChunk: (delta) => {
+                    onChunk?.(delta);
+                    this._emit({ type: "bash_execution_update", id: options?.id, delta });
+                },
+                signal: abortController.signal,
             });
             this.recordBashResult(command, result, options);
             return result;
         }
         finally {
-            this._bashAbortController = undefined;
+            this._bashAbortControllers.delete(abortController);
         }
     }
     /**
@@ -2213,11 +2248,13 @@ export class AgentSession {
      * Cancel running bash command.
      */
     abortBash() {
-        this._bashAbortController?.abort();
+        for (const abortController of [...this._bashAbortControllers]) {
+            abortController.abort();
+        }
     }
     /** Whether a bash command is currently running */
     get isBashRunning() {
-        return this._bashAbortController !== undefined;
+        return this._bashAbortControllers.size > 0;
     }
     /** Whether there are pending bash messages waiting to be flushed */
     get hasPendingBashMessages() {
@@ -2265,6 +2302,9 @@ export class AgentSession {
      * @returns Result with editorText (if user message) and cancelled status
      */
     async navigateTree(targetId, options = {}) {
+        if (this.isStreaming) {
+            throw new Error("Wait for the current response to finish before navigating the session tree.");
+        }
         const oldLeafId = this.sessionManager.getLeafId();
         // No-op if already at target
         if (targetId === oldLeafId) {
@@ -2327,6 +2367,7 @@ export class AgentSession {
             // Run default summarizer if needed
             let summaryText;
             let summaryDetails;
+            let summaryUsage;
             if (options.summarize && entriesToSummarize.length > 0 && !extensionSummary) {
                 const model = this.model;
                 const { apiKey, headers, env } = await this._getSummarizationRequestAuth(model);
@@ -2340,7 +2381,9 @@ export class AgentSession {
                     customInstructions,
                     replaceInstructions,
                     reserveTokens: branchSummarySettings.reserveTokens,
-                    streamFn: this.agent.streamFn,
+                    streamFn: this.agent.streamFunction,
+                    retry: this.settingsManager.getRetrySettings(),
+                    callbacks: this._summarizationRetryCallbacks({ source: "branchSummary" }),
                 });
                 if (result.aborted) {
                     return { cancelled: true, aborted: true };
@@ -2349,6 +2392,7 @@ export class AgentSession {
                     throw new Error(result.error);
                 }
                 summaryText = result.summary;
+                summaryUsage = result.usage;
                 summaryDetails = {
                     readFiles: result.readFiles || [],
                     modifiedFiles: result.modifiedFiles || [],
@@ -2357,6 +2401,7 @@ export class AgentSession {
             else if (extensionSummary) {
                 summaryText = extensionSummary.summary;
                 summaryDetails = extensionSummary.details;
+                summaryUsage = extensionSummary.usage;
             }
             // Determine the new leaf position based on target type
             let newLeafId;
@@ -2364,18 +2409,12 @@ export class AgentSession {
             if (targetEntry.type === "message" && targetEntry.message.role === "user") {
                 // User message: leaf = parent (null if root), text goes to editor
                 newLeafId = targetEntry.parentId;
-                editorText = this._extractUserMessageText(targetEntry.message.content);
+                editorText = contentText(targetEntry.message.content, "");
             }
             else if (targetEntry.type === "custom_message") {
                 // Custom message: leaf = parent (null if root), text goes to editor
                 newLeafId = targetEntry.parentId;
-                editorText =
-                    typeof targetEntry.content === "string"
-                        ? targetEntry.content
-                        : targetEntry.content
-                            .filter((c) => c.type === "text")
-                            .map((c) => c.text)
-                            .join("");
+                editorText = contentText(targetEntry.content, "");
             }
             else {
                 // Non-user message: leaf = selected node
@@ -2386,7 +2425,7 @@ export class AgentSession {
             let summaryEntry;
             if (summaryText) {
                 // Create summary at target position (can be null for root)
-                const summaryId = this.sessionManager.branchWithSummary(newLeafId, summaryText, summaryDetails, fromExtension);
+                const summaryId = this.sessionManager.branchWithSummary(newLeafId, summaryText, summaryDetails, fromExtension, summaryUsage);
                 summaryEntry = this.sessionManager.getEntry(summaryId);
                 // Attach label to the summary entry
                 if (label) {
@@ -2434,23 +2473,12 @@ export class AgentSession {
                 continue;
             if (entry.message.role !== "user")
                 continue;
-            const text = this._extractUserMessageText(entry.message.content);
+            const text = contentText(entry.message.content, "");
             if (text) {
                 result.push({ entryId: entry.id, text });
             }
         }
         return result;
-    }
-    _extractUserMessageText(content) {
-        if (typeof content === "string")
-            return content;
-        if (Array.isArray(content)) {
-            return content
-                .filter((c) => c.type === "text")
-                .map((c) => c.text)
-                .join("");
-        }
-        return "";
     }
     /**
      * Get session statistics. Aggregates over ALL session entries (including
@@ -2463,12 +2491,11 @@ export class AgentSession {
         let toolResults = 0;
         let totalMessages = 0;
         let toolCalls = 0;
-        let totalInput = 0;
-        let totalOutput = 0;
-        let totalCacheRead = 0;
-        let totalCacheWrite = 0;
-        let totalCost = 0;
+        const usageTotals = createUsageTotals();
         for (const entry of this.sessionManager.getEntries()) {
+            if ((entry.type === "branch_summary" || entry.type === "compaction") && entry.usage) {
+                addUsageToTotals(usageTotals, entry.usage);
+            }
             if (entry.type !== "message")
                 continue;
             totalMessages++;
@@ -2478,6 +2505,9 @@ export class AgentSession {
             }
             else if (message.role === "toolResult") {
                 toolResults++;
+                if (message.usage) {
+                    addUsageToTotals(usageTotals, message.usage);
+                }
             }
             else if (message.role === "assistant") {
                 assistantMessages++;
@@ -2485,12 +2515,7 @@ export class AgentSession {
                 if (Array.isArray(assistantMsg.content)) {
                     toolCalls += assistantMsg.content.filter((c) => c.type === "toolCall").length;
                 }
-                const usage = assistantMsg.usage;
-                totalInput += usage.input;
-                totalOutput += usage.output;
-                totalCacheRead += usage.cacheRead;
-                totalCacheWrite += usage.cacheWrite;
-                totalCost += usage.cost.total;
+                addUsageToTotals(usageTotals, assistantMsg.usage);
             }
         }
         return {
@@ -2502,13 +2527,13 @@ export class AgentSession {
             toolResults,
             totalMessages,
             tokens: {
-                input: totalInput,
-                output: totalOutput,
-                cacheRead: totalCacheRead,
-                cacheWrite: totalCacheWrite,
-                total: totalInput + totalOutput + totalCacheRead + totalCacheWrite,
+                input: usageTotals.input,
+                output: usageTotals.output,
+                cacheRead: usageTotals.cacheRead,
+                cacheWrite: usageTotals.cacheWrite,
+                total: usageTotals.input + usageTotals.output + usageTotals.cacheRead + usageTotals.cacheWrite,
             },
-            cost: totalCost,
+            cost: usageTotals.cost,
             contextUsage: this.getContextUsage(),
         };
     }

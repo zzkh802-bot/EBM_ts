@@ -15,7 +15,7 @@ const router = useRouter()
       <h1 id="entry-title">你想从哪里开始？</h1>
       <p class="entry-lede">为就医前的表达做准备，或进入临床循证工作台。</p>
       <div class="entry-choices">
-        <button class="entry-choice clinician" type="button" @click="router.push('/clinician/evidence')">
+        <button class="entry-choice clinician" type="button" @click="router.push('/clinician')">
           <span class="entry-choice-icon" aria-hidden="true">⌁</span>
           <span class="entry-choice-overline">循证研究</span>
           <strong>我是医生</strong>

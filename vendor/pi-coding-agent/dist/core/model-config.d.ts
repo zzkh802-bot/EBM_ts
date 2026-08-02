@@ -86,6 +86,7 @@ declare const ModelDefinitionSchema: Type.TObject<{
             only: Type.TOptional<Type.TArray<Type.TString>>;
             order: Type.TOptional<Type.TArray<Type.TString>>;
         }>>;
+        supportsOpenAIGrammarTools: Type.TOptional<Type.TBoolean>;
         supportsStrictMode: Type.TOptional<Type.TBoolean>;
         sendSessionAffinityHeaders: Type.TOptional<Type.TBoolean>;
         deferredToolsMode: Type.TOptional<Type.TLiteral<"kimi">>;
@@ -95,13 +96,18 @@ declare const ModelDefinitionSchema: Type.TObject<{
         supportsDeveloperRole: Type.TOptional<Type.TBoolean>;
         sessionAffinityFormat: Type.TOptional<Type.TUnion<[Type.TLiteral<"openai">, Type.TLiteral<"openai-nosession">, Type.TLiteral<"openrouter">]>>;
         supportsLongCacheRetention: Type.TOptional<Type.TBoolean>;
+        supportsStrictMode: Type.TOptional<Type.TBoolean>;
+        supportsOpenAIGrammarTools: Type.TOptional<Type.TBoolean>;
         supportsToolSearch: Type.TOptional<Type.TBoolean>;
     }>, Type.TObject<{
         supportsEagerToolInputStreaming: Type.TOptional<Type.TBoolean>;
         supportsLongCacheRetention: Type.TOptional<Type.TBoolean>;
         sendSessionAffinityHeaders: Type.TOptional<Type.TBoolean>;
         supportsCacheControlOnTools: Type.TOptional<Type.TBoolean>;
+        supportsTemperature: Type.TOptional<Type.TBoolean>;
         forceAdaptiveThinking: Type.TOptional<Type.TBoolean>;
+        allowEmptySignature: Type.TOptional<Type.TBoolean>;
+        supportsStrictTools: Type.TOptional<Type.TBoolean>;
         supportsToolReferences: Type.TOptional<Type.TBoolean>;
     }>]>>;
 }>;
@@ -188,6 +194,7 @@ declare const ModelOverrideSchema: Type.TObject<{
             only: Type.TOptional<Type.TArray<Type.TString>>;
             order: Type.TOptional<Type.TArray<Type.TString>>;
         }>>;
+        supportsOpenAIGrammarTools: Type.TOptional<Type.TBoolean>;
         supportsStrictMode: Type.TOptional<Type.TBoolean>;
         sendSessionAffinityHeaders: Type.TOptional<Type.TBoolean>;
         deferredToolsMode: Type.TOptional<Type.TLiteral<"kimi">>;
@@ -197,13 +204,18 @@ declare const ModelOverrideSchema: Type.TObject<{
         supportsDeveloperRole: Type.TOptional<Type.TBoolean>;
         sessionAffinityFormat: Type.TOptional<Type.TUnion<[Type.TLiteral<"openai">, Type.TLiteral<"openai-nosession">, Type.TLiteral<"openrouter">]>>;
         supportsLongCacheRetention: Type.TOptional<Type.TBoolean>;
+        supportsStrictMode: Type.TOptional<Type.TBoolean>;
+        supportsOpenAIGrammarTools: Type.TOptional<Type.TBoolean>;
         supportsToolSearch: Type.TOptional<Type.TBoolean>;
     }>, Type.TObject<{
         supportsEagerToolInputStreaming: Type.TOptional<Type.TBoolean>;
         supportsLongCacheRetention: Type.TOptional<Type.TBoolean>;
         sendSessionAffinityHeaders: Type.TOptional<Type.TBoolean>;
         supportsCacheControlOnTools: Type.TOptional<Type.TBoolean>;
+        supportsTemperature: Type.TOptional<Type.TBoolean>;
         forceAdaptiveThinking: Type.TOptional<Type.TBoolean>;
+        allowEmptySignature: Type.TOptional<Type.TBoolean>;
+        supportsStrictTools: Type.TOptional<Type.TBoolean>;
         supportsToolReferences: Type.TOptional<Type.TBoolean>;
     }>]>>;
 }>;
@@ -268,6 +280,7 @@ declare const ProviderConfigSchema: Type.TObject<{
             only: Type.TOptional<Type.TArray<Type.TString>>;
             order: Type.TOptional<Type.TArray<Type.TString>>;
         }>>;
+        supportsOpenAIGrammarTools: Type.TOptional<Type.TBoolean>;
         supportsStrictMode: Type.TOptional<Type.TBoolean>;
         sendSessionAffinityHeaders: Type.TOptional<Type.TBoolean>;
         deferredToolsMode: Type.TOptional<Type.TLiteral<"kimi">>;
@@ -277,13 +290,18 @@ declare const ProviderConfigSchema: Type.TObject<{
         supportsDeveloperRole: Type.TOptional<Type.TBoolean>;
         sessionAffinityFormat: Type.TOptional<Type.TUnion<[Type.TLiteral<"openai">, Type.TLiteral<"openai-nosession">, Type.TLiteral<"openrouter">]>>;
         supportsLongCacheRetention: Type.TOptional<Type.TBoolean>;
+        supportsStrictMode: Type.TOptional<Type.TBoolean>;
+        supportsOpenAIGrammarTools: Type.TOptional<Type.TBoolean>;
         supportsToolSearch: Type.TOptional<Type.TBoolean>;
     }>, Type.TObject<{
         supportsEagerToolInputStreaming: Type.TOptional<Type.TBoolean>;
         supportsLongCacheRetention: Type.TOptional<Type.TBoolean>;
         sendSessionAffinityHeaders: Type.TOptional<Type.TBoolean>;
         supportsCacheControlOnTools: Type.TOptional<Type.TBoolean>;
+        supportsTemperature: Type.TOptional<Type.TBoolean>;
         forceAdaptiveThinking: Type.TOptional<Type.TBoolean>;
+        allowEmptySignature: Type.TOptional<Type.TBoolean>;
+        supportsStrictTools: Type.TOptional<Type.TBoolean>;
         supportsToolReferences: Type.TOptional<Type.TBoolean>;
     }>]>>;
     authHeader: Type.TOptional<Type.TBoolean>;
@@ -373,6 +391,7 @@ declare const ProviderConfigSchema: Type.TObject<{
                 only: Type.TOptional<Type.TArray<Type.TString>>;
                 order: Type.TOptional<Type.TArray<Type.TString>>;
             }>>;
+            supportsOpenAIGrammarTools: Type.TOptional<Type.TBoolean>;
             supportsStrictMode: Type.TOptional<Type.TBoolean>;
             sendSessionAffinityHeaders: Type.TOptional<Type.TBoolean>;
             deferredToolsMode: Type.TOptional<Type.TLiteral<"kimi">>;
@@ -382,13 +401,18 @@ declare const ProviderConfigSchema: Type.TObject<{
             supportsDeveloperRole: Type.TOptional<Type.TBoolean>;
             sessionAffinityFormat: Type.TOptional<Type.TUnion<[Type.TLiteral<"openai">, Type.TLiteral<"openai-nosession">, Type.TLiteral<"openrouter">]>>;
             supportsLongCacheRetention: Type.TOptional<Type.TBoolean>;
+            supportsStrictMode: Type.TOptional<Type.TBoolean>;
+            supportsOpenAIGrammarTools: Type.TOptional<Type.TBoolean>;
             supportsToolSearch: Type.TOptional<Type.TBoolean>;
         }>, Type.TObject<{
             supportsEagerToolInputStreaming: Type.TOptional<Type.TBoolean>;
             supportsLongCacheRetention: Type.TOptional<Type.TBoolean>;
             sendSessionAffinityHeaders: Type.TOptional<Type.TBoolean>;
             supportsCacheControlOnTools: Type.TOptional<Type.TBoolean>;
+            supportsTemperature: Type.TOptional<Type.TBoolean>;
             forceAdaptiveThinking: Type.TOptional<Type.TBoolean>;
+            allowEmptySignature: Type.TOptional<Type.TBoolean>;
+            supportsStrictTools: Type.TOptional<Type.TBoolean>;
             supportsToolReferences: Type.TOptional<Type.TBoolean>;
         }>]>>;
     }>>>;
@@ -475,6 +499,7 @@ declare const ProviderConfigSchema: Type.TObject<{
                 only: Type.TOptional<Type.TArray<Type.TString>>;
                 order: Type.TOptional<Type.TArray<Type.TString>>;
             }>>;
+            supportsOpenAIGrammarTools: Type.TOptional<Type.TBoolean>;
             supportsStrictMode: Type.TOptional<Type.TBoolean>;
             sendSessionAffinityHeaders: Type.TOptional<Type.TBoolean>;
             deferredToolsMode: Type.TOptional<Type.TLiteral<"kimi">>;
@@ -484,13 +509,18 @@ declare const ProviderConfigSchema: Type.TObject<{
             supportsDeveloperRole: Type.TOptional<Type.TBoolean>;
             sessionAffinityFormat: Type.TOptional<Type.TUnion<[Type.TLiteral<"openai">, Type.TLiteral<"openai-nosession">, Type.TLiteral<"openrouter">]>>;
             supportsLongCacheRetention: Type.TOptional<Type.TBoolean>;
+            supportsStrictMode: Type.TOptional<Type.TBoolean>;
+            supportsOpenAIGrammarTools: Type.TOptional<Type.TBoolean>;
             supportsToolSearch: Type.TOptional<Type.TBoolean>;
         }>, Type.TObject<{
             supportsEagerToolInputStreaming: Type.TOptional<Type.TBoolean>;
             supportsLongCacheRetention: Type.TOptional<Type.TBoolean>;
             sendSessionAffinityHeaders: Type.TOptional<Type.TBoolean>;
             supportsCacheControlOnTools: Type.TOptional<Type.TBoolean>;
+            supportsTemperature: Type.TOptional<Type.TBoolean>;
             forceAdaptiveThinking: Type.TOptional<Type.TBoolean>;
+            allowEmptySignature: Type.TOptional<Type.TBoolean>;
+            supportsStrictTools: Type.TOptional<Type.TBoolean>;
             supportsToolReferences: Type.TOptional<Type.TBoolean>;
         }>]>>;
     }>>>;

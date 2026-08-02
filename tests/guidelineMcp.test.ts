@@ -144,6 +144,32 @@ describe("guideline MCP", () => {
     expect(result.items[0]!.availableViewTypes).toEqual(["recommendation_summary", "pico_questions"]);
   });
 
+  it("cleans markup inside search summaries before exposing it to the model", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-guideline-"));
+    const client = {
+      callTool: async () => ({
+        text: JSON.stringify([{
+          doc_id: "g1",
+          title: "Stroke guideline",
+          abstract: "<p>First recommendation.</p><p>Second paragraph.</p>",
+          view_type: "recommendation_summary",
+          document_views: {
+            recommendation_summary: "<div><strong>Recommendation:</strong><br>Use alteplase when eligible.</div>",
+          },
+        }]),
+        raw: {},
+      }),
+    };
+
+    const result = await searchGuidelines({ sessionDir, query: "stroke alteplase", client });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.items[0]!.abstract).toBe("First recommendation.\n\nSecond paragraph.");
+    expect(result.items[0]!.matchedViewContent).toContain("**Recommendation:**");
+    expect(result.archive.content).not.toMatch(/<\/?(?:p|div|strong|br)\b/i);
+  });
+
   it("archives search and read output before returning it", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-guideline-"));
     const calls: string[] = [];
@@ -174,6 +200,7 @@ describe("guideline MCP", () => {
       const archived = await readFile(path.join(sessionDir, read.archive.path), "utf8");
       expect(archived).toContain("Recommendation text");
       expect(archived).not.toContain("doc_id");
+      expect(archived).toContain('source_url: "mcp://guideline/g1"');
     }
   });
 

@@ -25,10 +25,10 @@ const referenceEntries = computed(() => Object.values(references.value).sort((a,
         <span>{{ referenceEntries.length }} 条</span>
       </header>
       <div class="reference-panel-body">
-        <article v-for="reference in referenceEntries" :key="reference.number" class="reference-card">
+        <button v-for="reference in referenceEntries" :key="reference.number" class="reference-card" type="button" :aria-label="`核验引用 ${reference.number}`" @click="emit('citation', reference)">
           <span class="reference-card-index">[{{ reference.number }}]</span>
-          <p>{{ reference.content }}<template v-if="reference.url && !reference.content.includes(reference.url)"> <a :href="reference.url" target="_blank" rel="noreferrer noopener">查看原文</a></template></p>
-        </article>
+          <p>{{ reference.content }}</p>
+        </button>
       </div>
     </section>
   </section>

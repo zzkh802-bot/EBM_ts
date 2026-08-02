@@ -114,7 +114,7 @@ const newFreeChat = () => intake.create('free_chat')
   <main class="patient-page">
     <header class="patient-top">
       <button class="patient-brand" type="button" aria-label="返回入口" @click="router.push('/')"><span>循</span>循医</button>
-      <div><small>{{ freeChat ? '健康自由问答' : '就诊前准备' }}</small><button type="button" @click="router.push('/clinician/evidence')">医生入口</button></div>
+      <div><small>{{ freeChat ? '健康自由问答' : '就诊前准备' }}</small><button type="button" @click="router.push('/clinician')">医生入口</button></div>
     </header>
     <div class="patient-layout" :class="{ 'free-chat': freeChat }">
       <PatientSessionRail :busy="busy" @profile="profileDialogOpen = true" @new-visit="newVisit" @free-chat="newFreeChat" />

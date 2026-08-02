@@ -2,8 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { workspaceService } from '../services'
-import { useKnowledgeStore } from '../stores'
+import { useKnowledgeStore, useUiStore } from '../stores'
 import type { WorkspaceAsset } from '../types/domain'
+import type { Reference } from '../utils/report'
 import ReportRenderer from '../components/report/ReportRenderer.vue'
 
 type ResearchArchive = {
@@ -17,6 +18,7 @@ type ResearchArchive = {
 }
 
 const knowledge = useKnowledgeStore()
+const ui = useUiStore()
 const router = useRouter()
 const search = ref('')
 const selectedArchive = ref<ResearchArchive | null>(null)
@@ -83,6 +85,13 @@ const openDocument = async (archive: ResearchArchive, file: WorkspaceAsset) => {
 const openArchive = (archive: ResearchArchive) => {
   const file = archive.report || archive.files[0]
   if (file) void openDocument(archive, file)
+}
+const openCitation = (reference: Reference) => {
+  if (!selectedArchive.value || selectedFile.value?.kind !== 'report') {
+    ui.openCitation(reference)
+    return
+  }
+  ui.openCitation(reference, { sessionId: selectedArchive.value.sessionId, reportPath: selectedFile.value.path })
 }
 
 onMounted(() => { void knowledge.loadWorkspaceAssets() })
@@ -152,7 +161,7 @@ onMounted(() => { void knowledge.loadWorkspaceAssets() })
       </nav>
       <p v-if="documentLoading" class="asset-reader-state">正在打开文档…</p>
       <p v-else-if="documentError" class="asset-reader-state error">{{ documentError }}</p>
-      <ReportRenderer v-else-if="documentContent" :markdown="documentContent" audience="clinician" />
+      <ReportRenderer v-else-if="documentContent" :markdown="documentContent" audience="clinician" @citation="openCitation" />
     </section>
   </section>
 </template>

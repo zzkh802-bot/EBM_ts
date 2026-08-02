@@ -102,7 +102,7 @@ describe("source archive", () => {
     expect(output.text).toContain("Preview truncated at 5000 bytes");
     expect(output.text).toContain("Continue without gaps");
     expect(output.text).toMatch(/Continue without gaps.*offset=\d+, limit=200/);
-    expect(output.text).toContain("For evidence_add, use this readable archive path with the exact 1-based offset/limit");
+    expect(output.text).toContain("For evidence_add, use this readable archive path and copy a minimal, sufficient, continuous verbatim quote");
   });
 
   it("normalizes content before hashing, archiving, and returning model-visible text", async () => {
@@ -117,5 +117,23 @@ describe("source archive", () => {
     expect(record.content.split("\n").length).toBeGreaterThan(1);
     expect(record.lines).toBe(record.content.split("\n").length);
     expect(saved.split("\n").slice(record.bodyLineStart - 1).join("\n")).toBe(record.content);
+  });
+
+  it("returns exactly the same cleaned markup that it persists as the citation body", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
+    const record = await archiveSource({
+      sessionDir,
+      kind: "read",
+      title: "HTML guideline",
+      contentFormat: "html",
+      content: '<section><h2>Recommendation</h2><p>Use treatment when BP &lt;185/110 mmHg.</p><table><tr><th>Group</th><th>Dose</th></tr><tr><td>Adult</td><td>5 mg</td></tr></table></section>',
+    });
+    const saved = await readFile(path.join(sessionDir, record.path), "utf8");
+    const archivedBody = saved.split("\n").slice(record.bodyLineStart - 1).join("\n");
+
+    expect(record.content).toBe(archivedBody);
+    expect(record.content).toContain("## Recommendation");
+    expect(record.content).toContain("| Adult");
+    expect(record.content).not.toContain("<section>");
   });
 });

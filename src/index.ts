@@ -3,7 +3,7 @@ export type { CompactionArtifactInput } from "./tools/compactionArtifact.js";
 export { registerEbmTools } from "./extensions/ebmTools.js";
 export { registerEbmProviders, XINQIONG_PROVIDER_ID } from "./providers/providerCatalog.js";
 export { archiveSource, stableArchiveName } from "./tools/archive.js";
-export { normalizeMarkdown } from "./tools/markdown.js";
+export { normalizeMarkdown, preprocessExternalContent } from "./tools/markdown.js";
 export type { MarkdownNormalizationOptions } from "./tools/markdown.js";
 export { addEvidence, listEvidence, readEvidence, renderEvidenceMarkdown, verifyEvidence } from "./tools/evidence.js";
 export { isPrivateAddress, jinaReaderUrl, validateOutboundUrl } from "./tools/urlSafety.js";
@@ -24,5 +24,5 @@ export type { ResearchFrameInput, ResearchFrameRecord } from "./tools/researchFr
 export { GuidelineMcpClient, readGuideline, retrieveGuidelines, searchGuidelines } from "./tools/guidelineMcp.js";
 export type { GuidelineClient, GuidelineReadResult, GuidelineResult, GuidelineRetrieveItem, GuidelineRetrieveResult, GuidelineSearchItem, GuidelineToolResult } from "./tools/guidelineMcp.js";
 export type { EvidenceNode, EvidenceProvenance, EvidenceRelation } from "./tools/evidence.js";
-export { createAgentApiServer, createPiCliExecutor, AgentRunStore } from "./server/agentApi.js";
+export { createAgentApiServer, createPiRpcExecutor, AgentRunStore } from "./server/agentApi.js";
 export type { AgentApiServerOptions, AgentExecutionResult, AgentExecutor, AgentRunInput, AgentRunResponse, AgentRunStatus } from "./server/agentApi.js";

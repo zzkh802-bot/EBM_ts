@@ -59,6 +59,11 @@ const startedAt = computed(() => parseTime(props.startedAt))
 const finishedAt = computed(() => parseTime(props.completedAt))
 const elapsed = computed(() => formatDuration((finishedAt.value ?? currentTime.value) - (startedAt.value ?? currentTime.value)))
 const progressUpdates = computed(() => (props.progressUpdates || []).filter((update) => update.text.trim()))
+const progressActivity = computed(() => progressUpdates.value.map((update, index, updates) => {
+  const started = parseTime(update.timestamp)
+  const ended = parseTime(updates[index + 1]?.timestamp) ?? finishedAt.value ?? currentTime.value
+  return { ...update, duration: formatDuration(started === undefined ? undefined : ended - started) }
+}))
 const errors = computed(() => props.trace.filter((item) =>
   ['run.cancelled', 'run.failed', 'model.error', 'research_frame.error'].includes(item.kind || ''),
 ))
@@ -87,23 +92,22 @@ const fallbackCopy = computed(() => {
   return props.pending ? '正在梳理临床问题并准备下一步研究。' : '已形成可回看的研究记录。'
 })
 const hasActivity = computed(() => Boolean(props.pending || errors.value.length || progressUpdates.value.length || toolActivity.value.length))
-const offsetFromStart = (timestamp: string) => formatDuration((parseTime(timestamp) ?? currentTime.value) - (startedAt.value ?? currentTime.value))
 </script>
 
 <template>
   <section v-if="hasActivity" class="research-progress" :class="{ error: errors.length, complete: completed }" aria-label="研究进展">
     <div class="research-progress-head">
       <span>{{ title }}</span>
-      <small>{{ elapsed }}</small>
+      <small>总计 {{ elapsed }}</small>
     </div>
 
     <p class="research-progress-current">{{ latestUpdate || fallbackCopy }}</p>
 
-    <ol v-if="progressUpdates.length" class="research-progress-notes" aria-label="模型研究进展">
-      <li v-for="update in progressUpdates" :key="`${update.timestamp}-${update.text}`">
+    <ol v-if="progressActivity.length" class="research-progress-notes" aria-label="模型研究进展">
+      <li v-for="update in progressActivity" :key="`${update.timestamp}-${update.text}`">
         <i aria-hidden="true" />
         <span>{{ update.text }}</span>
-        <small>{{ offsetFromStart(update.timestamp) }}</small>
+        <small :title="`本阶段用时 ${update.duration}`">{{ update.duration }}</small>
       </li>
     </ol>
 

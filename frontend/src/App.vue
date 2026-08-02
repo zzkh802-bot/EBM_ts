@@ -17,7 +17,8 @@ const moduleName = computed(() => {
 })
 
 const hasConversation = computed(() =>
-  sessions.active.messages.some((message) => message.role === 'user'))
+  route.path.startsWith('/clinician/evidence')
+  && sessions.active.messages.some((message) => message.role === 'user'))
 
 const resolvedTheme = computed(() => {
   if (preferences.themeMode === 'system') {

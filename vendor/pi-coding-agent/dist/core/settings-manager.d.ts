@@ -225,7 +225,7 @@ export declare class SettingsManager {
     getWebSocketConnectTimeoutMs(): number | undefined;
     getHideThinkingBlock(): boolean;
     getShowCacheMissNotices(): boolean;
-    getExternalEditorCommand(): string | undefined;
+    getExternalEditorCommand(): string;
     setHideThinkingBlock(hide: boolean): void;
     setShowCacheMissNotices(show: boolean): void;
     getShellPath(): string | undefined;

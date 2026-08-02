@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { cleanExternalText, normalizeMarkdown } from "./markdown.js";
+import { preprocessExternalContent, type ExternalContentFormat } from "./markdown.js";
 
 export type SourceArchiveResource = {
   path: string;
@@ -14,8 +14,10 @@ export type SourceArchiveInput = {
   kind: "search" | "read" | "upload";
   layout?: "directory" | "file";
   sourceUrl?: string;
+  sourceInstitution?: string;
   title?: string;
   content: string;
+  contentFormat?: ExternalContentFormat;
   resources?: SourceArchiveResource[];
 };
 
@@ -30,6 +32,7 @@ export type SourceArchiveRecord = {
   bodyLineStart: number;
   content: string;
   sourceUrl?: string;
+  sourceInstitution?: string;
   title?: string;
 };
 
@@ -69,6 +72,7 @@ function frontmatter(input: SourceArchiveInput, sha256: string): string {
     `kind: ${input.kind}`,
     `sha256: ${sha256}`,
     ...(input.sourceUrl ? [`source_url: ${JSON.stringify(input.sourceUrl)}`] : []),
+    ...(input.sourceInstitution ? [`source_institution: ${JSON.stringify(input.sourceInstitution)}`] : []),
     ...(input.title ? [`title: ${JSON.stringify(input.title)}`] : []),
     "---",
   ].join("\n")}\n\n`;
@@ -216,7 +220,7 @@ async function archiveReadDirectory(input: SourceArchiveInput, archived: string,
 }
 
 export async function archiveSource(input: SourceArchiveInput): Promise<SourceArchiveRecord> {
-  const content = normalizeMarkdown(cleanExternalText(input.content));
+  const content = preprocessExternalContent(input.content, input.contentFormat ? { format: input.contentFormat } : {});
   const normalizedInput = { ...input, content };
   const sha256 = createHash("sha256").update(content).digest("hex");
   const baseName = stableArchiveName(normalizedInput).replace(/\.md$/, "");
@@ -236,6 +240,7 @@ export async function archiveSource(input: SourceArchiveInput): Promise<SourceAr
     bodyLineStart,
     content,
     ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
+    ...(input.sourceInstitution ? { sourceInstitution: input.sourceInstitution } : {}),
     ...(input.title ? { title: input.title } : {}),
   };
 }

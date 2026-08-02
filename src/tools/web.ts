@@ -39,6 +39,29 @@ function firstMarkdownTitle(markdown: string): string | undefined {
   return title || undefined;
 }
 
+function isAccessVerificationPage(markdown: string): boolean {
+  const text = markdown.toLowerCase();
+  const markers = [
+    "title: just a moment",
+    "requiring captcha",
+    "captcha required",
+    "performing security verification",
+    "verifies you are not a bot",
+    "verify you are human",
+    "enable javascript and cookies to continue",
+    "cf-chl-",
+  ];
+  const matches = markers.reduce((count, marker) => count + Number(text.includes(marker)), 0);
+  return matches >= 2 || (markdown.length < 2_000 && matches >= 1);
+}
+
+function assertSourceContent(markdown: string): void {
+  if (!markdown.trim()) throw new Error("empty Markdown response");
+  if (isAccessVerificationPage(markdown)) {
+    throw new Error("reader returned an access-verification page instead of source content");
+  }
+}
+
 async function request(fetcher: typeof fetch, input: string, init: RequestInit, timeoutMs: number, signal?: AbortSignal): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(new Error(`request timed out after ${timeoutMs}ms`)), timeoutMs);
@@ -84,7 +107,9 @@ export async function readWeb(input: {
     ...(input.sourceLibraryDir ? { sourceLibraryDir: input.sourceLibraryDir } : {}),
     url: safe.url.toString(),
   });
-  if (libraryArchive) return { ok: true, provider: "library", archive: libraryArchive };
+  if (libraryArchive && !isAccessVerificationPage(libraryArchive.content)) {
+    return { ok: true, provider: "library", archive: libraryArchive };
+  }
 
   const fetcher = input.fetcher ?? fetch;
   const timeoutMs = input.timeoutMs ?? 30_000;
@@ -235,7 +260,7 @@ export async function readWeb(input: {
       attempts.push(await responseFailure("jina", response));
     } else {
       const markdown = await response.text();
-      if (!markdown.trim()) throw new Error("empty Markdown response");
+      assertSourceContent(markdown);
       return {
         ok: true,
         provider: "jina",
@@ -263,7 +288,8 @@ export async function readWeb(input: {
       } else {
         const payload = await response.json() as { data?: { markdown?: unknown; metadata?: { title?: unknown } } };
         const markdown = payload.data?.markdown;
-        if (typeof markdown !== "string" || !markdown.trim()) throw new Error("Firecrawl response has no Markdown");
+        if (typeof markdown !== "string") throw new Error("Firecrawl response has no Markdown");
+        assertSourceContent(markdown);
         const title = payload.data?.metadata?.title;
         return {
           ok: true,

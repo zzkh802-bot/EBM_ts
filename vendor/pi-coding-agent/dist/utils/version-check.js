@@ -18,7 +18,7 @@ export function isNewerPackageVersion(candidateVersion, currentVersion) {
     return candidateVersion.trim() !== currentVersion.trim();
 }
 export async function getLatestPiRelease(currentVersion, options = {}) {
-    if (process.env.PI_SKIP_VERSION_CHECK || process.env.PI_OFFLINE)
+    if (process.env.PI_OFFLINE)
         return undefined;
     const response = await fetch(LATEST_VERSION_URL, {
         headers: {
@@ -45,6 +45,8 @@ export async function getLatestPiVersion(currentVersion, options = {}) {
     return (await getLatestPiRelease(currentVersion, options))?.version;
 }
 export async function checkForNewPiVersion(currentVersion) {
+    if (process.env.PI_SKIP_VERSION_CHECK)
+        return undefined;
     try {
         const latestRelease = await getLatestPiRelease(currentVersion);
         if (latestRelease && isNewerPackageVersion(latestRelease.version, currentVersion)) {

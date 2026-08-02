@@ -193,6 +193,26 @@ export interface WorkspaceFileResponse extends WorkspaceFile {
   content: string
 }
 
+export interface CitationEvidenceExcerpt {
+  claim: string
+  quote: string
+  relation: 'supports' | 'partially_supports' | 'refutes'
+  provenance: string
+  confidence: 'low' | 'moderate' | 'high'
+  verified: true
+  source: {
+    title: string
+    institution?: string
+    url: string
+  }
+}
+
+export interface CitationDetailResponse {
+  number: number
+  citation: string
+  evidence: CitationEvidenceExcerpt[]
+}
+
 export interface WorkspaceAsset extends ClinicianDocument {
   id: string
   sessionId: string

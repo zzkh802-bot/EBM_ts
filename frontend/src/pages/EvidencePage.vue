@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { agentService, workspaceService } from '../services'
 import { useAgentRunStore, usePreferencesStore, useSessionsStore, useUiStore } from '../stores'
 import type { AccountConnection, ClinicianDocument, Message, ModeSnapshot, RuntimeConfig } from '../types/domain'
@@ -14,6 +15,8 @@ const preferences = usePreferencesStore()
 const sessions = useSessionsStore()
 const run = useAgentRunStore()
 const ui = useUiStore()
+const route = useRoute()
+const router = useRouter()
 const question = ref('')
 const feed = ref<HTMLElement | null>(null)
 const runtimeConfig = ref<RuntimeConfig | null>(null)
@@ -35,6 +38,9 @@ watch(() => sessions.activeSessionId, () => {
   question.value = ''
   run.queuedGuidance = []
 })
+watch(() => route.path, (path) => {
+  if (path === '/clinician') question.value = ''
+})
 
 const availableModels = computed(() => runtimeConfig.value?.models.filter((item) => item.available) || [])
 const providers = computed(() => availableModels.value.filter((item, index, items) =>
@@ -51,7 +57,9 @@ const primaryActionLabel = computed(() => {
   if (!run.busy) return '开始研究'
   return question.value.trim() ? '加入后续追问' : '停止本轮研究'
 })
-const hasConversation = computed(() => sessions.active.messages.some((message) => message.role === 'user'))
+const homeMode = computed(() => route.path === '/clinician')
+const activeHasConversation = computed(() => sessions.active.messages.some((message) => message.role === 'user'))
+const hasConversation = computed(() => !homeMode.value && activeHasConversation.value)
 const researchCount = computed(() => sessions.active.messages.filter((message) => message.role === 'user').length)
 const sessionStatusLabel = computed(() => ({ draft: '待开始', active: '正在研究', complete: '可继续追踪' })[sessions.active.status])
 const documentKindLabel = (kind: ClinicianDocument['kind']) => kind === 'report' ? '最终报告' : '研究框架'
@@ -126,8 +134,12 @@ const closeConversationFile = () => {
   conversationFileContent.value = ''
   conversationFileError.value = ''
 }
-watch(() => [sessions.activeSessionId, sessions.active.researchSessionId], () => {
+watch(() => [route.path, sessions.activeSessionId, sessions.active.researchSessionId], () => {
   closeConversationFile()
+  if (homeMode.value) {
+    conversationFiles.value = []
+    return
+  }
   void loadConversationFiles()
   void hydrateHistoricalReports()
 }, { immediate: true })
@@ -190,7 +202,7 @@ const cancelConnection = async () => {
 
 watch(() => sessions.active.messages.length, async () => {
   await nextTick()
-  feed.value?.scrollTo({ top: feed.value.scrollHeight, behavior: 'smooth' })
+  feed.value?.scrollTo?.({ top: feed.value.scrollHeight, behavior: 'smooth' })
 })
 
 async function submit(input = question.value, modeOverride?: ModeSnapshot) {
@@ -201,7 +213,10 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
     return
   }
   if (!text) return
-  const localSessionId = sessions.activeSessionId
+  const localSessionId = homeMode.value && activeHasConversation.value
+    ? sessions.create()
+    : sessions.activeSessionId
+  if (homeMode.value) await router.replace('/clinician/evidence')
   question.value = ''
   const mode = modeOverride || { ...preferences.snapshot }
   sessions.beginResearchIn(localSessionId, text)
@@ -290,7 +305,10 @@ const share = async (message: Message) => {
 const retry = (message: Message, detail = '') => submit(`${detail}${message.sourceQuestion || ''}`, {
   audienceMode: message.audienceMode, thinkingLevel: message.thinkingLevel, searchEnabled: message.searchEnabled,
 })
-const openCitation = (reference: Reference) => ui.openCitation(reference)
+const openCitation = (reference: Reference, reportPath?: string) => {
+  const sessionId = sessions.active.researchSessionId
+  ui.openCitation(reference, sessionId && reportPath ? { sessionId, reportPath } : undefined)
+}
 const openWorkspace = async (preferredPath = '') => {
   if (!conversationFiles.value.length) await loadConversationFiles()
   const target = conversationFiles.value.find((file) => file.path === preferredPath)
@@ -458,7 +476,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
                 v-if="message.role === 'assistant' && !message.pending && !message.showMarkdown && !message.reportMarkdown"
                 :markdown="message.content"
                 :audience="message.audienceMode"
-                @citation="openCitation"
+                @citation="openCitation($event, message.reportPath)"
               />
               <pre v-else-if="message.showMarkdown">{{ message.reportMarkdown || message.content }}</pre>
               <section v-else-if="message.role === 'assistant' && message.reportMarkdown" class="final-report" aria-label="正式报告">
@@ -471,19 +489,19 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
                 </header>
                 <section class="model-answer" aria-label="本轮回答摘要">
                   <span>本轮回答摘要</span>
-                  <p>{{ message.content }}</p>
+                  <ReportRenderer
+                    :markdown="message.content"
+                    :audience="message.audienceMode"
+                    @citation="openCitation($event, message.reportPath)"
+                  />
                 </section>
                 <ReportRenderer
                   :markdown="message.reportMarkdown"
                   :audience="message.audienceMode"
-                  @citation="openCitation"
+                  @citation="openCitation($event, message.reportPath)"
                 />
               </section>
               <p v-else>{{ message.content }}</p>
-              <div v-if="message.role === 'assistant' && message.reportMarkdown" class="report-file-link">
-                <span>可在右侧打开最终报告或研究框架。</span>
-                <button type="button" @click="openWorkspace(message.reportPath)">打开最终报告</button>
-              </div>
               <div v-if="message.role === 'assistant' && !message.pending" class="message-actions">
                 <button class="message-action-primary" type="button" @click="focusQuestion">继续追问</button>
                 <button type="button" @click="retry(message, '请用更简洁、适合快速决策的方式回答：')">简化结论</button>
@@ -542,7 +560,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
           v-else-if="conversationFileContent"
           :markdown="conversationFileContent"
           audience="clinician"
-          @citation="openCitation"
+          @citation="openCitation($event, selectedConversationFile.kind === 'report' ? selectedConversationFile.path : undefined)"
         />
       </div>
     </aside>

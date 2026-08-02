@@ -10,17 +10,35 @@ import { initializePiSessionDirectory, piReadableSessionPath } from "../src/exte
 
 describe("EBM Pi extension tools", () => {
   afterEach(() => vi.unstubAllEnvs());
-  it("returns evidence-ready PubMed abstract paths with exact readable windows", () => {
+  it("exposes quote-based evidence parameters without model-authored line coordinates", () => {
+    const tools = new Map<string, { parameters?: { properties?: Record<string, unknown>; required?: string[] } }>();
+    vi.stubEnv("GUIDELINE_MCP_URL", "");
+    registerEbmTools({
+      registerTool: (tool: { name: string; parameters?: { properties?: Record<string, unknown>; required?: string[] } }) => tools.set(tool.name, tool),
+      on: () => undefined,
+      events: { emit: () => undefined },
+    } as never);
+
+    const schema = tools.get("evidence_add")?.parameters;
+    expect(schema?.properties).toHaveProperty("quote");
+    expect(schema?.properties).not.toHaveProperty("offset");
+    expect(schema?.properties).not.toHaveProperty("limit");
+    expect(schema?.required).toContain("quote");
+  });
+
+  it("returns evidence-ready PubMed abstract paths with a canonical quote instruction", () => {
     const output = renderAbstractNavigation("session-1", [{
       path: "sources/read/trial/full.md",
       title: "Trial",
       bodyLineStart: 8,
-      content: "# Trial\n\n## Abstract\n\nResult line one.\nResult line two.\n",
+      content: "# Trial\n\n## Abstract\n\nResult line one.\nResult line two.\n\n## PubMed context\n\nNavigation/context only.\nDOI: 10.1000/test\n",
     }]);
     expect(output).toContain("PMID: unknown");
     expect(output).toContain("Abstract preview: Result line one. Result line two.");
     expect(output).toContain("Readable abstract path: data/sessions/session-1/sources/read/trial/full.md");
-    expect(output).toContain("Exact abstract lines: 12-13");
+    expect(output).toContain("copy a minimal, sufficient, continuous verbatim quote from the archived Abstract section");
+    expect(output).not.toContain("Navigation/context only");
+    expect(output).not.toContain("10.1000/test");
     expect(output).not.toContain("Evidence source_path:");
     expect(output).not.toContain("Source map");
     expect(output).not.toContain("Read any archive window");
@@ -59,7 +77,7 @@ describe("EBM Pi extension tools", () => {
     expect(text).not.toContain("Joanna M Wardlaw");
   });
 
-  it("renders copy-ready evidence_add locations for retrieved candidate material", () => {
+  it("renders copy-ready verbatim material without asking the model to calculate line ranges", () => {
     const text = renderRetrieveCards("Candidates", [{
       title: "Hypertension guideline",
       sourcePath: "sources/read/hypertension.md",
@@ -68,13 +86,12 @@ describe("EBM Pi extension tools", () => {
       candidateMaterial: "Recommendation text.",
     }], (sourcePath) => `data/sessions/s1/${sourcePath}`);
 
-    expect(text).toContain("evidence_add location (copy these values; 1-based):");
-    expect(text).toContain("source_path: data/sessions/s1/sources/read/hypertension.md");
-    expect(text).toContain("offset: 21");
-    expect(text).toContain("limit: 4");
+    expect(text).toContain("readable chunk path: data/sessions/s1/sources/read/hypertension.md");
     expect(text).toContain("candidate material (identical to archived body):");
     expect(text).toContain("candidate materials, not evidence yet");
-    expect(text).toContain("never extend it or replace limit with an arbitrary value");
+    expect(text).toContain("minimal, sufficient, continuous verbatim quote");
+    expect(text).not.toContain("offset:");
+    expect(text).not.toContain("limit:");
   });
 
   it("loads the project extension through Pi's resource loader", async () => {
@@ -131,8 +148,7 @@ describe("EBM Pi extension tools", () => {
       claim: "It works.",
       relation: "supports",
       source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
-      offset: 2,
-      limit: 1,
+      quote: "exact evidence",
     }, undefined, undefined, ctx);
 
     const report = await tools.get("report_write")!.execute("call-2", {
@@ -145,6 +161,30 @@ describe("EBM Pi extension tools", () => {
     expect(report.content[0].text).toContain(`Session workspace: ${workspace}`);
     expect(report.content[0].text).toContain(`Verified report written: ${workspace}/reports/mortality-report.md`);
     expect(report.details).toMatchObject({ readablePath: `${workspace}/reports/mortality-report.md`, sessionWorkspace: workspace });
+  });
+
+  it("returns canonical source candidates through evidence_add when a quote differs slightly", async () => {
+    const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
+    vi.stubEnv("GUIDELINE_MCP_URL", "");
+    registerEbmTools({
+      registerTool: (tool: { name: string; execute: (...args: any[]) => Promise<any> }) => tools.set(tool.name, tool),
+      on: () => undefined,
+      events: { emit: () => undefined },
+    } as never);
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "ebm-pi-tools-"));
+    const sessionId = "session-1";
+    const sessionDir = await initializePiSessionDirectory(cwd, sessionId, { sessionName: "Quote recovery", firstPrompt: "What is the bleeding risk?" });
+    await mkdir(path.join(sessionDir, "sources", "read"), { recursive: true });
+    await writeFile(path.join(sessionDir, "sources", "read", "study.md"), "严重出血年绝对增加率不超过 0.3%，低于卒中风险降低幅度。", "utf8");
+    const ctx = { cwd, sessionManager: { getSessionId: () => sessionId } };
+
+    await expect(tools.get("evidence_add")!.execute("call-1", {
+      question: "What is the bleeding tradeoff?",
+      claim: "The bleeding increase is smaller than the stroke reduction.",
+      relation: "supports",
+      source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
+      quote: "严重出血年绝对增加率约为 0.3%，低于卒中风险降低幅度。",
+    }, undefined, undefined, ctx)).rejects.toThrow(/候选 1[\s\S]*不超过 0\.3%[\s\S]*重试 evidence_add/);
   });
 
   it("saves a failed report draft and finalizes it after local edit", async () => {
@@ -167,16 +207,14 @@ describe("EBM Pi extension tools", () => {
       claim: "Mortality improved.",
       relation: "supports",
       source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
-      offset: 1,
-      limit: 1,
+      quote: "mortality improved",
     }, undefined, undefined, ctx);
     const ev2 = await tools.get("evidence_add")!.execute("call-2", {
       question: "Does it work?",
       claim: "Adverse events improved.",
       relation: "supports",
       source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
-      offset: 2,
-      limit: 1,
+      quote: "adverse events improved",
     }, undefined, undefined, ctx);
 
     const failed = await tools.get("report_write")!.execute("call-3", {
@@ -258,8 +296,7 @@ describe("EBM Pi extension tools", () => {
       claim: "It works.",
       relation: "supports",
       source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
-      offset: 2,
-      limit: 1,
+      quote: "exact evidence",
     }, undefined, undefined, ctx);
 
     expect(result.content[0].text).toContain("Evidence archived");

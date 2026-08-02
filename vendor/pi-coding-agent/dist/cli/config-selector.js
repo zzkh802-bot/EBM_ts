@@ -9,7 +9,7 @@ export async function selectConfig(options) {
     // Initialize theme before showing TUI
     initTheme(options.settingsManager.getTheme(), true);
     return new Promise((resolve) => {
-        const ui = new TUI(new ProcessTerminal());
+        const ui = new TUI(new ProcessTerminal(), undefined, options.agentDir);
         let resolved = false;
         const selector = new ConfigSelectorComponent(options.resolvedPaths, options.settingsManager, options.cwd, options.agentDir, () => {
             if (!resolved) {

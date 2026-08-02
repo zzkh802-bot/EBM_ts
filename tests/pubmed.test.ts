@@ -95,7 +95,7 @@ describe("PubMed archive adapters", () => {
   it("falls back to PMC HTML when PMC XML omits the article body", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-pubmed-"));
     const pmcNoBody = `<?xml version="1.0"?><pmc-articleset><article><!--The publisher of this article does not allow downloading of the full text in XML form.--><front /></article></pmc-articleset>`;
-    const pmcHtml = `<!doctype html><main id="main-content"><article><section class="body main-article-body"><section><h2>Abstract</h2><p>HTML abstract text.</p></section><section><h2>Results</h2><p>The PMC HTML full text reports clinically important outcomes.</p><ul><li>Outcome one improved.</li></ul></section></section></article></main>`;
+    const pmcHtml = `<!doctype html><main id="main-content"><article><section class="body main-article-body"><section><h2>Abstract</h2><p>HTML abstract text.</p></section><section><h2>Results</h2><p>The PMC HTML full text reports clinically important outcomes.</p><ul><li>Outcome one improved.</li></ul><table><tr><th>Outcome</th><th>Risk ratio</th></tr><tr><td>Mortality</td><td>0.82</td></tr></table><figure><img src="data:image/png;base64,SHOULD_NOT_BE_ARCHIVED" alt="Forest plot"><figcaption>Figure 2. Main outcome.</figcaption></figure></section></section></article></main>`;
     const mock = mockFetch([
       new Response(articleXml, { headers: { "content-type": "application/xml" } }),
       new Response(pmcNoBody, { headers: { "content-type": "application/xml" } }),
@@ -109,6 +109,10 @@ describe("PubMed archive adapters", () => {
     expect(result.archive.sourceUrl).toBe("https://pmc.ncbi.nlm.nih.gov/articles/PMC999/");
     expect(result.archive.content).toContain("Source status: PMC full text (HTML page)");
     expect(result.archive.content).toContain("The PMC HTML full text reports clinically important outcomes.");
+    expect(result.archive.content).toContain("| Outcome");
+    expect(result.archive.content).toContain("| Mortality");
+    expect(result.archive.content).toContain("[图像：Forest plot]");
+    expect(result.archive.content).not.toContain("SHOULD_NOT_BE_ARCHIVED");
   });
 
   it("keeps abstract search results when optional similar-article lookup fails", async () => {

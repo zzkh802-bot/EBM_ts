@@ -9,8 +9,8 @@ export class ModelRegistry {
         this.runtime = runtime;
     }
     /** Reload models.json asynchronously. Await before making synchronous registry reads. */
-    refresh() {
-        return this.runtime.reloadConfig();
+    async refresh() {
+        await this.runtime.refresh();
     }
     getError() {
         return this.runtime.getError();
@@ -59,8 +59,14 @@ export class ModelRegistry {
     getProviderAuthStatus(provider) {
         return this.runtime.getProviderAuthStatus(provider);
     }
+    getProvider(provider) {
+        return this.runtime.getProvider(provider);
+    }
     getProviderDisplayName(provider) {
         return this.runtime.getProvider(provider)?.name ?? provider;
+    }
+    getProviderAuth(provider) {
+        return this.runtime.getAuth(provider);
     }
     async getApiKeyForProvider(provider) {
         try {
@@ -73,14 +79,23 @@ export class ModelRegistry {
     isUsingOAuth(model) {
         return this.runtime.isUsingOAuth(model.provider);
     }
-    registerProvider(providerName, config) {
-        this.runtime.registerProvider(providerName, config);
+    registerProvider(providerOrName, config) {
+        if (typeof providerOrName === "string") {
+            if (!config)
+                throw new Error("Provider config is required when registering by name");
+            this.runtime.registerProvider(providerOrName, config);
+            return;
+        }
+        this.runtime.registerNativeProvider(providerOrName);
     }
     unregisterProvider(providerName) {
         this.runtime.unregisterProvider(providerName);
     }
     getRegisteredProviderConfig(providerName) {
         return this.runtime.getRegisteredProviderConfig(providerName);
+    }
+    getRegisteredNativeProvider(providerName) {
+        return this.runtime.getRegisteredNativeProvider(providerName);
     }
     getRegisteredProviderIds() {
         return this.runtime.getRegisteredProviderIds();

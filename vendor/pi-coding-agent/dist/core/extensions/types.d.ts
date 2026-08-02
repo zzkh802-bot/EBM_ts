@@ -8,7 +8,7 @@
  * - Interact with the user via UI primitives
  */
 import type { AgentMessage, AgentToolResult, AgentToolUpdateCallback, ThinkingLevel, ToolExecutionMode } from "@earendil-works/pi-agent-core";
-import type { Api, AssistantMessageEvent, AssistantMessageEventStream, Context, ImageContent, Model, OAuthCredentials, OAuthLoginCallbacks, ProviderHeaders, RefreshModelsContext, SimpleStreamOptions, TextContent, ToolResultMessage } from "@earendil-works/pi-ai";
+import type { Api, AssistantMessageEvent, AssistantMessageEventStream, ConstrainedSamplingConfig, Context, ImageContent, Model, OAuthCredentials, OAuthLoginCallbacks, Provider, ProviderHeaders, RefreshModelsContext, SimpleStreamOptions, TextContent, ToolResultMessage, Usage } from "@earendil-works/pi-ai";
 import type { AutocompleteItem, AutocompleteProvider, Component, EditorComponent, EditorTheme, KeyId, OverlayHandle, OverlayOptions, TUI } from "@earendil-works/pi-tui";
 import type { Static, TSchema } from "typebox";
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
@@ -20,6 +20,7 @@ import type { ReadonlyFooterDataProvider } from "../footer-data-provider.ts";
 import type { KeybindingsManager } from "../keybindings.ts";
 import type { CustomMessage } from "../messages.ts";
 import type { ModelRegistry } from "../model-registry.ts";
+import type { ScopedModel } from "../model-resolver.ts";
 import type { BranchSummaryEntry, CompactionEntry, CustomEntry, ReadonlySessionManager, SessionEntry, SessionManager } from "../session-manager.ts";
 import type { SlashCommandInfo } from "../slash-commands.ts";
 import type { SourceInfo } from "../source-info.ts";
@@ -220,6 +221,13 @@ export interface ExtensionContext {
     modelRegistry: ModelRegistry;
     /** Current model (may be undefined) */
     model: Model<any> | undefined;
+    /** Models scoped to this session (resolved from `--models` /
+     *  `enabledModels` settings against the available catalogue). Same set
+     *  the `/scoped-models` command shows. Empty when no scoping is
+     *  configured (all available models are usable). Read-only snapshot. */
+    scopedModels: readonly ScopedModel[];
+    /** Current thinking level, when provided by the session runtime. */
+    thinkingLevel?: ThinkingLevel;
     /** Whether the agent is idle (not streaming) */
     isIdle(): boolean;
     /** Whether project-local trust is active for this context. */
@@ -345,6 +353,8 @@ export interface ToolDefinition<TParams extends TSchema = TSchema, TDetails = un
     promptGuidelines?: string[];
     /** Parameter schema (TypeBox) */
     parameters: TParams;
+    /** Optional provider-side constrained sampling request for this tool. Set false to explicitly disable it, equivalent to leaving it undefined. */
+    constrainedSampling?: false | ConstrainedSamplingConfig;
     /** Controls whether ToolExecutionComponent renders the standard colored shell or the tool renders its own framing. */
     renderShell?: "default" | "self";
     /** Optional compatibility shim to prepare raw tool call arguments before schema validation. Must return an object conforming to TParams. */
@@ -684,6 +694,8 @@ interface ToolResultEventBase {
     input: Record<string, unknown>;
     content: (TextContent | ImageContent)[];
     isError: boolean;
+    /** Usage from the tool execution itself, if available. */
+    usage?: Usage;
 }
 export interface BashToolResultEvent extends ToolResultEventBase {
     toolName: "bash";
@@ -779,6 +791,7 @@ export interface ToolResultEventResult {
     content?: (TextContent | ImageContent)[];
     details?: unknown;
     isError?: boolean;
+    usage?: Usage;
 }
 export interface MessageEndEventResult {
     /** Replace the finalized message. The replacement must keep the original message role. */
@@ -805,6 +818,7 @@ export interface SessionBeforeTreeResult {
     summary?: {
         summary: string;
         details?: unknown;
+        usage?: Usage;
     };
     /** Override custom instructions for summarization */
     customInstructions?: string;
@@ -815,6 +829,8 @@ export interface SessionBeforeTreeResult {
 }
 export interface MessageRenderOptions {
     expanded: boolean;
+    /** Horizontal padding configured by the outputPad setting. */
+    outputPad: number;
 }
 export interface EntryRenderOptions {
     expanded: boolean;
@@ -979,6 +995,7 @@ export interface ExtensionAPI {
      *   }
      * });
      */
+    registerProvider(provider: Provider): void;
     registerProvider(name: string, config: ProviderConfig): void;
     /**
      * Unregister a previously registered provider.
@@ -1069,6 +1086,8 @@ export type InlineExtension = ExtensionFactory | {
     /** Display name shown as `<inline:name>` in the startup Extensions list. */
     name: string;
     factory: ExtensionFactory;
+    /** Omit this extension from the startup Extensions list. */
+    hidden?: boolean;
 };
 export interface RegisteredTool {
     definition: ToolDefinition;
@@ -1117,10 +1136,15 @@ export type SetLabelHandler = (entryId: string, label: string | undefined) => vo
  */
 export interface ExtensionRuntimeState {
     flagValues: Map<string, boolean | string>;
-    /** Provider registrations queued during extension loading, processed when runner binds */
+    /** Legacy provider-config registrations queued during extension loading, processed when runner binds. */
     pendingProviderRegistrations: Array<{
         name: string;
         config: ProviderConfig;
+        extensionPath: string;
+    }>;
+    /** Native pi-ai provider registrations queued during extension loading, processed when runner binds. */
+    pendingNativeProviderRegistrations: Array<{
+        provider: Provider;
         extensionPath: string;
     }>;
     /** Throws when this extension instance is stale after runtime replacement. */
@@ -1134,6 +1158,7 @@ export interface ExtensionRuntimeState {
      * After bindCore(): calls ModelRegistry directly for immediate effect.
      */
     registerProvider: (name: string, config: ProviderConfig, extensionPath?: string) => void;
+    registerNativeProvider: (provider: Provider, extensionPath?: string) => void;
     unregisterProvider: (name: string, extensionPath?: string) => void;
 }
 /**
@@ -1162,6 +1187,7 @@ export interface ExtensionActions {
  */
 export interface ExtensionContextActions {
     getModel: () => Model<any> | undefined;
+    getScopedModels: () => readonly ScopedModel[];
     isIdle: () => boolean;
     isProjectTrusted: () => boolean;
     getSignal: () => AbortSignal | undefined;
@@ -1217,6 +1243,7 @@ export interface ExtensionRuntime extends ExtensionRuntimeState, ExtensionAction
 export interface Extension {
     path: string;
     resolvedPath: string;
+    hidden?: boolean;
     sourceInfo: SourceInfo;
     handlers: Map<string, HandlerFn[]>;
     tools: Map<string, RegisteredTool>;
