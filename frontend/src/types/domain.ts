@@ -199,7 +199,7 @@ export interface CitationEvidenceExcerpt {
   relation: 'supports' | 'partially_supports' | 'refutes'
   provenance: string
   confidence: 'low' | 'moderate' | 'high'
-  verified: boolean
+  verified: true
   source: {
     title: string
     institution?: string

@@ -151,6 +151,12 @@ describe("循医研究服务 API", () => {
         institution: "Chinese Medical Association",
         url: "",
       });
+
+      await writeFile(path.join(workspace, source.path), "# Trial\n\nThe archived source was changed after report generation.", "utf8");
+      const invalidResponse = await fetch(`${baseUrl}/api/v1/research-sessions/${sessionId}/citations?report_path=${encodeURIComponent(report.path)}&number=1`);
+      const invalidPayload = await invalidResponse.json() as any;
+      expect(invalidResponse.status).toBe(409);
+      expect(invalidPayload.error.code).toBe("citation_evidence_unavailable");
     } finally {
       api.server.close();
       await once(api.server, "close");
@@ -194,6 +200,30 @@ describe("循医研究服务 API", () => {
       expect(result.agent_trace.some((event: { kind: string }) => event.kind === "tool.completed")).toBe(true);
       expect(result.progress_updates).toEqual([expect.objectContaining({ text: "正在核对最新治疗建议。" })]);
       expect(result.tools).toEqual([{ id: "tool-1", name: "pubmed_search", status: "completed", result: "已找到候选文献。" }]);
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
+  });
+
+  it("redacts credential-shaped diagnostics before returning an executor failure", async () => {
+    const executor: AgentExecutor = async () => {
+      throw new Error("provider failed: Authorization: Bearer RPC_TEST_SENTINEL");
+    };
+    const { api, baseUrl } = await startApi(executor);
+    try {
+      const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: "这是一个用于错误边界测试的临床问题。" }),
+      });
+      const accepted = await created.json() as { run_id: string };
+      const result = await eventually(
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        (value) => value.status === "failed",
+      );
+      expect(JSON.stringify(result)).not.toContain("RPC_TEST_SENTINEL");
+      expect(result.error.message).toContain("[redacted]");
     } finally {
       api.server.close();
       await once(api.server, "close");

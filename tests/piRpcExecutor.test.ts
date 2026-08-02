@@ -17,6 +17,7 @@ class FakeRpcClient implements PiRpcClientLike {
   abortCount = 0;
   started = false;
   stopped = false;
+  writeReport = true;
 
   constructor(private readonly sessionId: string, private readonly rootDir: string) {}
 
@@ -34,7 +35,9 @@ class FakeRpcClient implements PiRpcClientLike {
     this.prompts.push(message);
     const workspace = piSessionDirectory(this.rootDir, this.sessionId);
     await mkdir(path.join(workspace, "reports"), { recursive: true });
-    await writeFile(path.join(workspace, "reports", "verified.md"), `# Verified report ${this.prompts.length}\n`, "utf8");
+    if (this.writeReport) {
+      await writeFile(path.join(workspace, "reports", "verified.md"), `# Verified report ${this.prompts.length}\n`, "utf8");
+    }
     const assistant = { role: "assistant", content: [{ type: "text", text: `answer ${this.prompts.length}` }] };
     for (const listener of this.listeners) listener({ type: "message_end", message: assistant });
     for (const listener of this.listeners) listener({ type: "agent_end", messages: [assistant] });
@@ -92,6 +95,9 @@ describe("Pi RPC clinician executor", () => {
     expect(clients[0]?.thinkingLevels).toEqual(["medium", "medium"]);
     expect(first).toMatchObject({ sessionId: "rpc-session-1", message: "answer 1", reportPath: "reports/verified.md" });
     expect(second).toMatchObject({ sessionId: "rpc-session-1", message: "answer 2", reportMarkdown: "# Verified report 2" });
+
+    clients[0]!.writeReport = false;
+    await expect(executor(request(first.sessionId), hooks())).rejects.toThrow(/本轮正式报告未生成或未更新/);
 
     await executor.dispose();
     expect(clients[0]?.stopped).toBe(true);

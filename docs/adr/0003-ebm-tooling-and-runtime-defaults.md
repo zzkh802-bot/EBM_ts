@@ -156,7 +156,7 @@ Use Pi native TUI directly as the main local development interface. Provide a si
 
 ### Web runtime bridge
 
-The Node web server uses Pi's native JSONL RPC mode rather than launching one-shot JSON-mode processes. One RPC process remains affined to each active Pi session so later turns reuse native session state; both clinician research and patient intake set thinking level through RPC before every prompt. The server keeps a bounded pool of up to eight idle session processes, evicts the least recently used process when needed, and resumes evicted sessions from Pi's persisted session directory. Cancellation and request timeouts use the RPC `abort` command, while server shutdown disposes all retained processes.
+The Node web server uses Pi's native JSONL RPC mode rather than launching one-shot JSON-mode processes. One RPC process remains affined to each active Pi session so later turns reuse native session state; both clinician research and patient intake set thinking level through RPC before every prompt. The server admits at most eight live session processes, single-flights concurrent restoration of the same persisted session, evicts the least recently used idle process before admitting another, and asks callers to retry when every slot is active. Cancellation and request timeouts use the RPC `abort` command, while server shutdown disposes all retained processes. Child-process diagnostics are not mirrored or returned verbatim because provider stderr may contain credentials. A clinician turn returns only a formal report created or updated during that turn, never the previous turn's latest file.
 
 ## Consequences
 

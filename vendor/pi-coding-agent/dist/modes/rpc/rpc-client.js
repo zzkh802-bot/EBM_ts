@@ -45,10 +45,12 @@ export class RpcClient {
             stdio: ["pipe", "pipe", "pipe"],
         });
         this.process = childProcess;
-        // Collect stderr for debugging
+        // Preserve only the presence of child diagnostics. Provider and tool
+        // stderr may contain authorization headers or signed URLs and must not
+        // be mirrored into the host process or surfaced through RPC errors.
         childProcess.stderr?.on("data", (data) => {
-            this.stderr += data.toString();
-            process.stderr.write(data);
+            if (data.length > 0)
+                this.stderr = "[redacted]";
         });
         childProcess.once("exit", (code, signal) => {
             if (this.process !== childProcess)

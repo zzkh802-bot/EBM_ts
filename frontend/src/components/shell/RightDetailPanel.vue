@@ -67,7 +67,7 @@ watch(() => [ui.detailOpen, citation.value?.sessionId, citation.value?.reportPat
       <section v-if="detail?.evidence.length" class="citation-evidence-list" aria-label="已核验证据原文">
         <article v-for="(item, index) in detail.evidence" :key="`${detail.number}-${index}`" class="citation-evidence-card">
           <div class="citation-evidence-head">
-            <span :class="{ verified: item.verified }">{{ item.verified ? '原文已核验' : '原文待复核' }}</span>
+            <span class="verified">原文已核验</span>
             <small>{{ provenanceLabel(item.provenance) }} · {{ relationLabel(item.relation) }}</small>
           </div>
           <p class="citation-evidence-claim">{{ item.claim }}</p>

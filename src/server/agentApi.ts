@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { access, copyFile, mkdir, readFile, readdir, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
@@ -935,13 +935,14 @@ async function readCitationDetail(rootDir: string, sessionId: string, reportPath
   const evidence = await Promise.all(evidenceIds.map(async (evidenceId) => {
     try {
       const { record, sourceTitle, sourceUrl, sourceInstitution } = await citationArchive(workspace, reference, fallbackUrl, evidenceId);
+      if (!record.verification.ok) throw new Error("evidence verification failed");
       return {
         claim: record.node.claim,
         quote: record.node.quote,
         relation: record.node.relation,
         provenance: record.node.provenance,
         confidence: record.node.confidence,
-        verified: record.verification.ok,
+        verified: true,
         source: {
           title: sourceTitle,
           institution: sourceInstitution,
@@ -955,20 +956,32 @@ async function readCitationDetail(rootDir: string, sessionId: string, reportPath
   return { number, citation: reference.citation, evidence };
 }
 
-async function readLatestFinalReport(rootDir: string, sessionId: string): Promise<{ path: string; markdown: string } | undefined> {
+type FinalReportRevision = { path: string; markdown: string; modified: number; revision: string };
+
+async function readFinalReportRevisions(rootDir: string, sessionId: string): Promise<FinalReportRevision[]> {
   try {
     const workspace = await sessionWorkspace(rootDir, sessionId);
     const reportsDir = path.join(workspace, "reports");
     const entries = (await readdir(reportsDir, { withFileTypes: true }))
       .filter((entry) => entry.isFile() && entry.name.endsWith(".md"));
-    const candidates = await Promise.all(entries.map(async (entry) => {
+    return await Promise.all(entries.map(async (entry) => {
       const file = path.join(reportsDir, entry.name);
-      return { file, modified: (await stat(file)).mtimeMs };
+      const [details, markdown, metadata] = await Promise.all([
+        stat(file),
+        readFile(file, "utf8"),
+        readFile(`${file}.metadata.json`, "utf8").catch(() => ""),
+      ]);
+      const normalizedMarkdown = markdown.trim();
+      const contentHash = createHash("sha256").update(normalizedMarkdown).update("\0").update(metadata).digest("hex");
+      return {
+        path: path.posix.join("reports", entry.name),
+        markdown: normalizedMarkdown,
+        modified: details.mtimeMs,
+        revision: `${details.mtimeMs}:${contentHash}`,
+      };
     }));
-    const latest = candidates.sort((left, right) => right.modified - left.modified)[0];
-    return latest ? { path: path.posix.join("reports", path.basename(latest.file)), markdown: (await readFile(latest.file, "utf8")).trim() } : undefined;
   } catch {
-    return undefined;
+    return [];
   }
 }
 
@@ -1073,6 +1086,7 @@ async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks:
   const abort = () => void client.abort().catch(() => undefined);
   hooks.signal.addEventListener("abort", abort, { once: true });
   try {
+    const reportsBefore = new Map((await readFinalReportRevisions(rootDir, sessionId)).map((report) => [report.path, report.revision]));
     const settled = client.waitForIdle((request.requestTimeoutSeconds + 5) * 1000);
     await client.prompt(buildAgentPrompt(request));
     await settled;
@@ -1083,11 +1097,15 @@ async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks:
       const modelError = traceEvents.findLast((event) => event.kind === "model.error")?.detail;
       throw new Error(modelError || "研究引擎完成后未返回可展示的回答。");
     }
-    const report = await readLatestFinalReport(rootDir, sessionId);
+    const report = (await readFinalReportRevisions(rootDir, sessionId))
+      .filter((candidate) => reportsBefore.get(candidate.path) !== candidate.revision)
+      .sort((left, right) => right.modified - left.modified)[0];
+    if (!report) throw new Error("研究引擎已返回回答，但本轮正式报告未生成或未更新。");
     return {
       sessionId,
       message,
-      ...(report ? { reportMarkdown: report.markdown, reportPath: report.path } : {}),
+      reportMarkdown: report.markdown,
+      reportPath: report.path,
     };
   } finally {
     clearTimeout(timeout);
@@ -1231,7 +1249,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return redactDiagnostic(error instanceof Error ? error.message : String(error));
+}
+
+function redactDiagnostic(value: string): string {
+  return value
+    .replace(/(\bAuthorization\s*:\s*(?:Bearer|Basic)\s+)[^\s,;]+/gi, "$1[redacted]")
+    .replace(/(\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)\b\s*[:=]\s*)[^\s,;]+/gi, "$1[redacted]")
+    .replace(/([?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|signature)=)[^&#\s]+/gi, "$1[redacted]")
+    .replace(/\bhttps?:\/\/[^\s]*(?:webhook|\/hooks\/)[^\s]*/gi, "[redacted-url]")
+    .slice(0, 2_000);
 }
 
 function abortError(): Error {
