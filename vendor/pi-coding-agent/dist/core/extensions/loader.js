@@ -156,6 +156,7 @@ export function createExtensionRuntime() {
         setThinkingLevel: notInitialized,
         flagValues: new Map(),
         pendingProviderRegistrations: [],
+        pendingNativeProviderRegistrations: [],
         assertActive,
         invalidate: (message) => {
             state.staleMessage ??=
@@ -167,8 +168,12 @@ export function createExtensionRuntime() {
         registerProvider: (name, config, extensionPath = "<unknown>") => {
             runtime.pendingProviderRegistrations.push({ name, config, extensionPath });
         },
+        registerNativeProvider: (provider, extensionPath = "<unknown>") => {
+            runtime.pendingNativeProviderRegistrations.push({ provider, extensionPath });
+        },
         unregisterProvider: (name) => {
             runtime.pendingProviderRegistrations = runtime.pendingProviderRegistrations.filter((r) => r.name !== name);
+            runtime.pendingNativeProviderRegistrations = runtime.pendingNativeProviderRegistrations.filter((r) => r.provider.id !== name);
         },
     };
     return runtime;
@@ -287,9 +292,15 @@ function createExtensionAPI(extension, runtime, cwd, eventBus) {
             runtime.assertActive();
             runtime.setThinkingLevel(level);
         },
-        registerProvider(name, config) {
+        registerProvider(providerOrName, config) {
             runtime.assertActive();
-            runtime.registerProvider(name, config, extension.path);
+            if (typeof providerOrName === "string") {
+                if (!config)
+                    throw new Error("Provider config is required when registering by name");
+                runtime.registerProvider(providerOrName, config, extension.path);
+                return;
+            }
+            runtime.registerNativeProvider(providerOrName, extension.path);
         },
         unregisterProvider(name) {
             runtime.assertActive();

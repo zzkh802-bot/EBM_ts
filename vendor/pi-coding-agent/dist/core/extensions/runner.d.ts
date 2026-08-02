@@ -2,7 +2,7 @@
  * Extension runner - executes extensions and manages their lifecycle.
  */
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { ImageContent, ProviderHeaders } from "@earendil-works/pi-ai";
+import type { ImageContent, Provider, ProviderHeaders } from "@earendil-works/pi-ai";
 import type { KeyId } from "@earendil-works/pi-tui";
 import type { ResourceDiagnostic } from "../diagnostics.ts";
 import type { KeybindingsConfig } from "../keybindings.ts";
@@ -77,6 +77,7 @@ export declare class ExtensionRunner {
     private modelRegistry;
     private errorListeners;
     private getModel;
+    private getScopedModels;
     private isIdleFn;
     private isProjectTrustedFn;
     private getSignalFn;
@@ -99,6 +100,7 @@ export declare class ExtensionRunner {
     constructor(extensions: Extension[], runtime: ExtensionRuntime, cwd: string, sessionManager: SessionManager, modelRegistry: ModelRegistry);
     bindCore(actions: ExtensionActions, contextActions: ExtensionContextActions, providerActions?: {
         registerProvider?: (name: string, config: ProviderConfig) => void;
+        registerNativeProvider?: (provider: Provider) => void;
         unregisterProvider?: (name: string) => void;
     }): void;
     bindCommandContext(actions?: ExtensionCommandContextActions): void;

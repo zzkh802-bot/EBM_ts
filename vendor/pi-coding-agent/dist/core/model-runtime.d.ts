@@ -7,13 +7,17 @@ export interface CreateModelRuntimeOptions {
     modelsPath?: string | null;
     modelsStore?: ModelsStore;
     modelsStorePath?: string;
+    /** Allow create() to refresh model catalogs over the network. Defaults to false. */
     allowModelNetwork?: boolean;
+    /** Timeout for the create-time network model refresh. */
     modelRefreshTimeoutMs?: number;
     catalogBaseUrl?: string;
 }
 export interface ModelRuntimeAuthOverrides {
     apiKey?: string;
     env?: Record<string, string>;
+    /** Require this much remaining OAuth-token validity; defaults to five minutes. */
+    minOAuthValidityMs?: number;
 }
 /** Configured pi-ai Models collection used by coding-agent and SDK consumers. */
 export declare class ModelRuntime implements Models {
@@ -21,10 +25,11 @@ export declare class ModelRuntime implements Models {
     private readonly credentials;
     private readonly defaultBuiltins;
     private readonly builtins;
+    private readonly nativeExtensionProviders;
     private readonly extensionProviders;
     private readonly compositionErrors;
     private readonly modelsPath;
-    private readonly allowModelNetwork;
+    private readonly modelNetworkEnabled;
     private config;
     private snapshot;
     private availabilityRefresh;
@@ -52,13 +57,14 @@ export declare class ModelRuntime implements Models {
     getError(): string | undefined;
     getRegisteredProviderConfig(providerId: string): ProviderConfigInput | undefined;
     getRegisteredProviderIds(): readonly string[];
+    getRegisteredNativeProvider(providerId: string): Provider | undefined;
     /** @internal Compatibility fallback for ModelRegistry when provider auth is unconfigured. */
     getCompatibilityRequestConfig(model: Model<Api>): CompatibilityRequestConfig;
     isUsingOAuth(providerId: string): boolean;
     hasConfiguredAuth(providerId: string): boolean;
     getAuth(providerId: string, overrides?: ModelRuntimeAuthOverrides): Promise<AuthResult | undefined>;
     getAuth(model: Model<Api>, overrides?: ModelRuntimeAuthOverrides): Promise<AuthResult | undefined>;
-    setRuntimeApiKey(providerId: string, apiKey: string): Promise<void>;
+    setRuntimeApiKey(providerId: string, apiKey: string, refreshOptions?: ModelsRefreshOptions): Promise<void>;
     removeRuntimeApiKey(providerId: string): Promise<void>;
     listCredentials(): Promise<readonly CredentialInfo[]>;
     getProviderAuthStatus(providerId: string): AuthStatus;
@@ -69,8 +75,8 @@ export declare class ModelRuntime implements Models {
     completeSimple(model: Model<Api>, context: Context, options?: ModelsSimpleStreamOptions): Promise<AssistantMessage>;
     login(providerId: string, type: AuthType, interaction: AuthInteraction): Promise<Credential>;
     logout(providerId: string): Promise<void>;
-    reloadConfig(): Promise<void>;
     refresh(options?: ModelsRefreshOptions): Promise<ModelsRefreshResult>;
+    registerNativeProvider(provider: Provider): void;
     registerProvider(providerId: string, config: ProviderConfigInput): void;
     unregisterProvider(providerId: string): void;
 }

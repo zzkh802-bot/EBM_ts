@@ -56,7 +56,7 @@ export async function createStartupTui(settingsManager) {
     const terminalTheme = detectTerminalBackgroundFromEnv().theme;
     initTheme(resolveThemeSetting(settingsManager.getThemeSetting(), terminalTheme) ?? terminalTheme);
     setKeybindings(KeybindingsManager.create());
-    const ui = new TUI(new ProcessTerminal(), settingsManager.getShowHardwareCursor());
+    const ui = new TUI(new ProcessTerminal(), settingsManager.getShowHardwareCursor(), getAgentDir());
     ui.setClearOnShrink(settingsManager.getClearOnShrink());
     return ui;
 }

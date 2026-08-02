@@ -1511,13 +1511,20 @@ export class DefaultPackageManager {
             this.ensureGitIgnore(gitRoot);
         }
         mkdirSync(dirname(targetDir), { recursive: true });
-        await this.runCommand("git", ["clone", source.repo, targetDir]);
-        if (source.ref) {
-            await this.runCommand("git", ["checkout", source.ref], { cwd: targetDir });
+        try {
+            await this.runCommand("git", ["clone", source.repo, targetDir]);
+            if (source.ref) {
+                await this.runCommand("git", ["checkout", source.ref], { cwd: targetDir });
+            }
+            const packageJsonPath = join(targetDir, "package.json");
+            if (existsSync(packageJsonPath)) {
+                await this.runNpmCommand(this.getGitDependencyInstallArgs(), { cwd: targetDir });
+            }
         }
-        const packageJsonPath = join(targetDir, "package.json");
-        if (existsSync(packageJsonPath)) {
-            await this.runNpmCommand(this.getGitDependencyInstallArgs(), { cwd: targetDir });
+        catch (error) {
+            rmSync(targetDir, { recursive: true, force: true });
+            this.pruneEmptyGitParents(targetDir, gitRoot);
+            throw error;
         }
     }
     async updateGit(source, scope) {

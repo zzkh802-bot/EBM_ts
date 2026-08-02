@@ -79,6 +79,30 @@ export type AgentSessionEvent = Exclude<AgentEvent, {
     success: boolean;
     attempt: number;
     finalError?: string;
+} | {
+    type: "summarization_retry_scheduled";
+    attempt: number;
+    maxAttempts: number;
+    delayMs: number;
+    errorMessage: string;
+} | {
+    type: "summarization_retry_attempt_start";
+    source: "branchSummary";
+} | {
+    type: "summarization_retry_attempt_start";
+    source: "compaction";
+    reason: "manual" | "threshold" | "overflow";
+} | {
+    type: "summarization_retry_finished";
+} | {
+    type: "auto_retry_end";
+    success: boolean;
+    attempt: number;
+    finalError?: string;
+} | {
+    type: "bash_execution_update";
+    id?: string;
+    delta: string;
 };
 /** Listener function for agent session events */
 export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
@@ -187,7 +211,7 @@ export declare class AgentSession {
     private _branchSummaryAbortController;
     private _retryAbortController;
     private _retryAttempt;
-    private _bashAbortController;
+    private readonly _bashAbortControllers;
     private _pendingBashMessages;
     private _extensionRunner;
     private _turnIndex;
@@ -240,8 +264,6 @@ export declare class AgentSession {
     /** Internal handler for agent events - shared by subscribe and reconnect */
     private _handleAgentEvent;
     private _willRetryAfterAgentEnd;
-    /** Extract text content from a message */
-    private _getUserMessageText;
     /** Find the last assistant message in agent state (including aborted ones) */
     private _findLastAssistantMessage;
     private _replaceMessageInPlace;
@@ -505,6 +527,13 @@ export declare class AgentSession {
      * Context overflow errors are NOT retryable (handled by compaction instead).
      */
     private _isRetryableError;
+    /**
+     * Retry policy + callbacks shared by compaction and branch-summary summarization calls.
+     * Uses the same `settings.retry` budget/backoff as agent-turn retries so a single transient
+     * stream drop no longer fails the whole operation. `source` carries the context
+     * the TUI needs to render the retry and recreate the underlying indicator.
+     */
+    private _summarizationRetryCallbacks;
     private _prepareRetry;
     /**
      * Cancel in-progress retry.
@@ -524,10 +553,12 @@ export declare class AgentSession {
      * @param command The bash command to execute
      * @param onChunk Optional streaming callback for output
      * @param options.excludeFromContext If true, command output won't be sent to LLM (!! prefix)
+     * @param options.id Optional identifier included in bash execution update events
      * @param options.operations Custom BashOperations for remote execution
      */
     executeBash(command: string, onChunk?: (chunk: string) => void, options?: {
         excludeFromContext?: boolean;
+        id?: string;
         operations?: BashOperations;
     }): Promise<BashResult>;
     /**
@@ -583,7 +614,6 @@ export declare class AgentSession {
         entryId: string;
         text: string;
     }>;
-    private _extractUserMessageText;
     /**
      * Get session statistics. Aggregates over ALL session entries (including
      * history that was compacted away), so token/cost totals reflect what was

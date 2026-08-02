@@ -6,7 +6,7 @@ import { closeWatcher, FS_WATCH_RETRY_DELAY_MS, watchWithErrorHandler } from "..
  * Find git metadata paths by walking up from cwd.
  * Handles both regular git repos (.git is a directory) and worktrees (.git is a file).
  */
-function findGitPaths(cwd) {
+export function findGitPaths(cwd) {
     let dir = cwd;
     while (true) {
         const gitPath = join(dir, ".git");

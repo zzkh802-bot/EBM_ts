@@ -52,6 +52,7 @@ export declare function parseModelPattern(pattern: string, availableModels: Mode
  */
 export interface ModelScopeDiagnostic {
     type: "warning";
+    code: "no-match" | "invalid-thinking-level";
     message: string;
     pattern: string;
 }

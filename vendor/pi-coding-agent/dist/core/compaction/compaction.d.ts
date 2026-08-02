@@ -5,7 +5,8 @@
  * and after compaction the session is reloaded.
  */
 import type { AgentMessage, StreamFn, ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Model, Usage } from "@earendil-works/pi-ai/compat";
+import { type RetryCallbacks, type RetryPolicy } from "@earendil-works/pi-ai";
+import type { AssistantMessage, Context, Model, SimpleStreamOptions, Usage } from "@earendil-works/pi-ai/compat";
 import { type SessionEntry } from "../session-manager.ts";
 import { type FileOperations } from "./utils.ts";
 /** Details stored in CompactionEntry.details for file tracking */
@@ -19,6 +20,8 @@ export interface CompactionResult<T = unknown> {
     firstKeptEntryId: string;
     tokensBefore: number;
     estimatedTokensAfter?: number;
+    /** Usage from the LLM call(s) that generated this summary, if available */
+    usage?: Usage;
     /** Extension-specific data (e.g., ArtifactIndex, version markers for structured compaction) */
     details?: T;
 }
@@ -88,10 +91,23 @@ export interface CutPointResult {
  */
 export declare function findCutPoint(entries: SessionEntry[], startIndex: number, endIndex: number, keepRecentTokens: number): CutPointResult;
 /**
+ * Shared choke point for every compaction/branch-summary summarization call. Wraps the
+ * single LLM call in {@link retryAssistantCall} so transient stream drops (e.g.
+ * `terminated`, socket close) honor the configured retry policy instead of failing
+ * the whole compaction on the first attempt. Deterministic errors and aborts return
+ * immediately (see {@link retryAssistantCall}).
+ */
+export declare function completeSummarization(model: Model<any>, context: Context, options: SimpleStreamOptions, streamFn?: StreamFn, retry?: RetryPolicy, callbacks?: RetryCallbacks): Promise<AssistantMessage>;
+/**
  * Generate a summary of the conversation using the LLM.
  * If previousSummary is provided, uses the update prompt to merge.
  */
-export declare function generateSummary(currentMessages: AgentMessage[], model: Model<any>, reserveTokens: number, apiKey: string | undefined, headers?: Record<string, string>, signal?: AbortSignal, customInstructions?: string, previousSummary?: string, thinkingLevel?: ThinkingLevel, streamFn?: StreamFn, env?: Record<string, string>): Promise<string>;
+export declare function generateSummary(currentMessages: AgentMessage[], model: Model<any>, reserveTokens: number, apiKey: string | undefined, headers?: Record<string, string>, signal?: AbortSignal, customInstructions?: string, previousSummary?: string, thinkingLevel?: ThinkingLevel, streamFn?: StreamFn, env?: Record<string, string>, retry?: RetryPolicy, callbacks?: RetryCallbacks): Promise<string>;
+/** Generate or update a conversation summary and return its provider usage. */
+export declare function generateSummaryWithUsage(currentMessages: AgentMessage[], model: Model<any>, reserveTokens: number, apiKey: string | undefined, headers?: Record<string, string>, signal?: AbortSignal, customInstructions?: string, previousSummary?: string, thinkingLevel?: ThinkingLevel, streamFn?: StreamFn, env?: Record<string, string>, retry?: RetryPolicy, callbacks?: RetryCallbacks): Promise<{
+    text: string;
+    usage: Usage;
+}>;
 export interface CompactionPreparation {
     /** UUID of first entry to keep */
     firstKeptEntryId: string;
@@ -117,5 +133,5 @@ export declare function prepareCompaction(pathEntries: SessionEntry[], settings:
  * @param preparation - Pre-calculated preparation from prepareCompaction()
  * @param customInstructions - Optional custom focus for the summary
  */
-export declare function compact(preparation: CompactionPreparation, model: Model<any>, apiKey: string | undefined, headers?: Record<string, string>, customInstructions?: string, signal?: AbortSignal, thinkingLevel?: ThinkingLevel, streamFn?: StreamFn, env?: Record<string, string>): Promise<CompactionResult>;
+export declare function compact(preparation: CompactionPreparation, model: Model<any>, apiKey: string | undefined, headers?: Record<string, string>, customInstructions?: string, signal?: AbortSignal, thinkingLevel?: ThinkingLevel, streamFn?: StreamFn, env?: Record<string, string>, retry?: RetryPolicy, callbacks?: RetryCallbacks): Promise<CompactionResult>;
 //# sourceMappingURL=compaction.d.ts.map

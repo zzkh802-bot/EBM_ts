@@ -4,6 +4,7 @@
  * Pure functions for compaction logic. The session manager handles I/O,
  * and after compaction the session is reloaded.
  */
+import { contentText, retryAssistantCall, uuidv7 } from "@earendil-works/pi-ai";
 import { completeSimple } from "@earendil-works/pi-ai/compat";
 import { convertToLlm } from "../messages.js";
 import { buildSessionContext, sessionEntryToContextMessages, } from "../session-manager.js";
@@ -47,6 +48,28 @@ function getMessageFromEntryForCompaction(entry) {
         return undefined;
     }
     return sessionEntryToContextMessages(entry)[0];
+}
+function combineUsage(first, second) {
+    return {
+        input: first.input + second.input,
+        output: first.output + second.output,
+        cacheRead: first.cacheRead + second.cacheRead,
+        cacheWrite: first.cacheWrite + second.cacheWrite,
+        ...(first.cacheWrite1h !== undefined || second.cacheWrite1h !== undefined
+            ? { cacheWrite1h: (first.cacheWrite1h ?? 0) + (second.cacheWrite1h ?? 0) }
+            : {}),
+        ...(first.reasoning !== undefined || second.reasoning !== undefined
+            ? { reasoning: (first.reasoning ?? 0) + (second.reasoning ?? 0) }
+            : {}),
+        totalTokens: first.totalTokens + second.totalTokens,
+        cost: {
+            input: first.cost.input + second.cost.input,
+            output: first.cost.output + second.cost.output,
+            cacheRead: first.cost.cacheRead + second.cost.cacheRead,
+            cacheWrite: first.cost.cacheWrite + second.cost.cacheWrite,
+            total: first.cost.total + second.cost.total,
+        },
+    };
 }
 export const DEFAULT_COMPACTION_SETTINGS = {
     enabled: true,
@@ -407,18 +430,34 @@ function createSummarizationOptions(model, maxTokens, apiKey, headers, env, sign
     }
     return options;
 }
-async function completeSummarization(model, context, options, streamFn) {
-    if (!streamFn) {
-        return completeSimple(model, context, options);
-    }
-    const stream = await streamFn(model, context, options);
-    return stream.result();
+/**
+ * Shared choke point for every compaction/branch-summary summarization call. Wraps the
+ * single LLM call in {@link retryAssistantCall} so transient stream drops (e.g.
+ * `terminated`, socket close) honor the configured retry policy instead of failing
+ * the whole compaction on the first attempt. Deterministic errors and aborts return
+ * immediately (see {@link retryAssistantCall}).
+ */
+export async function completeSummarization(model, context, options, streamFn, retry, callbacks) {
+    // Summaries are standalone requests, so isolate routing and avoid cache writes that cannot be reused.
+    const requestOptions = {
+        ...options,
+        cacheRetention: "none",
+        sessionId: uuidv7(),
+    };
+    const produce = async () => streamFn
+        ? (await streamFn(model, context, requestOptions)).result()
+        : completeSimple(model, context, requestOptions);
+    return retryAssistantCall(produce, retry, requestOptions.signal, callbacks);
 }
 /**
  * Generate a summary of the conversation using the LLM.
  * If previousSummary is provided, uses the update prompt to merge.
  */
-export async function generateSummary(currentMessages, model, reserveTokens, apiKey, headers, signal, customInstructions, previousSummary, thinkingLevel, streamFn, env) {
+export async function generateSummary(currentMessages, model, reserveTokens, apiKey, headers, signal, customInstructions, previousSummary, thinkingLevel, streamFn, env, retry, callbacks) {
+    return (await generateSummaryWithUsage(currentMessages, model, reserveTokens, apiKey, headers, signal, customInstructions, previousSummary, thinkingLevel, streamFn, env, retry, callbacks)).text;
+}
+/** Generate or update a conversation summary and return its provider usage. */
+export async function generateSummaryWithUsage(currentMessages, model, reserveTokens, apiKey, headers, signal, customInstructions, previousSummary, thinkingLevel, streamFn, env, retry, callbacks) {
     const maxTokens = Math.min(Math.floor(0.8 * reserveTokens), model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY);
     // Use update prompt if we have a previous summary, otherwise initial prompt
     let basePrompt = previousSummary ? UPDATE_SUMMARIZATION_PROMPT : SUMMARIZATION_PROMPT;
@@ -443,15 +482,12 @@ export async function generateSummary(currentMessages, model, reserveTokens, api
         },
     ];
     const completionOptions = createSummarizationOptions(model, maxTokens, apiKey, headers, env, signal, thinkingLevel);
-    const response = await completeSummarization(model, { systemPrompt: SUMMARIZATION_SYSTEM_PROMPT, messages: summarizationMessages }, completionOptions, streamFn);
+    const response = await completeSummarization(model, { systemPrompt: SUMMARIZATION_SYSTEM_PROMPT, messages: summarizationMessages }, completionOptions, streamFn, retry, callbacks);
     if (response.stopReason === "error") {
         throw new Error(`Summarization failed: ${response.errorMessage || "Unknown error"}`);
     }
-    const textContent = response.content
-        .filter((c) => c.type === "text")
-        .map((c) => c.text)
-        .join("\n");
-    return textContent;
+    const textContent = contentText(response.content);
+    return { text: textContent, usage: response.usage };
 }
 export function prepareCompaction(pathEntries, settings) {
     if (pathEntries.length > 0 && pathEntries[pathEntries.length - 1].type === "compaction") {
@@ -544,21 +580,29 @@ Be concise. Focus on what's needed to understand the kept suffix.`;
  * @param preparation - Pre-calculated preparation from prepareCompaction()
  * @param customInstructions - Optional custom focus for the summary
  */
-export async function compact(preparation, model, apiKey, headers, customInstructions, signal, thinkingLevel, streamFn, env) {
+export async function compact(preparation, model, apiKey, headers, customInstructions, signal, thinkingLevel, streamFn, env, retry, callbacks) {
     const { firstKeptEntryId, messagesToSummarize, turnPrefixMessages, isSplitTurn, tokensBefore, previousSummary, fileOps, settings, } = preparation;
     // Generate summaries and merge into one
     let summary;
+    let summaryUsage;
     if (isSplitTurn && turnPrefixMessages.length > 0) {
-        const historyResult = messagesToSummarize.length > 0
-            ? await generateSummary(messagesToSummarize, model, settings.reserveTokens, apiKey, headers, signal, customInstructions, previousSummary, thinkingLevel, streamFn, env)
-            : "No prior history.";
-        const turnPrefixResult = await generateTurnPrefixSummary(turnPrefixMessages, model, settings.reserveTokens, apiKey, headers, env, signal, thinkingLevel, streamFn);
+        let historyText = "No prior history.";
+        let historyUsage;
+        if (messagesToSummarize.length > 0) {
+            const historyResult = await generateSummaryWithUsage(messagesToSummarize, model, settings.reserveTokens, apiKey, headers, signal, customInstructions, previousSummary, thinkingLevel, streamFn, env, retry, callbacks);
+            historyText = historyResult.text;
+            historyUsage = historyResult.usage;
+        }
+        const turnPrefixResult = await generateTurnPrefixSummary(turnPrefixMessages, model, settings.reserveTokens, apiKey, headers, env, signal, thinkingLevel, streamFn, retry, callbacks);
         // Merge into single summary
-        summary = `${historyResult}\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixResult}`;
+        summary = `${historyText}\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixResult.text}`;
+        summaryUsage = historyUsage ? combineUsage(historyUsage, turnPrefixResult.usage) : turnPrefixResult.usage;
     }
     else {
         // Just generate history summary
-        summary = await generateSummary(messagesToSummarize, model, settings.reserveTokens, apiKey, headers, signal, customInstructions, previousSummary, thinkingLevel, streamFn, env);
+        const result = await generateSummaryWithUsage(messagesToSummarize, model, settings.reserveTokens, apiKey, headers, signal, customInstructions, previousSummary, thinkingLevel, streamFn, env, retry, callbacks);
+        summary = result.text;
+        summaryUsage = result.usage;
     }
     // Compute file lists and append to summary
     const { readFiles, modifiedFiles } = computeFileLists(fileOps);
@@ -570,13 +614,14 @@ export async function compact(preparation, model, apiKey, headers, customInstruc
         summary,
         firstKeptEntryId,
         tokensBefore,
+        usage: summaryUsage,
         details: { readFiles, modifiedFiles },
     };
 }
 /**
  * Generate a summary for a turn prefix (when splitting a turn).
  */
-async function generateTurnPrefixSummary(messages, model, reserveTokens, apiKey, headers, env, signal, thinkingLevel, streamFn) {
+async function generateTurnPrefixSummary(messages, model, reserveTokens, apiKey, headers, env, signal, thinkingLevel, streamFn, retry, callbacks) {
     const maxTokens = Math.min(Math.floor(0.5 * reserveTokens), model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY); // Smaller budget for turn prefix
     const llmMessages = convertToLlm(messages);
     const conversationText = serializeConversation(llmMessages);
@@ -588,13 +633,13 @@ async function generateTurnPrefixSummary(messages, model, reserveTokens, apiKey,
             timestamp: Date.now(),
         },
     ];
-    const response = await completeSummarization(model, { systemPrompt: SUMMARIZATION_SYSTEM_PROMPT, messages: summarizationMessages }, createSummarizationOptions(model, maxTokens, apiKey, headers, env, signal, thinkingLevel), streamFn);
+    const response = await completeSummarization(model, { systemPrompt: SUMMARIZATION_SYSTEM_PROMPT, messages: summarizationMessages }, createSummarizationOptions(model, maxTokens, apiKey, headers, env, signal, thinkingLevel), streamFn, retry, callbacks);
     if (response.stopReason === "error") {
         throw new Error(`Turn prefix summarization failed: ${response.errorMessage || "Unknown error"}`);
     }
-    return response.content
-        .filter((c) => c.type === "text")
-        .map((c) => c.text)
-        .join("\n");
+    return {
+        text: contentText(response.content),
+        usage: response.usage,
+    };
 }
 //# sourceMappingURL=compaction.js.map

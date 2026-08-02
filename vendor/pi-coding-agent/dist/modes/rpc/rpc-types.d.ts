@@ -57,6 +57,9 @@ export type RpcCommand = {
     type: "cycle_thinking_level";
 } | {
     id?: string;
+    type: "get_available_thinking_levels";
+} | {
+    id?: string;
     type: "set_steering_mode";
     mode: "all" | "one-at-a-time";
 } | {
@@ -224,6 +227,14 @@ export type RpcResponse = {
     data: {
         level: ThinkingLevel;
     } | null;
+} | {
+    id?: string;
+    type: "response";
+    command: "get_available_thinking_levels";
+    success: true;
+    data: {
+        levels: ThinkingLevel[];
+    };
 } | {
     id?: string;
     type: "response";

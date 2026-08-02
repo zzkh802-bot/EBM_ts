@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { Agent } from "@earendil-works/pi-agent-core";
-import { clampThinkingLevel } from "@earendil-works/pi-ai/compat";
+import { Agent, setDefaultStreamFn } from "@earendil-works/pi-agent-core";
+import { clampThinkingLevel, streamSimple } from "@earendil-works/pi-ai/compat";
 import { getAgentDir } from "../config.js";
 import { resolvePath } from "../utils/paths.js";
 import { AgentSession } from "./agent-session.js";
@@ -15,6 +15,10 @@ import { getDefaultSessionDir, SessionManager } from "./session-manager.js";
 import { SettingsManager } from "./settings-manager.js";
 import { time } from "./timings.js";
 import { createBashTool, createCodingTools, createEditTool, createFindTool, createGrepTool, createLsTool, createReadOnlyTools, createReadTool, createWriteTool, withFileMutationQueue, } from "./tools/index.js";
+// Preserve the pre-0.81 fallback for extensions that construct Agent instances
+// or invoke low-level agent loops without supplying streamFn. Agent core remains
+// provider-agnostic and does not import pi-ai/compat itself.
+setDefaultStreamFn(streamSimple);
 // Re-exports
 export * from "./agent-session-runtime.js";
 export { withFileMutationQueue, 

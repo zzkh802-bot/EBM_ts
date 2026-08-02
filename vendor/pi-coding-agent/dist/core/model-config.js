@@ -83,6 +83,7 @@ const OpenAICompletionsCompatSchema = Type.Object({
     cacheControlFormat: Type.Optional(Type.Literal("anthropic")),
     openRouterRouting: Type.Optional(OpenRouterRoutingSchema),
     vercelGatewayRouting: Type.Optional(VercelGatewayRoutingSchema),
+    supportsOpenAIGrammarTools: Type.Optional(Type.Boolean()),
     supportsStrictMode: Type.Optional(Type.Boolean()),
     sendSessionAffinityHeaders: Type.Optional(Type.Boolean()),
     deferredToolsMode: Type.Optional(Type.Literal("kimi")),
@@ -93,6 +94,8 @@ const OpenAIResponsesCompatSchema = Type.Object({
     supportsDeveloperRole: Type.Optional(Type.Boolean()),
     sessionAffinityFormat: Type.Optional(Type.Union([Type.Literal("openai"), Type.Literal("openai-nosession"), Type.Literal("openrouter")])),
     supportsLongCacheRetention: Type.Optional(Type.Boolean()),
+    supportsStrictMode: Type.Optional(Type.Boolean()),
+    supportsOpenAIGrammarTools: Type.Optional(Type.Boolean()),
     supportsToolSearch: Type.Optional(Type.Boolean()),
 });
 const AnthropicMessagesCompatSchema = Type.Object({
@@ -100,7 +103,10 @@ const AnthropicMessagesCompatSchema = Type.Object({
     supportsLongCacheRetention: Type.Optional(Type.Boolean()),
     sendSessionAffinityHeaders: Type.Optional(Type.Boolean()),
     supportsCacheControlOnTools: Type.Optional(Type.Boolean()),
+    supportsTemperature: Type.Optional(Type.Boolean()),
     forceAdaptiveThinking: Type.Optional(Type.Boolean()),
+    allowEmptySignature: Type.Optional(Type.Boolean()),
+    supportsStrictTools: Type.Optional(Type.Boolean()),
     supportsToolReferences: Type.Optional(Type.Boolean()),
 });
 const ProviderCompatSchema = Type.Union([
