@@ -156,18 +156,18 @@ a { color: var(--evidence); }
 .entry-choice { position: relative; display: grid; min-height: 285px; align-content: start; justify-items: start; padding: 25px; overflow: hidden; border: 1px solid var(--line); border-radius: 18px; text-align: left; transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease; }
 .entry-choice:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
 .entry-choice.patient { background: linear-gradient(135deg, #fffdf8, #f6f0e4); border-color: rgba(173, 120, 45, .24); }
-.entry-choice.clinician { color: #f4faf8; background: radial-gradient(circle at 90% 8%, rgba(89, 169, 157, .22), transparent 38%), linear-gradient(145deg, #1d4542, #173331 72%); border-color: rgba(17, 66, 62, .72); box-shadow: 0 20px 44px rgba(20, 53, 50, .16); }
-.entry-choice.clinician:hover { border-color: rgba(94, 173, 160, .72); box-shadow: 0 24px 52px rgba(20, 53, 50, .24); }
+.entry-choice.clinician { color: #f5f8fc; background: radial-gradient(circle at 90% 8%, rgba(122, 167, 224, .28), transparent 39%), linear-gradient(145deg, #214f83, #17365f 72%); border-color: rgba(31, 72, 119, .78); box-shadow: 0 20px 44px rgba(25, 55, 94, .18); }
+.entry-choice.clinician:hover { border-color: rgba(119, 164, 220, .78); box-shadow: 0 24px 52px rgba(25, 55, 94, .26); }
 .entry-choice-icon { display: grid; width: 42px; height: 42px; margin-bottom: 25px; place-items: center; border-radius: 50%; background: rgba(255,255,255,.65); color: var(--jade); font-size: 24px; }
-.entry-choice.clinician .entry-choice-icon { background: rgba(242, 251, 248, .12); color: #a9ddd3; }
+.entry-choice.clinician .entry-choice-icon { background: rgba(244, 248, 253, .13); color: #bed8f6; }
 .entry-choice.patient .entry-choice-icon { color: var(--amber); }
 .entry-choice-overline { color: var(--ink-faint); font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
-.entry-choice.clinician .entry-choice-overline { color: #a9c8c2; }
+.entry-choice.clinician .entry-choice-overline { color: #b9cce3; }
 .entry-choice strong { margin-top: 5px; font-family: var(--serif); font-size: 29px; letter-spacing: -.035em; }
 .entry-choice p { max-width: 300px; margin: 8px 0 0; color: var(--ink-soft); font-size: 14px; line-height: 1.7; }
-.entry-choice.clinician p { color: #c9d9d5; }
+.entry-choice.clinician p { color: #d5e0ed; }
 .entry-choice em { margin-top: auto; padding-top: 20px; color: var(--ink); font-size: 13px; font-style: normal; font-weight: 700; }
-.entry-choice.clinician em { color: #f4faf8; }
+.entry-choice.clinician em { color: #f5f8fc; }
 .entry-choice em::after { padding-left: 7px; content: '→'; }
 .entry-foot { color: var(--ink-faint); font-size: 12px; text-align: center; }
 
