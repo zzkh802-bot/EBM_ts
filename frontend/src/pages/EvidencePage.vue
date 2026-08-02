@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { agentService, workspaceService } from '../services'
 import { useAgentRunStore, usePreferencesStore, useSessionsStore, useUiStore } from '../stores'
 import type { AccountConnection, ClinicianDocument, Message, ModeSnapshot, RuntimeConfig } from '../types/domain'
@@ -14,6 +15,8 @@ const preferences = usePreferencesStore()
 const sessions = useSessionsStore()
 const run = useAgentRunStore()
 const ui = useUiStore()
+const route = useRoute()
+const router = useRouter()
 const question = ref('')
 const feed = ref<HTMLElement | null>(null)
 const runtimeConfig = ref<RuntimeConfig | null>(null)
@@ -35,6 +38,9 @@ watch(() => sessions.activeSessionId, () => {
   question.value = ''
   run.queuedGuidance = []
 })
+watch(() => route.path, (path) => {
+  if (path === '/clinician') question.value = ''
+})
 
 const availableModels = computed(() => runtimeConfig.value?.models.filter((item) => item.available) || [])
 const providers = computed(() => availableModels.value.filter((item, index, items) =>
@@ -51,7 +57,9 @@ const primaryActionLabel = computed(() => {
   if (!run.busy) return '开始研究'
   return question.value.trim() ? '加入后续追问' : '停止本轮研究'
 })
-const hasConversation = computed(() => sessions.active.messages.some((message) => message.role === 'user'))
+const homeMode = computed(() => route.path === '/clinician')
+const activeHasConversation = computed(() => sessions.active.messages.some((message) => message.role === 'user'))
+const hasConversation = computed(() => !homeMode.value && activeHasConversation.value)
 const researchCount = computed(() => sessions.active.messages.filter((message) => message.role === 'user').length)
 const sessionStatusLabel = computed(() => ({ draft: '待开始', active: '正在研究', complete: '可继续追踪' })[sessions.active.status])
 const documentKindLabel = (kind: ClinicianDocument['kind']) => kind === 'report' ? '最终报告' : '研究框架'
@@ -126,8 +134,12 @@ const closeConversationFile = () => {
   conversationFileContent.value = ''
   conversationFileError.value = ''
 }
-watch(() => [sessions.activeSessionId, sessions.active.researchSessionId], () => {
+watch(() => [route.path, sessions.activeSessionId, sessions.active.researchSessionId], () => {
   closeConversationFile()
+  if (homeMode.value) {
+    conversationFiles.value = []
+    return
+  }
   void loadConversationFiles()
   void hydrateHistoricalReports()
 }, { immediate: true })
@@ -190,7 +202,7 @@ const cancelConnection = async () => {
 
 watch(() => sessions.active.messages.length, async () => {
   await nextTick()
-  feed.value?.scrollTo({ top: feed.value.scrollHeight, behavior: 'smooth' })
+  feed.value?.scrollTo?.({ top: feed.value.scrollHeight, behavior: 'smooth' })
 })
 
 async function submit(input = question.value, modeOverride?: ModeSnapshot) {
@@ -201,7 +213,10 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
     return
   }
   if (!text) return
-  const localSessionId = sessions.activeSessionId
+  const localSessionId = homeMode.value && activeHasConversation.value
+    ? sessions.create()
+    : sessions.activeSessionId
+  if (homeMode.value) await router.replace('/clinician/evidence')
   question.value = ''
   const mode = modeOverride || { ...preferences.snapshot }
   sessions.beginResearchIn(localSessionId, text)

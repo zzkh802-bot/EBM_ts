@@ -1,13 +1,15 @@
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { createMemoryHistory } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import EvidencePage from '../pages/EvidencePage.vue'
+import { createAppRouter } from '../router'
 import { useSessionsStore } from '../stores'
 
 afterEach(() => vi.unstubAllGlobals())
 
 describe('医生工作台回答展示', () => {
-  it('将正式报告前的模型回答按 Markdown 渲染', () => {
+  it('将正式报告前的模型回答按 Markdown 渲染', async () => {
     setActivePinia(createPinia())
     const sessions = useSessionsStore()
     sessions.active.messages = [{
@@ -24,8 +26,11 @@ describe('医生工作台回答展示', () => {
       searchEnabled: true,
     }]
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 503 })))
+    const router = createAppRouter(createMemoryHistory())
+    await router.push('/clinician/evidence')
+    await router.isReady()
 
-    const wrapper = mount(EvidencePage)
+    const wrapper = mount(EvidencePage, { global: { plugins: [router] } })
     const summary = wrapper.get('.model-answer')
 
     expect(summary.get('code').text()).toBe('reports/final.md')

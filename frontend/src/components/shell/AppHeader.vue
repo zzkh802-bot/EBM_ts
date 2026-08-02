@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { healthService } from '../../services'
-import { usePreferencesStore, useSessionsStore, useUiStore } from '../../stores'
+import { usePreferencesStore, useUiStore } from '../../stores'
 
 const preferences = usePreferencesStore()
-const sessions = useSessionsStore()
 const ui = useUiStore()
 const route = useRoute()
+const router = useRouter()
 const serviceStatus = ref('检测中')
 
 const workspaceLabel = computed(() => {
@@ -62,7 +62,7 @@ onMounted(async () => {
           </button>
         </div>
       </div>
-      <button class="icon-button" type="button" aria-label="新建对话" @click="sessions.create()">
+      <button class="icon-button" type="button" aria-label="新建临床问题" @click="router.push('/clinician')">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 7v6m-3-3h6M7.5 19.5 4 21l1.2-3.7A8 8 0 1 1 7.5 19.5Z" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" /></svg>
       </button>
     </div>

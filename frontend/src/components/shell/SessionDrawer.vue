@@ -10,10 +10,12 @@ const query = ref('')
 
 const filtered = computed(() => {
   const text = query.value.trim().toLowerCase()
-  const matching = sessions.sessions.filter((session) => !text
-    || session.title.toLowerCase().includes(text)
-    || session.clinicalQuestion.toLowerCase().includes(text)
-    || session.messages.some((message) => message.content.toLowerCase().includes(text)))
+  const matching = sessions.sessions.filter((session) =>
+    session.messages.some((message) => message.role === 'user')
+    && (!text
+      || session.title.toLowerCase().includes(text)
+      || session.clinicalQuestion.toLowerCase().includes(text)
+      || session.messages.some((message) => message.content.toLowerCase().includes(text))))
   return [...matching].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
 })
 
@@ -24,9 +26,8 @@ const openSession = (id: string) => {
 }
 
 const createSession = () => {
-  sessions.create()
   ui.sessionDrawerOpen = false
-  router.push('/clinician/evidence')
+  router.push('/clinician')
 }
 
 const formatSessionTime = (value: string) => {

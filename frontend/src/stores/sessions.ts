@@ -35,6 +35,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   const create = () => {
     const session = createSession()
     sessions.value.unshift(session); activeSessionId.value = session.id
+    return session.id
   }
   const remove = (id: string) => {
     sessions.value = sessions.value.filter((session) => session.id !== id)
