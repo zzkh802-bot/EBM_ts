@@ -82,13 +82,17 @@ describe("semantic session workspaces", () => {
     expect(piSessionDirectory(cwd, sessionId)).toBe(first);
   });
 
-  it("does not migrate or rename an existing UUID workspace", async () => {
+  it("keeps a pre-created UUID workspace addressable through the canonical session mapping", async () => {
     const cwd = await mkdtemp(path.join(os.tmpdir(), "ebm-workspace-"));
     const sessionId = "legacy-session-1";
     const legacy = path.join(cwd, "data", "sessions", sessionId);
     await mkdir(legacy, { recursive: true });
     await expect(initializePiSessionDirectory(cwd, sessionId, { firstPrompt: "New semantic title" })).resolves.toBe(legacy);
     expect(piReadableSessionPath(cwd, sessionId, "reports/report.md")).toBe("data/sessions/legacy-session-1/reports/report.md");
+    await expect(readFile(path.join(cwd, "data", "sessions", ".metadata", "workspaces", `${sessionId}.json`), "utf8"))
+      .resolves.toContain(`"directory": "${sessionId}"`);
+    await expect(readFile(path.join(legacy, ".metadata", "session.json"), "utf8"))
+      .resolves.toContain(`"sessionId": "${sessionId}"`);
   });
 
   it("rejects symlinked legacy workspaces", async () => {

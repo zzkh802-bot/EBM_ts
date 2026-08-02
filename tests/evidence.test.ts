@@ -54,6 +54,24 @@ describe("Markdown evidence ledger", () => {
       expect(await verifyEvidence(dir, node)).toEqual({ ok: true, errors: [] });
     });
 
+    it("ignores paired Markdown emphasis markers while preserving the canonical quote", async () => {
+      const dir = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
+      const source = "**HIGH-VALUE CARE ADVICE 4:** Clinicians should not prescribe antibiotics for patients with the common cold.";
+      await writeFile(path.join(dir, "source.md"), source, "utf8");
+
+      const node = await addEvidence({
+        sessionDir: dir,
+        question: "Should clinicians prescribe antibiotics for the common cold?",
+        claim: "Clinicians should not prescribe antibiotics for the common cold.",
+        relation: "supports",
+        sourcePath: "source.md",
+        quote: "HIGH-VALUE CARE ADVICE 4: Clinicians should not prescribe antibiotics for patients with the common cold.",
+      });
+
+      expect(node).toMatchObject({ quote: source, matchMode: "layout_normalized" });
+      expect(await verifyEvidence(dir, node)).toEqual({ ok: true, errors: [] });
+    });
+
     it("uses the same evidence id regardless of exact or layout-normalized submission", async () => {
       const dir = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
       const source = "治疗可显著降低\n卒中风险";

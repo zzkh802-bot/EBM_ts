@@ -551,8 +551,8 @@ body.chat-mode .conversation-files-panel { position: sticky; top: 20px; display:
 .citation-evidence-head small { color: var(--ink-faint); font-size: 10px; text-align: right; }
 .citation-evidence-claim { margin: 11px 0; color: var(--ink); font-size: 13px; font-weight: 650; line-height: 1.6; }
 .citation-evidence-quote { padding: 13px 15px; margin: 0; border-left: 2px solid rgba(49, 95, 155, .45); background: rgba(255, 255, 255, .72); color: #263b4d; }
-.citation-evidence-quote .markdown-content > :first-child, .citation-source-document .markdown-content > :first-child { margin-top: 0; }
-.citation-evidence-quote .markdown-content > :last-child, .citation-source-document .markdown-content > :last-child { margin-bottom: 0; }
+.citation-evidence-quote .markdown-content > :first-child { margin-top: 0; }
+.citation-evidence-quote .markdown-content > :last-child { margin-bottom: 0; }
 .citation-evidence-quote .markdown-content h1, .citation-evidence-quote .markdown-content h2, .citation-evidence-quote .markdown-content h3,
 .citation-evidence-quote .markdown-content h4, .citation-evidence-quote .markdown-content h5, .citation-evidence-quote .markdown-content h6 { margin: 0 0 8px; color: var(--ink); font-family: var(--sans); font-size: 12px; font-weight: 750; letter-spacing: .02em; line-height: 1.4; }
 .citation-evidence-quote .markdown-content p, .citation-evidence-quote .markdown-content li { margin: 7px 0; color: #263b4d; font-family: var(--reading); font-size: 13px; line-height: 1.78; }
@@ -563,21 +563,8 @@ body.chat-mode .conversation-files-panel { position: sticky; top: 20px; display:
 .citation-evidence-source .citation-source-institution { color: var(--ink-faint); font-family: var(--sans); font-size: 10px; font-weight: 500; }
 .citation-evidence-source strong { overflow: hidden; color: var(--ink-soft); font-size: 11px; font-weight: 600; line-height: 1.45; text-overflow: ellipsis; }
 .citation-source-actions { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 9px; }
-.citation-evidence-source a, .citation-source-archive-button { color: var(--evidence); font-size: 11px; font-weight: 700; text-decoration: none; }
-.citation-source-archive-button { padding: 0; border: 0; background: transparent; }
-.citation-source-archive-button:hover, .citation-evidence-source a:hover { color: var(--jade); }
-.citation-source-document { padding: 18px 0 4px; margin-top: 15px; border-top: 1px solid var(--line); }
-.citation-source-document > header { display: grid; gap: 4px; margin-bottom: 18px; }
-.citation-source-document > header span { color: var(--evidence); font-family: var(--mono); font-size: 9px; font-weight: 750; letter-spacing: .08em; }
-.citation-source-document > header strong { color: var(--ink); font-family: var(--serif); font-size: 18px; line-height: 1.35; }
-.citation-source-document .markdown-content h1 { margin: 28px 0 15px; color: var(--ink); font-family: var(--serif); font-size: 24px; line-height: 1.25; }
-.citation-source-document .markdown-content h2 { margin: 25px 0 11px; color: var(--ink); font-family: var(--serif); font-size: 19px; line-height: 1.35; }
-.citation-source-document .markdown-content h3, .citation-source-document .markdown-content h4 { margin: 21px 0 9px; color: var(--ink); font-size: 15px; line-height: 1.45; }
-.citation-source-document .markdown-content p, .citation-source-document .markdown-content li { margin: 9px 0; color: var(--ink-soft); font-family: var(--reading); font-size: 13px; line-height: 1.84; }
-.citation-source-document .markdown-content ul, .citation-source-document .markdown-content ol { padding-left: 22px; margin: 10px 0; }
-.citation-source-document .report-table-wrap { margin: 15px 0; overflow-x: auto; }
-.citation-source-document table { width: 100%; border-collapse: collapse; font-size: 11px; }
-.citation-source-document th, .citation-source-document td { padding: 7px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.citation-evidence-source a { color: var(--evidence); font-size: 11px; font-weight: 700; text-decoration: none; }
+.citation-evidence-source a:hover { color: var(--jade); }
 .citation-actions { justify-content: flex-end; padding-top: 18px; }
 
 @media (min-width: 1600px) {

@@ -131,16 +131,39 @@ async function initializePiSessionDirectoryUnlocked(cwd: string, sessionId: stri
   if (existingMapping) return existingMapping;
 
   const root = sessionRoot(cwd);
+  const label = input.sessionName?.trim() || input.firstPrompt.trim() || "research";
   await mkdir(root, { recursive: true, mode: 0o700 });
   const legacy = path.join(root, sessionId);
   if (existsSync(legacy)) {
     const safeLegacy = safeExistingWorkspace(cwd, legacy);
     if (!safeLegacy) throw new Error(`unsafe legacy workspace for session ${sessionId}`);
+    const metadataDir = path.join(safeLegacy, ".metadata");
+    const metadataFile = path.join(metadataDir, "session.json");
+    const mappingsDir = path.dirname(mappingPath(cwd, sessionId));
+    await mkdir(metadataDir, { recursive: true, mode: 0o700 });
+    await mkdir(mappingsDir, { recursive: true, mode: 0o700 });
+    try {
+      await writeFile(metadataFile, `${JSON.stringify({
+        sessionId,
+        directory: sessionId,
+        displayName: label,
+        createdAt: formatBeijingTimestamp(),
+      }, null, 2)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    } catch (error) {
+      const existing = JSON.parse(await readFile(metadataFile, "utf8")) as { sessionId?: unknown };
+      if (existing.sessionId !== sessionId) throw error;
+    }
+    const targetMapping = mappingPath(cwd, sessionId);
+    try {
+      await writeFile(targetMapping, `${JSON.stringify({ sessionId, directory: sessionId }, null, 2)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    } catch (error) {
+      const existing = JSON.parse(await readFile(targetMapping, "utf8")) as { directory?: unknown };
+      if (existing.directory !== sessionId) throw error;
+    }
     workspaceCache.set(cacheKey(cwd, sessionId), safeLegacy);
     return safeLegacy;
   }
 
-  const label = input.sessionName?.trim() || input.firstPrompt.trim() || "research";
   const baseDirectory = `${sessionId.slice(0, 8)}_${semanticSlug(label)}`;
   let directory = baseDirectory;
   let workspace = path.join(root, directory);

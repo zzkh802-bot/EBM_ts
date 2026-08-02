@@ -24,5 +24,5 @@ export type { ResearchFrameInput, ResearchFrameRecord } from "./tools/researchFr
 export { GuidelineMcpClient, readGuideline, retrieveGuidelines, searchGuidelines } from "./tools/guidelineMcp.js";
 export type { GuidelineClient, GuidelineReadResult, GuidelineResult, GuidelineRetrieveItem, GuidelineRetrieveResult, GuidelineSearchItem, GuidelineToolResult } from "./tools/guidelineMcp.js";
 export type { EvidenceNode, EvidenceProvenance, EvidenceRelation } from "./tools/evidence.js";
-export { createAgentApiServer, createPiCliExecutor, AgentRunStore } from "./server/agentApi.js";
+export { createAgentApiServer, createPiRpcExecutor, AgentRunStore } from "./server/agentApi.js";
 export type { AgentApiServerOptions, AgentExecutionResult, AgentExecutor, AgentRunInput, AgentRunResponse, AgentRunStatus } from "./server/agentApi.js";

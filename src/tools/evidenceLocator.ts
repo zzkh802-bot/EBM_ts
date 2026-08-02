@@ -19,7 +19,7 @@ export type EvidenceQuoteCandidate = {
 };
 
 type NormalizedChar = { value: string; sourceStart: number; sourceEnd: number };
-type NormalizedText = { value: string; chars: NormalizedChar[] };
+type NormalizedText = { value: string; chars: NormalizedChar[]; presentationOffsets: Set<number> };
 type ScoredSpan = { start: number; end: number; score: number; matchedBy: EvidenceQuoteCandidate["matchedBy"] };
 
 const IGNORED_LAYOUT_CHARACTERS = /[\u200B-\u200D\u2060\uFEFF\u00AD]/u;
@@ -39,6 +39,22 @@ function sourceCharacters(value: string): NormalizedChar[] {
   return chars;
 }
 
+function markdownPresentationOffsets(value: string): Set<number> {
+  const offsets = new Set<number>();
+  const emphasis = /(\*\*|__)(?=\S)([^\n]*?\S)\1/g;
+  for (const match of value.matchAll(emphasis)) {
+    const start = match.index;
+    const markerLength = match[1]?.length ?? 0;
+    if (start === undefined || markerLength === 0) continue;
+    const endMarker = start + match[0].length - markerLength;
+    for (let index = 0; index < markerLength; index += 1) {
+      offsets.add(start + index);
+      offsets.add(endMarker + index);
+    }
+  }
+  return offsets;
+}
+
 function isIgnored(character: string): boolean {
   return IGNORED_LAYOUT_CHARACTERS.test(character);
 }
@@ -54,11 +70,12 @@ function isWhitespace(character: string): boolean {
  */
 export function normalizeEvidenceLayout(value: string): NormalizedText {
   const source = sourceCharacters(value);
+  const presentationOffsets = markdownPresentationOffsets(value);
   const output: NormalizedChar[] = [];
   let index = 0;
   while (index < source.length) {
     const current = source[index]!;
-    if (isIgnored(current.value)) {
+    if (isIgnored(current.value) || presentationOffsets.has(current.sourceStart)) {
       index += 1;
       continue;
     }
@@ -74,7 +91,7 @@ export function normalizeEvidenceLayout(value: string): NormalizedText {
     let nextIndex = index + 1;
     while (nextIndex < source.length) {
       const next = source[nextIndex]!;
-      if (!isWhitespace(next.value) && !isIgnored(next.value)) break;
+      if (!isWhitespace(next.value) && !isIgnored(next.value) && !presentationOffsets.has(next.sourceStart)) break;
       runEnd = next.sourceEnd;
       if (next.value === "\n") newlineCount += 1;
       nextIndex += 1;
@@ -87,7 +104,7 @@ export function normalizeEvidenceLayout(value: string): NormalizedText {
     }
     index = nextIndex;
   }
-  return { value: output.map((item) => item.value).join(""), chars: output };
+  return { value: output.map((item) => item.value).join(""), chars: output, presentationOffsets };
 }
 
 function occurrences(haystack: string, needle: string): number[] {
@@ -126,7 +143,11 @@ function originalSpan(normalized: NormalizedText, start: number, end: number): {
   const first = normalized.chars[start];
   const last = normalized.chars[end - 1];
   if (!first || !last) return undefined;
-  return { start: first.sourceStart, end: last.sourceEnd };
+  let sourceStart = first.sourceStart;
+  let sourceEnd = last.sourceEnd;
+  while (normalized.presentationOffsets.has(sourceStart - 1)) sourceStart -= 1;
+  while (normalized.presentationOffsets.has(sourceEnd)) sourceEnd += 1;
+  return { start: sourceStart, end: sourceEnd };
 }
 
 function lineWindow(source: string, charStart: number, charEnd: number, contextLines: number): { start: number; end: number } {

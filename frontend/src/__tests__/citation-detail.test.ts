@@ -9,14 +9,8 @@ afterEach(() => vi.unstubAllGlobals())
 describe('报告引用核验', () => {
   it('展示已核验的原文片段与公开原文链接，不展示内部 evidence ID', async () => {
     setActivePinia(createPinia())
-    vi.stubGlobal('fetch', vi.fn().mockImplementation((input: RequestInfo | URL) => {
-      const url = String(input)
-      const payload = url.includes('/citations/source?') ? {
-        title: 'Randomized trial',
-        url: 'https://pubmed.ncbi.nlm.nih.gov/12345678/',
-        scope: 'archived_document',
-        markdown: '# Trial\n\n**The intervention** reduced recurrence without increasing severe bleeding.',
-      } : {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => {
+      const payload = {
         number: 1,
         citation: 'Randomized trial. PMID 12345678.',
         evidence: [{
@@ -29,8 +23,6 @@ describe('报告引用核验', () => {
           source: {
             title: 'Randomized trial',
             url: 'https://pubmed.ncbi.nlm.nih.gov/12345678/',
-            archive_available: true,
-            archive_scope: 'archived_document',
           },
         }],
       }
@@ -49,10 +41,7 @@ describe('报告引用核验', () => {
     expect(wrapper.get('.citation-evidence-quote h2').text()).toBe('Results')
     expect(wrapper.get('.citation-evidence-quote strong').text()).toBe('The intervention')
     expect(wrapper.get('.citation-evidence-source a').attributes('href')).toBe('https://pubmed.ncbi.nlm.nih.gov/12345678/')
-    await wrapper.get('.citation-source-archive-button').trigger('click')
-    await flushPromises()
-    expect(wrapper.get('.citation-source-document h1').text()).toBe('Trial')
-    expect(wrapper.get('.citation-source-document .markdown-content strong').text()).toBe('The intervention')
+    expect(wrapper.find('.citation-source-archive-button').exists()).toBe(false)
     expect(wrapper.text()).not.toMatch(/ev_[a-f0-9]{16}/)
   })
 
@@ -66,7 +55,6 @@ describe('报告引用核验', () => {
         provenance: 'guideline_official', confidence: 'high', verified: true,
         source: {
           title: '中国指南（2023 年版）', institution: '中华医学会', url: '',
-          archive_available: false, archive_scope: 'archived_document',
         },
       }],
     }), { headers: { 'Content-Type': 'application/json' } })))

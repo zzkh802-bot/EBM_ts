@@ -138,25 +138,10 @@ describe("循医研究服务 API", () => {
           source: {
             title: "Randomized trial",
             url: "https://pubmed.ncbi.nlm.nih.gov/12345678/",
-            archive_available: true,
-            archive_scope: "archived_document",
           },
         }],
       });
       expect(JSON.stringify(payload)).not.toContain(evidence.id);
-
-      const sourceResponse = await fetch(`${baseUrl}/api/v1/research-sessions/${sessionId}/citations/source?report_path=${encodeURIComponent(report.path)}&number=1&evidence=0`);
-      const sourcePayload = await sourceResponse.json() as any;
-      expect(sourceResponse.status).toBe(200);
-      expect(sourcePayload).toMatchObject({
-        title: "Randomized trial",
-        url: "https://pubmed.ncbi.nlm.nih.gov/12345678/",
-        scope: "archived_document",
-        markdown: "# Trial\n\nThe intervention reduced recurrence without increasing severe bleeding.",
-      });
-      expect(JSON.stringify(sourcePayload)).not.toContain(evidence.id);
-      expect(JSON.stringify(sourcePayload)).not.toContain("data/sessions");
-      expect(sourcePayload.markdown).not.toContain("source_url:");
 
       const mcpResponse = await fetch(`${baseUrl}/api/v1/research-sessions/${sessionId}/citations?report_path=${encodeURIComponent(report.path)}&number=2`);
       const mcpPayload = await mcpResponse.json() as any;
@@ -165,10 +150,7 @@ describe("循医研究服务 API", () => {
         title: "Chinese clinical guideline",
         institution: "Chinese Medical Association",
         url: "",
-        archive_available: false,
       });
-      const hiddenMcpSource = await fetch(`${baseUrl}/api/v1/research-sessions/${sessionId}/citations/source?report_path=${encodeURIComponent(report.path)}&number=2&evidence=0`);
-      expect(hiddenMcpSource.status).toBe(404);
     } finally {
       api.server.close();
       await once(api.server, "close");
