@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { cleanExternalText, normalizeMarkdown } from "./markdown.js";
+import { preprocessExternalContent, type ExternalContentFormat } from "./markdown.js";
 
 export type SourceArchiveResource = {
   path: string;
@@ -17,6 +17,7 @@ export type SourceArchiveInput = {
   sourceInstitution?: string;
   title?: string;
   content: string;
+  contentFormat?: ExternalContentFormat;
   resources?: SourceArchiveResource[];
 };
 
@@ -219,7 +220,7 @@ async function archiveReadDirectory(input: SourceArchiveInput, archived: string,
 }
 
 export async function archiveSource(input: SourceArchiveInput): Promise<SourceArchiveRecord> {
-  const content = normalizeMarkdown(cleanExternalText(input.content));
+  const content = preprocessExternalContent(input.content, input.contentFormat ? { format: input.contentFormat } : {});
   const normalizedInput = { ...input, content };
   const sha256 = createHash("sha256").update(content).digest("hex");
   const baseName = stableArchiveName(normalizedInput).replace(/\.md$/, "");

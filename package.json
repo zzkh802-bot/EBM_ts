@@ -27,6 +27,7 @@
     "@earendil-works/pi-coding-agent": "file:vendor/pi-coding-agent",
     "fast-xml-parser": "^5.10.1",
     "fflate": "^0.8.3",
+    "node-html-markdown": "^2.0.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^5.7.284",
     "typebox": "^1.0.55",

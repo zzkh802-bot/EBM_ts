@@ -1,6 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
 import { Agent, fetch as undiciFetch } from "undici";
 import { archiveSource, type SourceArchiveRecord } from "./archive.js";
+import { preprocessExternalContent } from "./markdown.js";
 
 const ncbiDispatcher = new Agent({ connect: { family: 4 } });
 const defaultNcbiFetch = ((input: Parameters<typeof fetch>[0], init?: RequestInit) =>
@@ -500,22 +501,6 @@ function renderPubmedFullTextMarkdown(article: ParsedArticle, body: string[], so
   ].join("\n");
 }
 
-function decodeHtml(text: string): string {
-  return text
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
-}
-
-function stripHtml(fragment: string): string {
-  return decodeHtml(fragment.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
-}
-
 function extractBalancedSection(html: string, startIndex: number): string | undefined {
   const tag = /<\/?section\b[^>]*>/gi;
   tag.lastIndex = startIndex;
@@ -536,24 +521,7 @@ function extractBalancedSection(html: string, startIndex: number): string | unde
 }
 
 function htmlBodyToMarkdown(fragment: string): string[] {
-  const cleaned = fragment
-    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
-    .replace(/<style\b[\s\S]*?<\/style>/gi, "")
-    .replace(/<sup\b[^>]*class="[^"]*reference[^"]*"[\s\S]*?<\/sup>/gi, "")
-    .replace(/<table\b[\s\S]*?<\/table>/gi, (table) => `\n\n${stripHtml(table)}\n\n`)
-    .replace(/<h2\b[^>]*>([\s\S]*?)<\/h2>/gi, (_, text) => `\n\n## ${stripHtml(text)}\n\n`)
-    .replace(/<h3\b[^>]*>([\s\S]*?)<\/h3>/gi, (_, text) => `\n\n### ${stripHtml(text)}\n\n`)
-    .replace(/<h4\b[^>]*>([\s\S]*?)<\/h4>/gi, (_, text) => `\n\n#### ${stripHtml(text)}\n\n`)
-    .replace(/<p\b[^>]*>([\s\S]*?)<\/p>/gi, (_, text) => `\n\n${stripHtml(text)}\n\n`)
-    .replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, (_, text) => `\n- ${stripHtml(text)}`)
-    .replace(/<br\s*\/?\s*>/gi, "\n");
-  return decodeHtml(cleaned.replace(/<[^>]+>/g, " "))
-    .replace(/[ \t\f\v]+/g, " ")
-    .replace(/\n[ \t]+/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .split(/\n{2,}/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 20 || /^#{2,4}\s/.test(line));
+  return preprocessExternalContent(fragment, { format: "html" }).split("\n");
 }
 
 function renderPmcHtmlFullText(article: ParsedArticle, html: string): string {

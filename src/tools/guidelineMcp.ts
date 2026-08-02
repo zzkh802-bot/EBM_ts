@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { archiveSource, type SourceArchiveRecord } from "./archive.js";
+import { preprocessExternalContent } from "./markdown.js";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 
@@ -293,14 +294,14 @@ function searchCardsFromText(text: string): GuidelineSearchItem[] {
     if (typeof item.document_kind === "string" && item.document_kind.trim()) card.documentKind = item.document_kind.trim();
     if (typeof item.view_id === "string" && item.view_id.trim()) card.viewId = item.view_id.trim();
     if (typeof item.view_type === "string" && item.view_type.trim()) card.viewType = item.view_type.trim();
-    if (typeof item.abstract === "string" && item.abstract.trim()) card.abstract = item.abstract.trim();
+    if (typeof item.abstract === "string" && item.abstract.trim()) card.abstract = preprocessExternalContent(item.abstract.trim());
     if (item.document_views && typeof item.document_views === "object" && !Array.isArray(item.document_views)) {
       const views = item.document_views as Record<string, unknown>;
       const viewTypes = Object.keys(views);
       if (viewTypes.length) card.availableViewTypes = viewTypes;
       if (card.viewType) {
         const matched = viewText(views[card.viewType]);
-        if (matched) card.matchedViewContent = matched;
+        if (matched) card.matchedViewContent = preprocessExternalContent(matched);
       }
     }
     if (item.is_fallback === true) card.fallbackMatch = true;

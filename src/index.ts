@@ -3,7 +3,7 @@ export type { CompactionArtifactInput } from "./tools/compactionArtifact.js";
 export { registerEbmTools } from "./extensions/ebmTools.js";
 export { registerEbmProviders, XINQIONG_PROVIDER_ID } from "./providers/providerCatalog.js";
 export { archiveSource, stableArchiveName } from "./tools/archive.js";
-export { normalizeMarkdown } from "./tools/markdown.js";
+export { normalizeMarkdown, preprocessExternalContent } from "./tools/markdown.js";
 export type { MarkdownNormalizationOptions } from "./tools/markdown.js";
 export { addEvidence, listEvidence, readEvidence, renderEvidenceMarkdown, verifyEvidence } from "./tools/evidence.js";
 export { isPrivateAddress, jinaReaderUrl, validateOutboundUrl } from "./tools/urlSafety.js";

@@ -118,4 +118,22 @@ describe("source archive", () => {
     expect(record.lines).toBe(record.content.split("\n").length);
     expect(saved.split("\n").slice(record.bodyLineStart - 1).join("\n")).toBe(record.content);
   });
+
+  it("returns exactly the same cleaned markup that it persists as the citation body", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
+    const record = await archiveSource({
+      sessionDir,
+      kind: "read",
+      title: "HTML guideline",
+      contentFormat: "html",
+      content: '<section><h2>Recommendation</h2><p>Use treatment when BP &lt;185/110 mmHg.</p><table><tr><th>Group</th><th>Dose</th></tr><tr><td>Adult</td><td>5 mg</td></tr></table></section>',
+    });
+    const saved = await readFile(path.join(sessionDir, record.path), "utf8");
+    const archivedBody = saved.split("\n").slice(record.bodyLineStart - 1).join("\n");
+
+    expect(record.content).toBe(archivedBody);
+    expect(record.content).toContain("## Recommendation");
+    expect(record.content).toContain("| Adult");
+    expect(record.content).not.toContain("<section>");
+  });
 });
