@@ -471,7 +471,11 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
                 </header>
                 <section class="model-answer" aria-label="本轮回答摘要">
                   <span>本轮回答摘要</span>
-                  <p>{{ message.content }}</p>
+                  <ReportRenderer
+                    :markdown="message.content"
+                    :audience="message.audienceMode"
+                    @citation="openCitation"
+                  />
                 </section>
                 <ReportRenderer
                   :markdown="message.reportMarkdown"

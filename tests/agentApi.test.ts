@@ -47,6 +47,8 @@ describe("循医研究服务 API", () => {
       expect(prompt).toContain("不得只在聊天消息中输出摘要")
       expect(prompt).toContain("clinical-report-writing skill")
       expect(prompt).toContain("调用 report_write 前自检")
+      expect(prompt).toContain("只有研究目标、临床判断或面向医生的阶段发生实质变化时才说明进展")
+      expect(prompt).toContain("定位行号、登记证据和可自动恢复的工具重试")
       expect(prompt).not.toContain("完整呈现 PICO")
       expect(prompt).not.toContain("保留 PICO")
       expect(prompt).not.toContain("临床场景概述、循证问题、证据基础与证据状态")

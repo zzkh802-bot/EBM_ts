@@ -198,6 +198,40 @@ describe("archived web tools", () => {
     expect(mock.calls[0]!.input).toBe("https://r.jinaai.cn/https://example.com/study");
   });
 
+  it("rejects a Jina access-verification page instead of archiving it as evidence", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
+    const challenge = [
+      "Title: Just a moment...",
+      "Warning: This page maybe requiring CAPTCHA.",
+      "## Performing security verification",
+      "This page is displayed while the website verifies you are not a bot.",
+    ].join("\n\n");
+    const mock = mockFetch([new Response(challenge, { status: 200 })]);
+
+    const result = await readWeb({ sessionDir, url: "https://example.com/protected-study", fetcher: mock.fetcher });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "all_readers_failed" } });
+    expect(await readdir(sessionDir)).toHaveLength(0);
+  });
+
+  it("falls back to Firecrawl when Jina returns an access-verification page", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
+    const challenge = "Title: Just a moment...\n\nWarning: CAPTCHA required.\n\nPerforming security verification.";
+    const mock = mockFetch([
+      new Response(challenge, { status: 200 }),
+      Response.json({ data: { markdown: "# Clinical guideline\n\nRecommendation text with enough source detail.", metadata: { title: "Clinical guideline" } } }),
+    ]);
+
+    const result = await readWeb({
+      sessionDir,
+      url: "https://example.com/protected-study",
+      fetcher: mock.fetcher,
+      firecrawlApiKey: "test-key",
+    });
+
+    expect(result).toMatchObject({ ok: true, provider: "firecrawl" });
+  });
+
   it("uses MinerU before web readers for document URLs", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
     const archive = zipSync({ "result/full.md": strToU8("# PDF result\n\nParsed evidence.") });
