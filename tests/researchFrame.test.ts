@@ -43,6 +43,19 @@ describe("research frame", () => {
     expect(first.content).toContain("Does BP 165/95 mmHg block alteplase");
   });
 
+  it("publishes one complete frame when startup and tool initialization race", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-frame-"));
+    const frames = await Promise.all(Array.from({ length: 12 }, (_, index) => initResearchFrame({
+      sessionDir,
+      userQuestion: index === 0 ? "Should anticoagulation be resumed?" : `Concurrent tool call ${index}`,
+    })));
+    const [first] = frames;
+
+    expect(first?.content).toContain("# Research Frame");
+    expect(frames.every((frame) => frame.content === first?.content)).toBe(true);
+    await expect(readFile(path.join(sessionDir, "notes", "research_frame.md"), "utf8")).resolves.toBe(first?.content);
+  });
+
   it("accepts free section content but rejects missing or reordered fixed headings", () => {
     const valid = validFrame("observation -> belief -> next action");
     expect(researchFrameValidationError(valid)).toBe("");

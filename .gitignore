@@ -11,6 +11,9 @@ coverage/
 data/sessions/
 data/pi-sessions/
 data/pi-agent/
+data/pi-patient-intake/
+data/pi-patient-sessions/
+data/patient-records/
 data/benchmark_reports/
 data/source_library/guidelines/*
 !data/source_library/guidelines/README.md

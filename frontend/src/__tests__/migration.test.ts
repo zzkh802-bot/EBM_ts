@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import {
-  buildAgentRequest,
-  migrateSessions,
-  modeIterationBudget,
-  modeTimeoutSeconds,
-  readLegacyString,
+  buildResearchRunRequest,
   responseText,
 } from '../utils/core'
 import { extractReferences, parseReport, projectReport, reportPlainText } from '../utils/report'
@@ -16,43 +12,13 @@ beforeEach(() => {
   setActivePinia(createPinia())
 })
 
-describe('回答模式预算', () => {
-  it.each([
-    ['instant', false, 5, 300],
-    ['instant', true, 5, 300],
-    ['expert', false, 12, 600],
-    ['expert', true, 12, 600],
-  ] as const)('%s deep=%s', (researchMode, deepThink, budget, timeout) => {
-    const mode = { researchMode, deepThink, audienceMode: 'clinician' as const, searchEnabled: true }
-    expect(modeIterationBudget(mode)).toBe(budget)
-    expect(modeTimeoutSeconds(mode)).toBe(timeout)
-  })
-})
-
-describe('会话存储迁移', () => {
-  it('兼容 snake_case 和旧 ebm_session_id', () => {
-    const rows = migrateSessions([
-      { id: 'a', title: 'A', messages: [], ebm_session_id: 'snake' },
-      { id: 'b', title: 'B', messages: [] },
-    ], 'legacy')
-    expect(rows[0].ebmSessionId).toBe('snake')
-    expect(rows[1].ebmSessionId).toBeNull()
-    expect(migrateSessions([{ id: 'a', messages: [] }], 'legacy')[0].ebmSessionId).toBe('legacy')
-  })
-  it('兼容原始字符串和历史 JSON 字符串键值', () => {
+describe('本地工作台状态', () => {
+  it('不再读取已退役的历史会话和偏好键', () => {
     localStorage.setItem('dp_xunyi_theme_mode_v1', '"dark"')
-    localStorage.setItem('dp_xunyi_sessions_v1', JSON.stringify([{ id: 'session-id', messages: [] }]))
-    localStorage.setItem('dp_xunyi_active_session_v1', '"session-id"')
-    expect(readLegacyString('dp_xunyi_theme_mode_v1')).toBe('dark')
-    expect(localStorage.getItem('dp_xunyi_theme_mode_v1')).toBe('dark')
-    expect(usePreferencesStore().themeMode).toBe('dark')
-    expect(usePreferencesStore().backendVersion).toBe('v1')
-    expect(useSessionsStore().activeSessionId).toBe('session-id')
-    expect(localStorage.getItem('dp_xunyi_active_session_v1')).toBe('session-id')
-  })
-  it('为旧会话补齐独立的 V2 session', () => {
-    const [session] = migrateSessions([{ id: 'a', messages: [], v2_session_id: 'pi-1' }])
-    expect(session.v2SessionId).toBe('pi-1')
+    localStorage.setItem('dp_xunyi_sessions_v1', JSON.stringify([{ id: 'retired-session', messages: [] }]))
+    localStorage.setItem('dp_xunyi_active_session_v1', '"retired-session"')
+    expect(usePreferencesStore().themeMode).toBe('system')
+    expect(useSessionsStore().activeSessionId).not.toBe('retired-session')
   })
 })
 
@@ -91,26 +57,17 @@ describe('报告 AST 与投影', () => {
   })
 })
 
-describe('Agent DTO', () => {
-  it('保持四模式参数、双会话和响应优先级', () => {
-    const dto = buildAgentRequest('稳定问题', '完整问题', [{
-      id: 'ui-only', name: 'report.pdf', size: 42, type: 'application/pdf',
-      dataUrl: 'data:application/pdf;base64,QUJD',
-    }], 'remote-1', {
-      researchMode: 'expert', audienceMode: 'public', deepThink: true, searchEnabled: false,
-    })
+describe('Agent run DTO', () => {
+  it('只构建当前后端契约需要的追踪会话请求', () => {
+    const dto = buildResearchRunRequest('完整问题', 'remote-1', {
+      thinkingLevel: 'max', audienceMode: 'public', searchEnabled: false,
+    }, 'openai', 'gpt-5-mini')
     expect(dto).toMatchObject({
-      stable_question: '稳定问题', question: '完整问题', ebm_session_id: 'remote-1',
-      max_iterations: 12, request_timeout_seconds: 600, research_mode: 'expert',
-      audience_mode: 'public', deep_think: true, search_enabled: false,
+      question: '完整问题', session_id: 'remote-1',
+      audience_mode: 'public', thinking_level: 'max', search_enabled: false,
+      provider: 'openai', model: 'gpt-5-mini',
     })
-    expect(dto.attachments).toEqual([{
-      name: 'report.pdf', size: 42, type: 'application/pdf',
-      content_base64: 'data:application/pdf;base64,QUJD',
-    }])
-    expect(dto.attachments[0]).not.toHaveProperty('id')
-    expect(dto.attachments[0]).not.toHaveProperty('dataUrl')
-    expect(responseText({ report_markdown: 'report', agent_answer: 'answer', message: 'message' })).toBe('report')
+    expect(responseText({ report_markdown: 'report', agent_answer: 'answer', message: 'message' })).toBe('answer')
     expect(responseText({ agent_answer: 'answer', message: 'message' })).toBe('answer')
   })
 })

@@ -58,7 +58,7 @@ cp .env.example .env
 npm run ebm
 ```
 
-## Web application and V2 API
+## Web application and Agent API
 
 Start the TypeScript Agent API from the repository root:
 
@@ -75,7 +75,7 @@ npm install
 npm run dev
 ```
 
-The production deployment keeps the public frontend and V1 compatibility route behind Nginx while the V2 Agent API runs on an internal loopback port. Deployment credentials and API keys are intentionally not stored in this repository.
+The production deployment keeps the public frontend behind Nginx while the Agent API runs on an internal loopback port. Deployment credentials and API keys are intentionally not stored in this repository.
 
 `npm run ebm` is the single launcher. It loads the ignored local `.env` and launches Pi's interactive TUI.
 

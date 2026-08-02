@@ -1,5 +1,26 @@
 # Development Log
 
+## 2026-07-31 — Codex subscription transport recovery
+
+- Confirmed that a failed Codex WebSocket connection was cached as a permanent per-session SSE fallback, so recovered networks never retried the preferred transport during a long-lived terminal session.
+- Added a small, reproducible dependency patch: automatic fallback now cools down for 30 seconds before retrying WebSocket; explicitly selected WebSocket transports fail visibly instead of silently changing transport.
+- Added one transport-level regression test with a simulated WebSocket outage and no real account or credential access.
+
+## 2026-07-31 — research asset library
+
+- Replaced the knowledge page's retired archive calls and browser-only "imported" metadata with a direct view of real per-session research workspaces.
+- The library now lists formal reports, research frames, evidence records, and archived sources produced by the local service; selecting a row opens that exact file in the existing workspace detail view.
+- Removed UI claims about upload processing, embeddings, shared libraries, and review states that the service does not implement. File import and retrieval-augmented knowledge management remain a separate future capability, rather than a simulated one.
+- Verification: root `npm run typecheck`; frontend production build; live local service health and knowledge-route checks.
+
+## 2026-07-31 — connected research workspace
+
+- Restored the research-asset route and made it a first-class desktop and mobile navigation destination; the previous redirect made the real workspace-backed library unreachable.
+- Replaced the flat research-file list with a VS Code–style explorer: reports, evidence, notes, and archived sources retain their directory structure; selected reports render as documents beside the tree.
+- Kept the explorer scoped to the active research conversation, so the chat, generated formal report, evidence files, and archived sources are one continuous workflow rather than separate product areas.
+- Refined the asset library after visual review: it now presents one research archive per session, named from its formal report and summarized by report/evidence/source counts. Internal evidence identifiers and source index files remain available only inside that archive's explorer.
+- Verification: a real quick-mode hypertension research run completed through the active local provider, produced a formal report and 19 workspace files, then was visually reviewed in desktop conversation, desktop explorer, and mobile explorer states. The unavailable local guideline service appeared as failed tool records while remaining retrieval continued.
+
 Persistent implementation memory for context compaction/recovery. Update after each verified vertical slice.
 
 ## Current direction
@@ -9,6 +30,67 @@ Persistent implementation memory for context compaction/recovery. Update after e
 - Markdown source/evidence truth with stable line offsets.
 - Local development first; Pi native TUI and bash remain available.
 - Governing decisions: `docs/adr/0001-*`, `0002-*`, `0003-*`.
+
+## 2026-07-30 — product runtime and execution visibility
+
+### Completed slice: model configuration and user-visible execution
+
+- Made the TypeScript research service the only user-facing chat path. The retired Python/V1 route remains a compatibility API only; the UI no longer asks users to choose an implementation backend.
+- Added `GET /api/v1/runtime-config`. It returns only provider/model labels, availability and setup hints—never credentials. The submit request now carries the selected provider/model and the server validates it against this configuration before launching the runtime.
+- Added server configuration for 芯穹, DeepSeek, OpenAI and Anthropic. 芯穹 now prefers `XINQIONG_API_KEY` while retaining the existing `OPENAI_API_KEY` compatibility path; OpenAI requires the explicit `EBM_ENABLE_OPENAI=1` guard to avoid mistaking a legacy 芯穹 key for an OpenAI key.
+- Reused the runtime's native tool lifecycle: a tool starts one record and completion updates that same record. The frontend polls and renders each call as one compact line; users can expand it for input, result summary, error and timestamps. Tool output is bounded and obvious secret-shaped values are redacted before it crosses the API boundary.
+- Removed demo-like static “connected sources”, fabricated daily counts and fabricated continuation cards. The side panel now reflects real server configuration and the selected research mode.
+- Kept the runtime implementation private in product text: user-visible copy refers to the “循证研究服务” and “研究引擎”; runtime names remain limited to internal code/ADR documentation.
+- Deliberately did not add a per-tool approval/rollback workflow: clinical research involves many read-only actions, so it would add friction without a meaningful decision boundary.
+- Verification: root `npm run typecheck`; focused `npm test -- tests/agentApi.test.ts` (5 passing); frontend `npm run typecheck && npm test` (20 passing).
+
+### Completed slice: subscription account connection
+
+- Studied the runtime TUI account flow and reused its `ModelRuntime.login()` interface instead of reimplementing provider OAuth. The runtime supports ChatGPT Plus/Pro (Codex) and Claude Pro/Max subscription login, alongside API-key deployment configuration.
+- Added local single-user account-connection endpoints. They relay only an authorization URL, device code, non-secret selection/manual-code prompt and status; credentials remain in the service-owned credential store and never enter an API response or frontend state.
+- Runtime configuration now reevaluates subscription availability after a connection, making the corresponding model selectable without exposing provider/runtime internals.
+
+### Sweep cleanup: inactive frontend paths
+
+- Removed four unreferenced duplicate evidence components: an old composer, conversation feed, message renderer and debug panel. The active Evidence page is now the single owner of the chat/composer/rendering path.
+- Removed the visible but inert voice-input control rather than advertising a feature with no implementation.
+- Pointed the shell health state at the active research service instead of the retired Python proxy. Replaced fabricated recent sessions and demo-user authentication text with live browser-session data and truthful local-workspace copy; removed the inert global share button.
+- Removed four unimported legacy stylesheet files after confirming `styles/index.css` is the sole stylesheet entry point. Production build remains unchanged in size and succeeds.
+
+### Completed slice: unified local product delivery
+
+- Kept Vue/Vite for productive development, but added one production launch path: `npm start` builds the frontend and the Node research service hosts the resulting files and APIs from the same origin.
+- The service recognizes the existing `/ts-api` development prefix, so the frontend keeps one API contract in development and production. Unknown API routes remain JSON 404s; only ordinary browser routes receive the SPA fallback.
+- Rebranded the browser document title and metadata as 循医. No implementation/runtime name is exposed in product-facing copy.
+- Preserved the existing blue-green palette. Tightened the clinical-workspace hierarchy around the question composer, evidence-run details, side-panel status and keyboard focus without changing the product's visual language.
+- Account-connection failures now expose a concise recovery message instead of a runtime exception. Credentials and account-store data remain server-owned.
+- Verification: root typecheck and boundary check; frontend typecheck and production build; live same-origin checks for `/`, `/evidence`, `/ts-api/health`, and an unknown API route (404 JSON).
+
+### Completed slice: research-mode and conversation ergonomics
+
+- Reframed the user-facing research choices as 快速 and 专家 while retaining the `instant` / `expert` API values. The composer now states what the selected mode changes; switching modes also gives deep thinking a coherent default, which remains user-adjustable.
+- Made the primary action truthful while a run is active: an empty composer stops the current research run; typed text becomes a queued follow-up and the button changes accordingly.
+- Selecting a clinical example fills and focuses the composer. Assistant messages retain the mode and audience used for that specific answer, so a mixed-mode conversation stays legible.
+- Reduced report-action noise: follow-up, concise conclusion and expanded evidence remain visible; copy, speech, sharing, rerun, Markdown and archive actions live under one “更多” menu.
+- Captured the real local product page with host Chrome in headless mode and used the review to remove generic/internal English labels, clarify example usage, and prevent provider labels from wrapping character-by-character.
+- Verification: frontend typecheck, production build, frontend test suite (20 passing), root boundary check, and visual screenshots at 1440px.
+
+### Completed slice: trustworthy research-process visibility
+
+- Used a real non-patient clinical query to inspect the live task event stream, then cancelled it once the display path was verified to avoid unnecessary provider usage.
+- Fixed the API run store so a tool start and its completion, which share a call ID, update one record instead of creating duplicate rows. Added a focused regression assertion for that lifecycle merge.
+- Classified startup reads of project research rules as a concise preparation step. Their path and full internal content no longer enter the user-visible tool detail panel.
+- The frontend now translates common evidence operations into plain-language steps (for example searching literature, reading guidelines, recording evidence, and drafting the final report). The full visible tool result remains available on expansion for research work itself.
+- Server-reported state now wins over time-based fallback labels for a short freshness window. The pending status therefore tracks actual retrieval, active tool work, report drafting, cancellation, and network recovery instead of only elapsed time.
+- Verification: root typecheck; focused API test suite (5 passing); frontend typecheck and production build; restarted local service and confirmed health endpoint.
+
+### Completed slice: single-service navigation and mobile research flow
+
+- Removed the visible entry points for legacy knowledge and literature pages because their requests still require the retired service. Old bookmarks now return to the evidence workspace instead of exposing a broken screen; the active navigation is limited to evidence work, research records, and creating a new research session.
+- Updated desktop, drawer and mobile vocabulary from “问诊/历史” to “研究记录”, matching the product’s evidence-workflow role.
+- Reworked the mobile composer into a vertical five-step layout: mode, mode explanation, clinical question, provider/retrieval choices, and an explicit primary action. This prevents desktop control geometry from forcing horizontal overflow on narrow screens.
+- Rebuilt the mobile bottom navigation as three equal actions: records, evidence workspace, and new research.
+- Verification: frontend typecheck/build/test suite, boundary check, old-route SPA fallback, and visual review at desktop plus 500px mobile layout.
 
 ## 2026-07-21 — implementation started
 
@@ -207,3 +289,43 @@ The target in `docs/CURRENT_STATE.md` is satisfied. Further work is hardening ra
 - Wall time was 45.45 seconds; traced time 43.861 seconds; 7 turns; 6 tool calls; 0 errors; no duplicate actions; first evidence at turn 5 / 33.882 seconds. This verifies that citation-capable PubMed abstracts do not require another network retrieval.
 - The trajectory still showed one shell call used to count lines after generic Pi `read`. PubMed tool output now proactively returns each abstract's session-relative evidence path, Pi-readable path, exact complete abstract line range, and copyable bounded `read` command, with continuation for an exceptional abstract over 200 lines.
 - Repeated the real abstract-only workflow after that navigation change. It completed in 23.96 wall-clock / 22.54 traced seconds with 6 turns, 5 tool calls, 0 errors, no duplicates, and first evidence at turn 3 / 11.305 seconds. The exact chain was one `pubmed_search` → one targeted `read` → one `primary_abstract` `evidence_add` → `evidence_read` → `report_write`; there was no `pubmed_read`, shell, web, or guideline call.
+
+### Evidence Workbook interface exploration
+
+- Created the isolated `design/evidence-workbook` branch to explore a product-level visual direction without changing `main`.
+- Replaced the overlapping demo-style entry sheet with a compact, paper-like design system: serif clinical questions, sans-serif body copy, monospaced evidence metadata, muted jade/blue evidence accents, and a subtle non-white paper texture.
+- Reframed the start screen around the research journey: clinical question → evidence retrieval and verification → report. Provider and model controls remain available, but are deliberately subordinate to the question.
+- Kept runtime transparency as progressive disclosure. The default interface shows the current research phase; each research step can be expanded to inspect its tool result and evidence context without exposing private reasoning or internal runtime branding.
+- Reviewed the stable desktop and mobile renders with the local development server. `npm --prefix frontend run build` passed.
+
+### Evidence Workbook interaction completion
+
+- Reworked the research activity feed into progressive disclosure: every tool call now presents one concise line with its state and a clipped real input/result preview; a click reveals the complete recorded input and result. Empty startup state is explicit rather than looking stalled.
+- Kept the activity feed limited to tool events and product-level milestones. It does not render private model reasoning or internal runtime identity.
+- Added a formal-report dossier only for structured reports or cited answers. It summarizes the intended audience, section count, and reference count without decorating ordinary conversational messages as reports.
+- Changed research archives to lead with the completed answer; operational metadata, statistics, evidence entries, and raw JSON remain inspectable on demand.
+- Removed the disconnected 8,000-line demo stylesheet. The application now has one active visual stylesheet (`workbook.css`) instead of competing cascades.
+- Corrected the dark-theme selectors to follow the application’s `data-theme` state and visually reviewed the isolated light, mobile, and dark renders. `npm --prefix frontend run build` passed.
+- A live quick-mode run exhausted its former five-iteration budget before report finalization. Raised the quick-mode baseline to 16 iterations and the expert-mode baseline to 32 iterations; deep thinking changes the review scope rather than the budget, and the API fallback is aligned with those two levels.
+- Re-ran the same adult uncomplicated upper-respiratory-infection question through the live DeepSeek service after the budget change. The run succeeded with 31 trace events, 13 visible tool steps, three completed `evidence_add` records, and a completed `report_write`; it returned a 2,677-character Markdown report with ten headings, two distinct citation numbers, and a reference section. A failed guideline lookup and web search remained visible as non-blocking research steps.
+- Added a transient per-turn research-round hint. Before each model call it states the current agent turn and the suggested budget, but is not written to session history; the stable system prompt, original conversation, and tool results remain unchanged for provider prefix-cache reuse.
+
+### Account visibility and visual calibration
+
+- Corrected the subscription-account panel to show every account-capable provider rather than only unavailable ones. Connected ChatGPT subscriptions now remain visible with their usable state and a reconnect action; unavailable Claude accounts retain a connection action.
+- Restored a blue-forward visual system across the paper background, interaction states, evidence accents, and example cards. Reduced the oversized hero scale while raising undersized navigation, metadata, controls, and run-step text to a more consistent reading scale.
+- Reworked narrow-screen mode controls into two full-width rows so account, mode, and composer controls remain legible at a 430px viewport. Reviewed both desktop and mobile local renders; `npm --prefix frontend run build` passed.
+
+### Session workspaces and natural conversation
+
+- Bound each submitted browser conversation to its own local session ID for every status update and final patch. Switching conversations while a run is in progress can no longer write tool progress or a final answer into the newly active conversation.
+- Added read-only workspace-file access for a research session. Users can now browse the actual generated formal reports, research frame, evidence records, and archived source Markdown from the conversation's “研究文件” entry; hidden metadata and account files are not exposed.
+- Restored the distinction between a natural chat reply and a formal report file. The chat uses the model's final answer, while the verified report stays in the session workspace. Report rendering no longer filters sections by audience or rearranges/collapses report sections; opening a report file renders its original Markdown content.
+- Promoted the active conversation's file directory from a modal-only action to a persistent desktop sidebar. The directory now stays beside the conversation, uses a readable type scale, and opens an individual file only when the user chooses to inspect its content. Narrow screens retain the compact “研究文件” entry instead of squeezing a second column into the chat.
+- Made the formal report the primary completion surface: when the service returns a report it is rendered directly in the completed conversation, with a workspace read-back fallback when only a report path is returned. Existing sessions with a stored report path are hydrated on open. The file tree and report library now support review instead of hiding the delivered result behind another click.
+
+### Clinical conversation surface
+
+- Separated the conversation surface from the onboarding workbench. Once a session has a user question, the static configuration rail disappears, the conversation centers on a readable clinical column, and the composer becomes a compact sticky action surface.
+- Rebalanced chat hierarchy: user questions use a restrained blue reply bubble; research replies use a quiet document surface with an explicit provenance edge; the generated formal report is shown as a real workspace-file attachment. Copy and speech actions no longer apply an audience-specific projection to the stored response.
+- Replaced the high-frequency grid/particle backdrop with a low-contrast blue-grey light field, with a corresponding dark-mode conversation treatment. Reviewed the light onboarding render and rechecked TypeScript, frontend build, and the targeted response-priority test.

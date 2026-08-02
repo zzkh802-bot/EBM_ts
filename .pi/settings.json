@@ -5,5 +5,9 @@
   "compaction": {
     "enabled": true
   },
-  "enableSkillCommands": true
+  "enableSkillCommands": true,
+  "extensions": [
+    "-extensions/ebm-providers.ts",
+    "-extensions/ebm-tools.ts"
+  ]
 }

@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { registerEbmTools } from "../src/extensions/ebmTools.js";
-import { renderGuidelineReadText } from "../src/extensions/guidelineTools.js";
+import { renderGuidelineReadText, renderRetrieveCards } from "../src/extensions/guidelineTools.js";
 import { renderAbstractNavigation } from "../src/extensions/pubmedTools.js";
 import { initializePiSessionDirectory, piReadableSessionPath } from "../src/extensions/sessionPath.js";
 
@@ -52,11 +52,29 @@ describe("EBM Pi extension tools", () => {
       ].join("\n"),
     });
     expect(text).toContain("Readable guideline path: data/sessions/s1/sources/read/guideline/full.md");
-    expect(text).toContain("Useful section map:");
+    expect(text).toContain("Best-effort navigation index");
     expect(text).toContain("## Abstract");
     expect(text).toContain("## Evidence-based Recommendation 1");
     expect(text).toContain("We recommend intravenous alteplase");
     expect(text).not.toContain("Joanna M Wardlaw");
+  });
+
+  it("renders copy-ready evidence_add locations for retrieved candidate material", () => {
+    const text = renderRetrieveCards("Candidates", [{
+      title: "Hypertension guideline",
+      sourcePath: "sources/read/hypertension.md",
+      lineStart: 21,
+      lineEnd: 24,
+      candidateMaterial: "Recommendation text.",
+    }], (sourcePath) => `data/sessions/s1/${sourcePath}`);
+
+    expect(text).toContain("evidence_add location (copy these values; 1-based):");
+    expect(text).toContain("source_path: data/sessions/s1/sources/read/hypertension.md");
+    expect(text).toContain("offset: 21");
+    expect(text).toContain("limit: 4");
+    expect(text).toContain("candidate material (identical to archived body):");
+    expect(text).toContain("candidate materials, not evidence yet");
+    expect(text).toContain("never extend it or replace limit with an arbitrary value");
   });
 
   it("loads the project extension through Pi's resource loader", async () => {

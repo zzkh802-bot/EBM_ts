@@ -5,22 +5,30 @@ import { upsertSourceLibraryFromArchive } from "../tools/sourceLibrary.js";
 import { archiveDetails } from "./archiveOutput.js";
 import { piReadableSessionPath, piSessionDirectory } from "./sessionPath.js";
 
+function indentedText(value: string, spaces = 4): string {
+  return value.split("\n").map((line) => `${" ".repeat(spaces)}${line}`).join("\n");
+}
+
+function normalizedText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
 function renderSearchCards(title: string, items: GuidelineSearchItem[]): string {
   const lines = [title, ""];
   if (!items.length) return `${title}\n\nNo guideline records matched.`;
-  items.slice(0, 5).forEach((item, index) => {
+  items.forEach((item, index) => {
     lines.push(`${index + 1}. ${item.title}`);
-    lines.push("   document_card:");
-    if (item.docId) lines.push(`     doc_id: ${item.docId}`);
-    if (item.institution) lines.push(`     institution: ${item.institution}`);
-    if (item.publicationDate) lines.push(`     date: ${item.publicationDate}`);
-    if (item.documentKind) lines.push(`     kind: ${item.documentKind}`);
-    if (item.departments?.length) lines.push(`     departments: ${item.departments.join(", ")}`);
-    else if (item.department) lines.push(`     department: ${item.department}`);
-    if (item.departmentScope) lines.push(`     department_scope: ${item.departmentScope}`);
-    if (item.viewType || item.excerpt) lines.push("   matched_topic:");
-    if (item.viewType) lines.push(`     type: ${item.viewType}`);
-    if (item.excerpt) lines.push(`     excerpt: ${item.excerpt}`);
+    if (item.docId) lines.push(`   doc_id: ${item.docId}`);
+    if (item.institution) lines.push(`   catalog source: ${item.institution}`);
+    if (item.publicationDate) lines.push(`   publication date: ${item.publicationDate}`);
+    if (item.documentKind) lines.push(`   document kind: ${item.documentKind}`);
+    if (item.departments?.length) lines.push(`   indexed departments: ${item.departments.join(", ")}`);
+    else if (item.department) lines.push(`   indexed department: ${item.department}`);
+    if (item.fallbackMatch) lines.push("   retrieval note: fallback match; verify relevance before reading.");
+    if (item.viewId || item.viewType) lines.push(`   matched view: ${[item.viewType, item.viewId].filter(Boolean).join(" · ")}`);
+    if (item.availableViewTypes?.length) lines.push(`   available document views: ${item.availableViewTypes.join(", ")}`);
+    if (item.matchedViewContent) lines.push("   matched view content:", indentedText(item.matchedViewContent, 5));
+    if (item.abstract && normalizedText(item.abstract) !== normalizedText(item.matchedViewContent ?? "")) lines.push("   abstract:", indentedText(item.abstract, 5));
     lines.push("");
   });
   return lines.join("\n");
@@ -37,7 +45,11 @@ function informativeHeading(text: string): boolean {
   return /(abstract|method|result|recommend|discussion|conclusion|pico|population|scope|treatment|therapy|diagnos|management|secondary prevention|acute)/i.test(normalized);
 }
 
-export function renderGuidelineReadText(readablePath: string, record: { content: string; bodyLineStart: number; lines: number; tocPath?: string }): string {
+export function renderGuidelineReadText(
+  readablePath: string,
+  record: { content: string; bodyLineStart: number; lines: number; tocPath?: string },
+  document?: GuidelineSearchItem,
+): string {
   const lines = record.content.split("\n");
   const totalLines = record.bodyLineStart + record.lines - 1;
   const headings = lines.flatMap((line, index) => {
@@ -62,11 +74,19 @@ export function renderGuidelineReadText(readablePath: string, record: { content:
   const previewEnd = previewStart + previewLines.length - 1;
   const readableTocPath = record.tocPath ? readablePath.replace(/full\.md$/, "toc.md") : undefined;
   return [
+    ...(document ? [
+      "Source document:",
+      `- Title: ${document.title}`,
+      ...(document.institution ? [`- Catalog source: ${document.institution}`] : []),
+      ...(document.publicationDate ? [`- Publication date: ${document.publicationDate}`] : []),
+      ...(document.documentKind ? [`- Document kind: ${document.documentKind}`] : []),
+      "",
+    ] : []),
     `Readable guideline path: ${readablePath}`,
     ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
     `Archive lines: 1-${totalLines} (${totalLines} total lines; 1-based).`,
     `For evidence_add, use this readable guideline path with exact offset/limit.`,
-    ...(headings.length ? ["", "Useful section map:", ...headings] : []),
+    ...(headings.length ? ["", "Best-effort navigation index (generated from cleaned Markdown; verify against full text):", ...headings] : []),
     "",
     `Informative preview lines ${previewStart}-${previewEnd}:`,
     "",
@@ -74,24 +94,34 @@ export function renderGuidelineReadText(readablePath: string, record: { content:
   ].join("\n");
 }
 
-function renderRetrieveCards(title: string, items: GuidelineRetrieveItem[], readablePath: (sourcePath: string) => string): string {
+export function renderRetrieveCards(title: string, items: GuidelineRetrieveItem[], readablePath: (sourcePath: string) => string): string {
   const lines = [title, ""];
   if (!items.length) return `${title}\n\nNo guideline chunks matched.`;
-  items.slice(0, 5).forEach((item, index) => {
+  items.forEach((item, index) => {
     lines.push(`${index + 1}. ${item.title}`);
     if (item.docId) lines.push(`   doc_id: ${item.docId}`);
     if (item.chunkId) lines.push(`   chunk_id: ${item.chunkId}`);
-    if (item.institution) lines.push(`   institution: ${item.institution}`);
+    if (item.institution) lines.push(`   catalog source: ${item.institution}`);
     if (item.publicationDate) lines.push(`   date: ${item.publicationDate}`);
     if (item.section) lines.push(`   section: ${item.section}`);
     if (item.chunkType) lines.push(`   chunk_type: ${item.chunkType}`);
-    if (item.sourcePath) lines.push(`   readable chunk path: ${readablePath(item.sourcePath)}`);
-    if (item.lineStart !== undefined && item.lineEnd !== undefined) lines.push(`   exact chunk lines: ${item.lineStart}-${item.lineEnd}`);
-    if (item.score !== undefined) lines.push(`   retrieval score: ${item.score}`);
-    if (item.excerpt) lines.push(`   excerpt: ${item.excerpt}`);
+    const sourcePath = item.sourcePath ? readablePath(item.sourcePath) : undefined;
+    if (sourcePath) lines.push(`   readable chunk path: ${sourcePath}`);
+    if (item.lineStart !== undefined && item.lineEnd !== undefined) {
+      lines.push(`   exact chunk lines: ${item.lineStart}-${item.lineEnd}`);
+      if (sourcePath) {
+        lines.push(
+          "   evidence_add location (copy these values; 1-based):",
+          `     source_path: ${sourcePath}`,
+          `     offset: ${item.lineStart}`,
+          `     limit: ${item.lineEnd - item.lineStart + 1}`,
+        );
+      }
+    }
+    if (item.candidateMaterial) lines.push("   candidate material (identical to archived body):", "", item.candidateMaterial);
     lines.push("");
   });
-  lines.push("These retrieved chunks are archived as citation-capable sources; use readable chunk path + exact chunk lines with evidence_add when the chunk directly supports a claim.");
+  lines.push("These are candidate materials, not evidence yet. If a continuous passage directly supports a claim, call evidence_add with the exact source_path, offset, and limit shown above. You may narrow the range, but never extend it or replace limit with an arbitrary value.");
   return lines.join("\n");
 }
 
@@ -131,7 +161,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
       if (!result.ok) throw new Error(JSON.stringify(result.error));
       pi.events.emit("ebm:source_archived", { sessionId, provider: "guideline_mcp", path: result.archive.path, kind: "search" });
       return {
-        content: [{ type: "text", text: renderSearchCards("Guideline search candidates (top 5):", result.items) }],
+        content: [{ type: "text", text: renderSearchCards(`Guideline search candidates (${result.items.length} returned):`, result.items) }],
         details: { archive: archiveDetails(result.archive), itemCount: result.items.length, truncated: false },
       };
     },
@@ -167,7 +197,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
         if (item.sourcePath) pi.events.emit("ebm:source_archived", { sessionId, provider: "guideline_mcp", path: item.sourcePath, kind: "read", sourceStatus: "rag_chunk" });
       });
       return {
-        content: [{ type: "text", text: renderRetrieveCards("Guideline RAG retrieval candidates (top 5):", result.items, (sourcePath) => piReadableSessionPath(ctx.cwd, sessionId, sourcePath)) }],
+        content: [{ type: "text", text: renderRetrieveCards(`Guideline RAG retrieval candidates (${result.items.length} returned):`, result.items, (sourcePath) => piReadableSessionPath(ctx.cwd, sessionId, sourcePath)) }],
         details: { archive: archiveDetails(result.archive), itemCount: result.items.length, chunkArchives: result.items.flatMap((item) => item.sourcePath ? [{ path: item.sourcePath, lineStart: item.lineStart, lineEnd: item.lineEnd }] : []), truncated: false },
       };
     },
@@ -199,7 +229,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
       const library = await upsertSourceLibraryFromArchive({ sourceLibraryDir, archive: result.archive, provider: "guideline_mcp", sessionId });
       pi.events.emit("ebm:source_archived", { sessionId, provider: "guideline_mcp", path: result.archive.path, kind: "read", sourceLibraryPath: library.path, sourceLibraryWritten: library.written });
       return {
-        content: [{ type: "text", text: renderGuidelineReadText(readablePath, result.archive) }],
+        content: [{ type: "text", text: renderGuidelineReadText(readablePath, result.archive, result.document) }],
         details: { archive: archiveDetails(result.archive), sourceLibrary: library, truncated: false },
       };
     },
