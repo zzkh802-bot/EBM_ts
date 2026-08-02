@@ -152,17 +152,22 @@ a { color: var(--evidence); }
 .entry-kicker { margin: 0 0 15px; color: var(--jade); font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .15em; }
 .entry-stage h1 { max-width: 600px; margin: 0; font-family: var(--serif); font-size: clamp(43px, 6vw, 74px); letter-spacing: -.065em; line-height: 1.04; text-wrap: balance; }
 .entry-lede { margin: 18px 0 38px; color: var(--ink-soft); font-size: 17px; }
-.entry-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.entry-choices { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, .88fr); gap: 18px; }
 .entry-choice { position: relative; display: grid; min-height: 285px; align-content: start; justify-items: start; padding: 25px; overflow: hidden; border: 1px solid var(--line); border-radius: 18px; text-align: left; transition: transform .22s ease, box-shadow .22s ease, border-color .22s ease; }
 .entry-choice:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
 .entry-choice.patient { background: linear-gradient(135deg, #fffdf8, #f6f0e4); border-color: rgba(173, 120, 45, .24); }
-.entry-choice.clinician { background: linear-gradient(135deg, #f7fcfa, #e7f1ee); border-color: rgba(8, 118, 109, .22); }
+.entry-choice.clinician { color: #f4faf8; background: radial-gradient(circle at 90% 8%, rgba(89, 169, 157, .22), transparent 38%), linear-gradient(145deg, #1d4542, #173331 72%); border-color: rgba(17, 66, 62, .72); box-shadow: 0 20px 44px rgba(20, 53, 50, .16); }
+.entry-choice.clinician:hover { border-color: rgba(94, 173, 160, .72); box-shadow: 0 24px 52px rgba(20, 53, 50, .24); }
 .entry-choice-icon { display: grid; width: 42px; height: 42px; margin-bottom: 25px; place-items: center; border-radius: 50%; background: rgba(255,255,255,.65); color: var(--jade); font-size: 24px; }
+.entry-choice.clinician .entry-choice-icon { background: rgba(242, 251, 248, .12); color: #a9ddd3; }
 .entry-choice.patient .entry-choice-icon { color: var(--amber); }
 .entry-choice-overline { color: var(--ink-faint); font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; }
+.entry-choice.clinician .entry-choice-overline { color: #a9c8c2; }
 .entry-choice strong { margin-top: 5px; font-family: var(--serif); font-size: 29px; letter-spacing: -.035em; }
 .entry-choice p { max-width: 300px; margin: 8px 0 0; color: var(--ink-soft); font-size: 14px; line-height: 1.7; }
+.entry-choice.clinician p { color: #c9d9d5; }
 .entry-choice em { margin-top: auto; padding-top: 20px; color: var(--ink); font-size: 13px; font-style: normal; font-weight: 700; }
+.entry-choice.clinician em { color: #f4faf8; }
 .entry-choice em::after { padding-left: 7px; content: '→'; }
 .entry-foot { color: var(--ink-faint); font-size: 12px; text-align: center; }
 
