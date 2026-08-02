@@ -48,6 +48,24 @@ describe("guideline MCP", () => {
     expect(requests[2]!.session).toBe("session-1");
   });
 
+  it("prefers the structured MCP contract and expands its result array", async () => {
+    const responses = [
+      rpcResponse({ jsonrpc: "2.0", id: 1, result: { protocolVersion: "2025-06-18", capabilities: {} } }, "session-1"),
+      new Response(null, { status: 202 }),
+      new Response('event: message\ndata: {"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"legacy presentation copy"}],"structuredContent":{"result":[{"doc_id":"g1","title":"First"},{"doc_id":"g2","title":"Second"}]}}}\n\n', { headers: { "content-type": "text/event-stream" } }),
+    ];
+    const client = new GuidelineMcpClient({
+      endpoint: "http://guideline.test/mcp",
+      fetcher: (async () => responses.shift()!) as typeof fetch,
+    });
+
+    const response = await client.callTool("search", { query: "heart failure" });
+    const result = await searchGuidelines({ sessionDir: await mkdtemp(path.join(os.tmpdir(), "ebm-guideline-")), query: "heart failure", client: { callTool: async () => response } });
+
+    expect(response.text).toBe(JSON.stringify({ result: [{ doc_id: "g1", title: "First" }, { doc_id: "g2", title: "Second" }] }));
+    expect(result.ok && result.items.map((item) => item.docId)).toEqual(["g1", "g2"]);
+  });
+
   it("reports malformed protocol JSON and timeout errors explicitly", async () => {
     const malformed = new GuidelineMcpClient({
       endpoint: "http://guideline.test/mcp",
@@ -87,7 +105,7 @@ describe("guideline MCP", () => {
     expect(toc).toContain("Note: noisy PDF headings");
   });
 
-  it("repairs concatenated guideline search objects with literal newlines into a semantic index", async () => {
+  it("repairs concatenated guideline search objects with literal newlines without truncating document information", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-guideline-"));
     const client = {
       callTool: async () => ({
@@ -101,16 +119,16 @@ describe("guideline MCP", () => {
     expect(result.archive.content).toContain("Results: 2");
     expect(result.archive.content).toContain("- 1. PMC result 1 — document ID: g1");
     expect(result.archive.content).toContain("- 2. Named Guideline — document ID: g2");
-    expect(result.items[0]).toMatchObject({ docId: "g1", institution: "PMC", excerpt: "First line second line" });
-    expect(result.archive.content).toContain("First line second line");
+    expect(result.items[0]).toMatchObject({ docId: "g1", institution: "PMC", abstract: "First line\nsecond line" });
+    expect(result.archive.content).toContain("First line\nsecond line");
     expect(result.archive.content).not.toContain('"doc_id"');
   });
 
-  it("prefers informative document views over noisy MCP search abstracts", async () => {
+  it("preserves the matched document view and exposes other available views without dumping them", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-guideline-"));
     const client = {
       callTool: async () => ({
-        text: JSON.stringify([{ doc_id: "g1", title: "Guideline", abstract: "journal metadata and boilerplate", view_type: "recommendation_summary", document_views: { recommendation_summary: "Use alteplase according to acute stroke guideline criteria." } }]),
+        text: JSON.stringify([{ doc_id: "g1", title: "Guideline", abstract: "journal metadata and boilerplate", view_type: "recommendation_summary", document_views: { recommendation_summary: "Use alteplase according to acute stroke guideline criteria.", pico_questions: "This non-matched view must not be dumped into model context." } }]),
         raw: {},
       }),
     };
@@ -119,9 +137,11 @@ describe("guideline MCP", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.items[0]!.excerpt).toBe("Use alteplase according to acute stroke guideline criteria.");
     expect(result.archive.content).toContain("Use alteplase according to acute stroke guideline criteria.");
-    expect(result.archive.content).not.toContain("journal metadata and boilerplate");
+    expect(result.archive.content).toContain("journal metadata and boilerplate");
+    expect(result.archive.content).not.toContain("This non-matched view must not be dumped into model context.");
+    expect(result.items[0]!.matchedViewContent).toBe("Use alteplase according to acute stroke guideline criteria.");
+    expect(result.items[0]!.availableViewTypes).toEqual(["recommendation_summary", "pico_questions"]);
   });
 
   it("archives search and read output before returning it", async () => {
@@ -170,7 +190,7 @@ describe("guideline MCP", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.items[0]).toMatchObject({ docId: "g1", chunkId: "g1#1", title: "Stroke guideline", section: "Stroke > BP", excerpt: "BP recommendation text" });
+    expect(result.items[0]).toMatchObject({ docId: "g1", chunkId: "g1#1", title: "Stroke guideline", section: "Stroke > BP", candidateMaterial: "BP recommendation text" });
     expect(result.items[0]!.sourcePath).toMatch(/^sources\/read\//);
     expect(result.items[0]!.sourcePath).toMatch(/\.md$/);
     expect(result.items[0]!.sourcePath).not.toMatch(/\/full\.md$/);
@@ -178,5 +198,56 @@ describe("guideline MCP", () => {
     expect(result.items[0]!.lineEnd).toBeTypeOf("number");
     expect(result.archive.content).toContain("# Guideline retrieve: stroke blood pressure");
     expect(result.archive.content).not.toContain('"chunk_id"');
+  });
+
+  it("archives retrieve content rather than its truncated display context", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-guideline-"));
+    const client = {
+      callTool: async () => ({
+        text: JSON.stringify([{
+          doc_id: "g1",
+          chunk_id: "g1#1",
+          title: "Stroke guideline",
+          content: "Complete candidate material, including the condition that changes the recommendation.",
+          source_quote_context: "[current] Complete candidate material...",
+        }]),
+        raw: {},
+      }),
+    };
+
+    const result = await retrieveGuidelines({ sessionDir, query: "stroke treatment", client });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.items[0]!.candidateMaterial).toBe("Complete candidate material, including the condition that changes the recommendation.");
+    expect(result.items[0]!.candidateMaterial).not.toContain("[current]");
+    expect(result.items[0]!.lineStart).toBe(8);
+    expect(result.items[0]!.lineEnd).toBe(8);
+    const archived = await readFile(path.join(sessionDir, result.items[0]!.sourcePath!), "utf8");
+    expect(archived).toContain("including the condition that changes the recommendation.");
+    expect(archived).not.toContain("## Source metadata");
+    expect(archived).not.toContain("## Retrieved guideline chunk");
+  });
+
+  it("returns the normalized archived candidate body to the model", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-guideline-"));
+    const rawMaterial = `First&nbsp;candidate line.\n${"long material ".repeat(40)}`;
+    const result = await retrieveGuidelines({
+      sessionDir,
+      query: "archive consistency",
+      client: {
+        callTool: async () => ({
+          text: JSON.stringify([{ doc_id: "g1", chunk_id: "g1#1", title: "Guideline", content: rawMaterial }]),
+          raw: {},
+        }),
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const archived = await readFile(path.join(sessionDir, result.items[0]!.sourcePath!), "utf8");
+    const archivedBody = archived.slice(archived.indexOf("---\n\n") + "---\n\n".length);
+    expect(result.items[0]!.candidateMaterial).toBe(archivedBody);
+    expect(result.items[0]!.candidateMaterial).not.toContain("&nbsp;");
   });
 });

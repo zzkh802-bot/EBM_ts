@@ -1,5 +1,6 @@
 import path from "node:path";
-import { createAgentApiServer, createPiCliExecutor } from "../src/server/agentApi.js";
+import { AccountConnectionStore, createAgentApiServer, createPiCliExecutor, loadRuntimeConfig } from "../src/server/agentApi.js";
+import { createPiPatientIntakeExecutor } from "../src/server/patientIntake.js";
 
 const rootDir = path.resolve(import.meta.dirname, "..");
 const port = parsePort(process.env.DP_XUNYI_TS_PORT, 8787);
@@ -8,11 +9,16 @@ const corsOrigin = process.env.DP_XUNYI_TS_CORS_ORIGIN?.trim() || "*";
 
 const { server } = createAgentApiServer({
   executor: createPiCliExecutor({ rootDir }),
+  patientIntakeExecutor: createPiPatientIntakeExecutor({ rootDir }),
   corsOrigin,
+  runtimeConfig: () => loadRuntimeConfig(rootDir),
+  accountConnections: new AccountConnectionStore(rootDir),
+  staticDir: path.join(rootDir, "frontend", "dist"),
+  rootDir,
 });
 
 server.listen(port, host, () => {
-  process.stdout.write(`DP循医 TypeScript API listening on http://${host}:${port}\n`);
+  process.stdout.write(`循医研究服务监听于 http://${host}:${port}\n`);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {

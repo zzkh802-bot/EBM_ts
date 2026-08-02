@@ -15,6 +15,7 @@ import { registerEbmIdentity } from "./ebmIdentity.js";
 import { registerGuidelineTools } from "./guidelineTools.js";
 import { registerPubMedTools } from "./pubmedTools.js";
 import { registerReportTools } from "./reportTools.js";
+import { registerResearchRoundHint } from "./researchRoundHint.js";
 import { registerResearchFrameTools } from "./researchFrameTools.js";
 import { piReadableSessionPath, piSessionDirectory, registerSessionWorkspace } from "./sessionPath.js";
 import { registerTrajectoryRecorder } from "./trajectoryRecorder.js";
@@ -33,6 +34,7 @@ export function registerEbmTools(pi: ExtensionAPI): void {
   const retrievalPolicy = process.env.EBM_RETRIEVAL_POLICY?.trim() || "all";
   registerSessionWorkspace(pi);
   registerEbmIdentity(pi);
+  registerResearchRoundHint(pi);
 
   pi.registerTool({
     name: "evidence_add",

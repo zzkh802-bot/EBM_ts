@@ -2,10 +2,10 @@
 
 ## 本地开发
 
-先在项目根目录启动带线上鉴权注入的 API 代理：
+先在项目根目录启动循医研究服务：
 
 ```bash
-DP_PUBLIC_PASSWORD='服务密码' python3 dev_proxy.py
+npm run api
 ```
 
 再启动 Vite：
@@ -16,7 +16,9 @@ npm install
 npm run dev
 ```
 
-浏览器访问 `http://127.0.0.1:5173/evidence`。Vite 会把 `/health`、`/ebm`、`/archive`、`/literature`、`/evidence`、`/grade` 和 `/qa` 代理到 `127.0.0.1:8000`，Basic Auth 密码不会进入浏览器构建产物。
+浏览器访问 `http://127.0.0.1:5173/evidence`。Vite 只代理 `/ts-api` 到本机服务（默认 `127.0.0.1:8787`）；研究任务、研究文件和运行配置都通过同一份 API 契约访问。
+
+每个“临床问题”会话在浏览器本机单独保存，并持续复用后端返回的 `session_id`。同一问题的后续追问会沿用既有研究上下文；新建临床问题会创建独立会话。
 
 ## 验证与构建
 
@@ -27,24 +29,21 @@ npm run test
 npm run build
 ```
 
-构建产物位于 `frontend/dist/`。`dev_proxy.py` 检测到该目录后，会直接提供 Vue 构建及 `/evidence`、`/knowledge`、`/literature` 的 SPA 回退。
+构建产物位于 `frontend/dist/`。循医服务可以直接提供 Vue 构建及 SPA 回退。
 
 ## 生产部署
 
-将 `dist/` 复制到 Python 网关运行目录下的以下任一位置：
+将 `dist/` 复制到循医服务的静态目录：
 
 - `frontend/dist/`
-- `dist/`
-- 环境变量 `DP_FRONTEND_DIST` 指定的绝对目录
 
-新版 `feishu_bot_server.py` 会在现有 Basic Auth 之后提供 `index.html` 和哈希静态资源，因此 Nginx 仍可将全部请求代理到 `127.0.0.1:8765`，无需把认证凭据写入前端。
+循医服务会提供 `index.html` 和哈希静态资源；Nginx 可将应用请求代理到运行该服务的端口。
 
-发布前保留当前 `web_demo.html` 和服务目录备份；发布后检查：
+发布后检查：
 
 ```bash
-curl -u "$DP_PUBLIC_USER:$DP_PUBLIC_PASSWORD" http://127.0.0.1/health
-curl -u "$DP_PUBLIC_USER:$DP_PUBLIC_PASSWORD" http://127.0.0.1/evidence
-curl -u "$DP_PUBLIC_USER:$DP_PUBLIC_PASSWORD" http://127.0.0.1/assets/<构建后的资源文件>
+curl http://127.0.0.1:8787/health
+curl http://127.0.0.1:8787/evidence
 ```
 
-旧单文件版本保留在 `web_demo.legacy.html`，仅用于紧急回退。
+旧单文件演示不属于当前 Vue 前端部署流程。

@@ -10,7 +10,7 @@ export function registerEbmProviders(pi: Pick<ExtensionAPI, "registerProvider">)
   pi.registerProvider(XINQIONG_PROVIDER_ID, {
     name: "Xinqiong / Infini-AI OpenAI-Compatible",
     baseUrl: process.env.XINQIONG_BASE_URL || "https://cloud.infini-ai.com/maas/deepseek-v4-flash/nvidia",
-    apiKey: "$OPENAI_API_KEY",
+    apiKey: process.env.XINQIONG_API_KEY || "$OPENAI_API_KEY",
     api: "openai-completions",
     models: [
       {
