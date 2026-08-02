@@ -14,6 +14,7 @@ export type SourceArchiveInput = {
   kind: "search" | "read" | "upload";
   layout?: "directory" | "file";
   sourceUrl?: string;
+  sourceInstitution?: string;
   title?: string;
   content: string;
   resources?: SourceArchiveResource[];
@@ -30,6 +31,7 @@ export type SourceArchiveRecord = {
   bodyLineStart: number;
   content: string;
   sourceUrl?: string;
+  sourceInstitution?: string;
   title?: string;
 };
 
@@ -69,6 +71,7 @@ function frontmatter(input: SourceArchiveInput, sha256: string): string {
     `kind: ${input.kind}`,
     `sha256: ${sha256}`,
     ...(input.sourceUrl ? [`source_url: ${JSON.stringify(input.sourceUrl)}`] : []),
+    ...(input.sourceInstitution ? [`source_institution: ${JSON.stringify(input.sourceInstitution)}`] : []),
     ...(input.title ? [`title: ${JSON.stringify(input.title)}`] : []),
     "---",
   ].join("\n")}\n\n`;
@@ -236,6 +239,7 @@ export async function archiveSource(input: SourceArchiveInput): Promise<SourceAr
     bodyLineStart,
     content,
     ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
+    ...(input.sourceInstitution ? { sourceInstitution: input.sourceInstitution } : {}),
     ...(input.title ? { title: input.title } : {}),
   };
 }

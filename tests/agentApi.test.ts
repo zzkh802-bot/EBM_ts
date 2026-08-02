@@ -51,16 +51,18 @@ describe("循医研究服务 API", () => {
       expect(prompt).toContain("clinical-report-writing skill")
       expect(prompt).toContain("调用 report_write 前自检")
       expect(prompt).toContain("只有研究目标、临床判断或面向医生的阶段发生实质变化时才说明进展")
-      expect(prompt).toContain("定位行号、登记证据和可自动恢复的工具重试")
+      expect(prompt).toContain("原文定位、登记证据和可自动恢复的工具重试")
       expect(prompt).not.toContain("完整呈现 PICO")
       expect(prompt).not.toContain("保留 PICO")
       expect(prompt).not.toContain("临床场景概述、循证问题、证据基础与证据状态")
       expect(prompt).not.toContain("必须使用独立的二级或三级标题")
     }
+    expect(publicPrompt).toContain("read、bash 等本地工具仍可用于读取和定位本会话已归档内容")
+    expect(publicPrompt).toContain("不使用 PubMed、公共网页或本地来源库检索")
     expect(low).not.toContain("最少必要")
     expect(maximum).not.toContain("指南推荐等级")
     expect(publicPrompt).toContain("面向临床人员")
-    expect(publicPrompt).toContain("本轮仅使用指南库")
+    expect(publicPrompt).toContain("本轮外部临床知识检索仅使用指南库")
   });
 
   it("returns verified source excerpts for a numbered report citation without exposing evidence IDs", async () => {
@@ -90,14 +92,34 @@ describe("循医研究服务 API", () => {
       provenance: "primary_abstract",
       confidence: "high",
       sourcePath: source.path,
-      offset: source.bodyLineStart + 2,
-      limit: 1,
+      quote: "The intervention reduced recurrence without increasing severe bleeding.",
+    });
+    const mcpSource = await archiveSource({
+      sessionDir: workspace,
+      kind: "read",
+      title: "Chinese clinical guideline",
+      sourceUrl: "mcp://guideline/cma_2026_example",
+      sourceInstitution: "Chinese Medical Association",
+      content: "# Guideline\n\nThe guideline recommends treatment for eligible patients.",
+    });
+    const mcpEvidence = await addEvidence({
+      sessionDir: workspace,
+      question: "Does the guideline recommend treatment?",
+      claim: "The guideline recommends treatment.",
+      relation: "supports",
+      provenance: "guideline_official",
+      confidence: "high",
+      sourcePath: mcpSource.path,
+      quote: "The guideline recommends treatment for eligible patients.",
     });
     const report = await writeReport({
       sessionDir: workspace,
       title: "Citation details",
-      content: "# Conclusion\n\nTreatment reduced recurrence [1].",
-      references: [{ number: 1, citation: "Randomized trial. PMID 12345678.", evidenceId: evidence.id }],
+      content: "# Conclusion\n\nTreatment reduced recurrence [1]. The guideline recommends treatment [2].",
+      references: [
+        { number: 1, citation: "Randomized trial. PMID 12345678.", evidenceId: evidence.id },
+        { number: 2, citation: "Chinese clinical guideline.", evidenceId: mcpEvidence.id },
+      ],
     });
     const executor: AgentExecutor = async () => ({ message: "unused" });
     const { api, baseUrl } = await startApi(executor, undefined, rootDir);
@@ -113,10 +135,40 @@ describe("循医研究服务 API", () => {
           claim: "Treatment reduced recurrence.",
           quote: "The intervention reduced recurrence without increasing severe bleeding.",
           verified: true,
-          source: { title: "Randomized trial", url: "https://pubmed.ncbi.nlm.nih.gov/12345678/" },
+          source: {
+            title: "Randomized trial",
+            url: "https://pubmed.ncbi.nlm.nih.gov/12345678/",
+            archive_available: true,
+            archive_scope: "archived_document",
+          },
         }],
       });
       expect(JSON.stringify(payload)).not.toContain(evidence.id);
+
+      const sourceResponse = await fetch(`${baseUrl}/api/v1/research-sessions/${sessionId}/citations/source?report_path=${encodeURIComponent(report.path)}&number=1&evidence=0`);
+      const sourcePayload = await sourceResponse.json() as any;
+      expect(sourceResponse.status).toBe(200);
+      expect(sourcePayload).toMatchObject({
+        title: "Randomized trial",
+        url: "https://pubmed.ncbi.nlm.nih.gov/12345678/",
+        scope: "archived_document",
+        markdown: "# Trial\n\nThe intervention reduced recurrence without increasing severe bleeding.",
+      });
+      expect(JSON.stringify(sourcePayload)).not.toContain(evidence.id);
+      expect(JSON.stringify(sourcePayload)).not.toContain("data/sessions");
+      expect(sourcePayload.markdown).not.toContain("source_url:");
+
+      const mcpResponse = await fetch(`${baseUrl}/api/v1/research-sessions/${sessionId}/citations?report_path=${encodeURIComponent(report.path)}&number=2`);
+      const mcpPayload = await mcpResponse.json() as any;
+      expect(mcpResponse.status).toBe(200);
+      expect(mcpPayload.evidence[0].source).toMatchObject({
+        title: "Chinese clinical guideline",
+        institution: "Chinese Medical Association",
+        url: "",
+        archive_available: false,
+      });
+      const hiddenMcpSource = await fetch(`${baseUrl}/api/v1/research-sessions/${sessionId}/citations/source?report_path=${encodeURIComponent(report.path)}&number=2&evidence=0`);
+      expect(hiddenMcpSource.status).toBe(404);
     } finally {
       api.server.close();
       await once(api.server, "close");

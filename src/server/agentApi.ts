@@ -517,7 +517,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
         ok: true,
         service: "xunyi-research-service",
         contract_version: CONTRACT_VERSION,
-        endpoints: ["GET /api/v1/runtime-config", "POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel", "POST /api/v1/patient-intake/messages", "POST /api/v1/patient-intake/summary", "GET /api/v1/research-sessions/{session_id}/files", "GET /api/v1/research-sessions/{session_id}/citations"],
+        endpoints: ["GET /api/v1/runtime-config", "POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel", "POST /api/v1/patient-intake/messages", "POST /api/v1/patient-intake/summary", "GET /api/v1/research-sessions/{session_id}/files", "GET /api/v1/research-sessions/{session_id}/citations", "GET /api/v1/research-sessions/{session_id}/citations/source"],
       });
       return;
     }
@@ -552,6 +552,17 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
         const workspace = await sessionWorkspace(rootDir, sessionId);
         sendJson(response, 200, { session_id: sessionId, files: await listWorkspaceFiles(workspace) });
       }
+      return;
+    }
+    const citationSourceMatch = /^\/api\/v1\/research-sessions\/([^/]+)\/citations\/source$/.exec(pathname);
+    if (citationSourceMatch && request.method === "GET") {
+      const sessionId = decodeURIComponent(citationSourceMatch[1] ?? "");
+      const reportPath = url.searchParams.get("report_path") ?? "";
+      const number = Number(url.searchParams.get("number"));
+      const evidenceIndex = Number(url.searchParams.get("evidence"));
+      if (!Number.isInteger(number) || number < 1) throw new ApiError(422, "invalid_citation_number", "引用编号必须是正整数。 ");
+      if (!Number.isInteger(evidenceIndex) || evidenceIndex < 0) throw new ApiError(422, "invalid_evidence_index", "原文序号必须是非负整数。 ");
+      sendJson(response, 200, await readCitationSource(rootDir, sessionId, reportPath, number, evidenceIndex));
       return;
     }
     const citationMatch = /^\/api\/v1\/research-sessions\/([^/]+)\/citations$/.exec(pathname);
@@ -811,7 +822,7 @@ type ReportMetadataReference = {
   evidence_id?: string;
 };
 
-function archiveFrontmatterValue(markdown: string, key: "title" | "source_url"): string {
+function archiveFrontmatterValue(markdown: string, key: "title" | "source_url" | "source_institution"): string {
   if (!markdown.startsWith("---\n")) return "";
   const end = markdown.indexOf("\n---\n", 4);
   if (end < 0) return "";
@@ -835,7 +846,28 @@ function publicSourceUrl(value: string): string {
   }
 }
 
-async function readCitationDetail(rootDir: string, sessionId: string, reportPath: string, number: number): Promise<Record<string, unknown>> {
+type CitationArchiveScope = "archived_document" | "retrieved_excerpt" | "abstract";
+
+type ResolvedCitation = {
+  workspace: string;
+  reference: ReportMetadataReference;
+  evidenceIds: string[];
+  fallbackUrl: string;
+};
+
+function archiveBody(markdown: string): string {
+  if (!markdown.startsWith("---\n")) return markdown.trim();
+  const end = markdown.indexOf("\n---\n", 4);
+  return (end < 0 ? markdown : markdown.slice(end + 5)).trim();
+}
+
+function archiveScope(sourcePath: string, markdown: string): CitationArchiveScope {
+  const body = archiveBody(markdown);
+  if (/Source status:\s*PubMed abstract only/i.test(body)) return "abstract";
+  return sourcePath.endsWith("/full.md") ? "archived_document" : "retrieved_excerpt";
+}
+
+async function resolveCitation(rootDir: string, sessionId: string, reportPath: string, number: number): Promise<ResolvedCitation> {
   if (!/^reports\/(?!drafts\/).+\.md$/.test(reportPath)) {
     throw new ApiError(422, "invalid_report_path", "请选择正式报告后查看引用。 ");
   }
@@ -858,14 +890,26 @@ async function readCitationDetail(rootDir: string, sessionId: string, reportPath
   ])];
   const pmid = /PMID[:\s]+(\d{6,9})/i.exec(reference.citation)?.[1] ?? "";
   const fallbackUrl = pmid ? `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` : "";
+  return { workspace, reference, evidenceIds, fallbackUrl };
+}
+
+async function citationArchive(workspace: string, reference: ReportMetadataReference, fallbackUrl: string, evidenceId: string) {
+  const record = await readEvidence(workspace, evidenceId);
+  const sourceAbsolute = path.resolve(workspace, record.node.sourcePath);
+  if (!sourceAbsolute.startsWith(`${workspace}${path.sep}`)) throw new Error("source outside workspace");
+  const sourceMarkdown = await readFile(sourceAbsolute, "utf8");
+  const sourceTitle = archiveFrontmatterValue(sourceMarkdown, "title") || reference.citation.slice(0, 180);
+  const archivedSourceUrl = archiveFrontmatterValue(sourceMarkdown, "source_url");
+  const sourceUrl = publicSourceUrl(archivedSourceUrl) || fallbackUrl;
+  const sourceInstitution = archiveFrontmatterValue(sourceMarkdown, "source_institution");
+  return { record, sourceMarkdown, sourceTitle, sourceUrl, sourceInstitution, archivedSourceUrl, scope: archiveScope(record.node.sourcePath, sourceMarkdown) };
+}
+
+async function readCitationDetail(rootDir: string, sessionId: string, reportPath: string, number: number): Promise<Record<string, unknown>> {
+  const { workspace, reference, evidenceIds, fallbackUrl } = await resolveCitation(rootDir, sessionId, reportPath, number);
   const evidence = await Promise.all(evidenceIds.map(async (evidenceId) => {
     try {
-      const record = await readEvidence(workspace, evidenceId);
-      const sourceAbsolute = path.resolve(workspace, record.node.sourcePath);
-      if (!sourceAbsolute.startsWith(`${workspace}${path.sep}`)) throw new Error("source outside workspace");
-      const sourceMarkdown = await readFile(sourceAbsolute, "utf8");
-      const sourceTitle = archiveFrontmatterValue(sourceMarkdown, "title") || reference.citation.slice(0, 180);
-      const sourceUrl = publicSourceUrl(archiveFrontmatterValue(sourceMarkdown, "source_url")) || fallbackUrl;
+      const { record, sourceTitle, sourceUrl, sourceInstitution, archivedSourceUrl, scope } = await citationArchive(workspace, reference, fallbackUrl, evidenceId);
       return {
         claim: record.node.claim,
         quote: record.node.quote,
@@ -873,13 +917,35 @@ async function readCitationDetail(rootDir: string, sessionId: string, reportPath
         provenance: record.node.provenance,
         confidence: record.node.confidence,
         verified: record.verification.ok,
-        source: { title: sourceTitle, url: sourceUrl },
+        source: {
+          title: sourceTitle,
+          institution: sourceInstitution,
+          url: sourceUrl,
+          archive_available: Boolean(publicSourceUrl(archivedSourceUrl)),
+          archive_scope: scope,
+        },
       };
     } catch {
       throw new ApiError(409, "citation_evidence_unavailable", "该引用的证据片段暂时无法重新核验。 ");
     }
   }));
   return { number, citation: reference.citation, evidence };
+}
+
+async function readCitationSource(rootDir: string, sessionId: string, reportPath: string, number: number, evidenceIndex: number): Promise<Record<string, unknown>> {
+  const { workspace, reference, evidenceIds, fallbackUrl } = await resolveCitation(rootDir, sessionId, reportPath, number);
+  const evidenceId = evidenceIds[evidenceIndex];
+  if (!evidenceId) throw new ApiError(404, "citation_source_not_found", "未找到这条引用对应的归档原文。 ");
+  try {
+    const { sourceMarkdown, sourceTitle, sourceUrl, archivedSourceUrl, scope } = await citationArchive(workspace, reference, fallbackUrl, evidenceId);
+    if (!publicSourceUrl(archivedSourceUrl)) {
+      throw new ApiError(404, "citation_source_not_public", "该来源的可核验内容已在引用片段中展示。 ");
+    }
+    return { title: sourceTitle, url: sourceUrl, scope, markdown: archiveBody(sourceMarkdown) };
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(409, "citation_source_unavailable", "该引用的归档原文暂时无法读取。 ");
+  }
 }
 
 async function readLatestFinalReport(rootDir: string, sessionId: string): Promise<{ path: string; markdown: string } | undefined> {
@@ -923,7 +989,6 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
     "--skill", path.join(rootDir, ".pi", "skills", "ebm-research", "SKILL.md"),
     "--skill", path.join(rootDir, ".pi", "skills", "clinical-report-writing", "SKILL.md"),
   ];
-  if (request.retrievalPolicy === "mcp_only") args.push("--exclude-tools", "bash");
   if (request.sessionId) args.push("--session", request.sessionId);
   else args.push("--name", sessionWorkspaceLabel(request.question));
   args.push(buildAgentPrompt(request));
@@ -1128,7 +1193,7 @@ async function projectEnv(rootDir: string): Promise<Record<string, string>> {
 export function buildAgentPrompt(input: AgentRunInput): string {
   const audienceInstruction = "使用面向临床人员的中文；按临床决策需要呈现证据等级、效应量和适用边界。";
   const retrievalInstruction = input.retrievalPolicy === "mcp_only"
-    ? "本轮仅使用指南库：只使用 guideline_mcp_search、guideline_mcp_retrieve、guideline_mcp_read 及证据/报告工具；禁止 PubMed、公共网页和本地来源库检索。若指南证据不足，明确报告证据缺口，不得改用其他检索来源。最终面向用户的报告不得出现 MCP、RAG、工具调用、内部文件路径或内部 evidence ID。"
+    ? "本轮外部临床知识检索仅使用指南库：使用 guideline_mcp_search、guideline_mcp_retrieve、guideline_mcp_read，不使用 PubMed、公共网页或本地来源库检索。Pi 的 read、bash 等本地工具仍可用于读取和定位本会话已归档内容，但不得借此增加其他外部检索来源。若指南证据不足，明确报告证据缺口。最终面向用户的报告不得出现 MCP、RAG、工具调用、内部文件路径或内部 evidence ID。"
     : input.searchEnabled
       ? "可按需使用已配置的检索工具。"
       : "用户要求不进行外部检索；只使用当前会话中的既有材料。";
@@ -1138,7 +1203,7 @@ export function buildAgentPrompt(input: AgentRunInput): string {
     "医生版正式报告必须遵循 clinical-report-writing skill：以临床总决策拆出最少的、能改变选择的循证子问题；每个分析小节先给出裁决，再解释证据如何支持或限制它，并回到当前病例的适用条件。报告标题与结构由该 skill 和实际临床决策决定，不得按文献逐篇罗列，不得把内部工具、文件路径或检索日志写给医生。",
     "调用 report_write 前自检：每个关键子问题都说明了待裁决主张、直接或间接证据、证据能与不能推出什么、对病例意味着什么；关键医学判断、阈值、疗效或安全性数字紧跟编号引用；正文引用与参考文献编号完全对应。",
     "本轮必须生成正式循证报告：在最终回复前调用 report_write；若 report_write 只保存了 draft，则修复后调用 report_finalize。不得只在聊天消息中输出摘要而跳过正式报告文件。最终聊天消息使用自然、简洁的中文答复，概括结论、重要边界和下一步，不复制完整报告；该摘要会与正式报告同时展示。",
-    "研究过程中，可在工具调用前用一句简短中文说明对医生有意义的进展。只有研究目标、临床判断或面向医生的阶段发生实质变化时才说明进展，例如完成问题框定、找到会改变决策的关键证据、发现重要冲突或缺口、停止检索并进入写作。定位行号、登记证据和可自动恢复的工具重试属于内部操作，无需播报；同一阶段不要反复说明‘证据已足够’或下一项内部动作。不要暴露工具参数、内部路径，也不要把未经核验的中间发现写成结论；无需为了展示而凑数量。",
+    "研究过程中，可在工具调用前用一句简短中文说明对医生有意义的进展。只有研究目标、临床判断或面向医生的阶段发生实质变化时才说明进展，例如完成问题框定、找到会改变决策的关键证据、发现重要冲突或缺口、停止检索并进入写作。原文定位、登记证据和可自动恢复的工具重试属于内部操作，无需播报；同一阶段不要反复说明‘证据已足够’或下一项内部动作。不要暴露工具参数、内部路径，也不要把未经核验的中间发现写成结论；无需为了展示而凑数量。",
     retrievalInstruction,
     `本轮最大工具迭代预算为 ${input.maxIterations}（提示性约束）。`,
     "临床问题：",

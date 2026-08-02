@@ -174,6 +174,7 @@ describe("guideline MCP", () => {
       const archived = await readFile(path.join(sessionDir, read.archive.path), "utf8");
       expect(archived).toContain("Recommendation text");
       expect(archived).not.toContain("doc_id");
+      expect(archived).toContain('source_url: "mcp://guideline/g1"');
     }
   });
 

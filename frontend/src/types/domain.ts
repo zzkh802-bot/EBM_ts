@@ -200,13 +200,28 @@ export interface CitationEvidenceExcerpt {
   provenance: string
   confidence: 'low' | 'moderate' | 'high'
   verified: boolean
-  source: { title: string; url: string }
+  source: {
+    title: string
+    institution?: string
+    url: string
+    archive_available: boolean
+    archive_scope: CitationArchiveScope
+  }
 }
+
+export type CitationArchiveScope = 'archived_document' | 'retrieved_excerpt' | 'abstract'
 
 export interface CitationDetailResponse {
   number: number
   citation: string
   evidence: CitationEvidenceExcerpt[]
+}
+
+export interface CitationSourceResponse {
+  title: string
+  url: string
+  scope: CitationArchiveScope
+  markdown: string
 }
 
 export interface WorkspaceAsset extends ClinicianDocument {

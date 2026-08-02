@@ -85,7 +85,7 @@ export function renderGuidelineReadText(
     `Readable guideline path: ${readablePath}`,
     ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
     `Archive lines: 1-${totalLines} (${totalLines} total lines; 1-based).`,
-    `For evidence_add, use this readable guideline path with exact offset/limit.`,
+    `For evidence_add, use this readable guideline path and copy a minimal, sufficient, continuous verbatim quote.`,
     ...(headings.length ? ["", "Best-effort navigation index (generated from cleaned Markdown; verify against full text):", ...headings] : []),
     "",
     `Informative preview lines ${previewStart}-${previewEnd}:`,
@@ -107,21 +107,10 @@ export function renderRetrieveCards(title: string, items: GuidelineRetrieveItem[
     if (item.chunkType) lines.push(`   chunk_type: ${item.chunkType}`);
     const sourcePath = item.sourcePath ? readablePath(item.sourcePath) : undefined;
     if (sourcePath) lines.push(`   readable chunk path: ${sourcePath}`);
-    if (item.lineStart !== undefined && item.lineEnd !== undefined) {
-      lines.push(`   exact chunk lines: ${item.lineStart}-${item.lineEnd}`);
-      if (sourcePath) {
-        lines.push(
-          "   evidence_add location (copy these values; 1-based):",
-          `     source_path: ${sourcePath}`,
-          `     offset: ${item.lineStart}`,
-          `     limit: ${item.lineEnd - item.lineStart + 1}`,
-        );
-      }
-    }
     if (item.candidateMaterial) lines.push("   candidate material (identical to archived body):", "", item.candidateMaterial);
     lines.push("");
   });
-  lines.push("These are candidate materials, not evidence yet. If a continuous passage directly supports a claim, call evidence_add with the exact source_path, offset, and limit shown above. You may narrow the range, but never extend it or replace limit with an arbitrary value.");
+  lines.push("These are candidate materials, not evidence yet. If a passage directly supports a claim, call evidence_add with the readable chunk path and a minimal, sufficient, continuous verbatim quote copied from the candidate material.");
   return lines.join("\n");
 }
 
@@ -170,9 +159,9 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
   pi.registerTool({
     name: "guideline_mcp_retrieve",
     label: "Retrieve Guideline Chunks",
-    description: "Run internal guideline RAG retrieval and archive each returned chunk as a citation-capable source with exact lines.",
+    description: "Run internal guideline RAG retrieval and archive each returned chunk as a citation-capable quote source.",
     promptSnippet: "Retrieve traceable guideline chunks that can directly support evidence when relevant",
-    promptGuidelines: ["RAG chunks may directly support evidence when the returned readable chunk path and exact lines match the claim; use guideline_mcp_read only when broader context is needed."],
+    promptGuidelines: ["RAG chunks may directly support evidence when a continuous verbatim passage supports the claim; copy that passage with the readable chunk path. Use guideline_mcp_read only when broader context is needed."],
     parameters: Type.Object({
       query: Type.String({ minLength: 2, description: "Focused clinical retrieval query" }),
       topk: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),

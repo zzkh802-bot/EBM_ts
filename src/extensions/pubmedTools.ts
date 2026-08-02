@@ -14,16 +14,15 @@ function compactAbstractText(value: string): string {
   return value.replace(/\s+/g, " ").trim().slice(0, 500);
 }
 
-function abstractWindow(archive: { content: string; bodyLineStart: number }): { offset: number; limit: number; preview: string } {
+function abstractPreview(archive: { content: string }): string {
   const sourceLines = archive.content.split("\n");
   const headingIndex = sourceLines.findIndex((line) => line.trim() === "## Abstract");
   let firstIndex = headingIndex >= 0 ? headingIndex + 1 : 0;
   while (firstIndex < sourceLines.length && !sourceLines[firstIndex]!.trim()) firstIndex += 1;
-  let lastIndex = sourceLines.length - 1;
+  const nextHeadingIndex = sourceLines.findIndex((line, index) => index > firstIndex && /^##\s+/.test(line.trim()));
+  let lastIndex = (nextHeadingIndex >= 0 ? nextHeadingIndex : sourceLines.length) - 1;
   while (lastIndex >= firstIndex && !sourceLines[lastIndex]!.trim()) lastIndex -= 1;
-  const offset = archive.bodyLineStart + firstIndex;
-  const limit = Math.max(1, lastIndex - firstIndex + 1);
-  return { offset, limit, preview: compactAbstractText(sourceLines.slice(firstIndex, lastIndex + 1).join(" ")) };
+  return compactAbstractText(sourceLines.slice(firstIndex, lastIndex + 1).join(" "));
 }
 
 function pmidFromAbstract(content: string): string {
@@ -55,13 +54,13 @@ export function renderAbstractNavigation(
   const lines = ["PubMed abstract results:", ""];
   archives.forEach((archive, index) => {
     const readablePath = ["data", "sessions", sessionDirectoryName, archive.path].join("/");
-    const { offset, limit, preview } = abstractWindow(archive);
+    const preview = abstractPreview(archive);
     lines.push(
       `${index + 1}. ${archive.title ?? archive.path}`,
       `   PMID: ${pmidFromAbstract(archive.content)}`,
       `   Abstract preview: ${preview}`,
       `   Readable abstract path: ${readablePath}`,
-      `   Exact abstract lines: ${offset}-${offset + limit - 1}`,
+      "   Evidence use: copy a minimal, sufficient, continuous verbatim quote from the archived Abstract section.",
       "",
     );
   });

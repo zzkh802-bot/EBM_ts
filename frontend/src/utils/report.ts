@@ -57,8 +57,9 @@ export function parseInline(value: string): InlineNode[] {
 const tableCells = (line: string) =>
   line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => parseInline(cell.trim()))
 
-export function parseReport(markdown: string): ReportNode[] {
-  const lines = reportBody(markdown).replace(/\r/g, '').split('\n')
+export function parseReport(markdown: string, options: { stripReferences?: boolean } = {}): ReportNode[] {
+  const source = options.stripReferences === false ? markdown.trim() : reportBody(markdown)
+  const lines = source.replace(/\r/g, '').split('\n')
   const nodes: ReportNode[] = []
   let index = 0
   while (index < lines.length) {

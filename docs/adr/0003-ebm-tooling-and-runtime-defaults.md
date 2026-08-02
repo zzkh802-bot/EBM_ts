@@ -19,9 +19,9 @@ Evidence source of truth is Markdown.
 - Do not paste redundant raw JSON at the end of the evidence file.
 - JSON/index files are allowed as generated companions for UI/tests, but the agent-facing evidence record is Markdown.
 
-### Source normalization and line stability
+### Source normalization and quote stability
 
-Network readers can return pathological Markdown, including very long full text compressed into a single line. This breaks line-offset evidence.
+Network readers can return pathological Markdown, including very long full text compressed into a single line. This harms reading and makes copied evidence text unstable.
 
 Therefore every read/search/document tool must normalize text **before** both:
 
@@ -42,7 +42,7 @@ Normalization goals:
 
 Read-like network tools archive the complete normalized source before model exposure. Each source uses a semantic directory containing canonical `full.md` and a generated `toc.md`; the TOC is navigation metadata, not a duplicate source. Their immediate model-visible result is navigation data plus a bounded exact preview, not the complete long document: semantic evidence path, Pi-readable full/TOC paths, total one-based line range, up to 20 Markdown heading locations, a 5KB preview, and a copyable `read(path, offset, limit)` continuation hint with an exact overlapping next offset. Every truncation must preserve a reachable path and gap-free continuation; a bounded response without a continuation mechanism is invalid. If a heading map is partial, disclose its count and point to the complete `toc.md`.
 
-Pi's built-in `read` remains unchanged. Evidence windows use the same one-based line numbers as Pi `read`, so the model can pass an observed offset/limit directly to `evidence_add`.
+Pi's built-in `read` remains unchanged and line numbers remain useful for navigating long files. They are not evidence identifiers. The model passes a minimal, sufficient, continuous verbatim `quote` to `evidence_add`; the evidence tool locates it in the canonical archive and derives character and line coordinates for audit. It first requires a unique exact match, then permits only layout normalization such as line wrapping, Unicode spacing, and zero-width characters. Changed numbers, drug names, wording, punctuation, OCR substitutions, translations, and discontinuous ellipses are never auto-accepted. When matching fails, deterministic short boundary anchors may return canonical source candidates for the model to copy and retry, but candidates are not registered automatically.
 
 Normalize external transport artifacts before both archive and preview: decode numeric/common HTML entities, normalize Unicode spacing, remove zero-width/invalid control characters, and preserve inline PubMed XML text order. Transport envelopes such as guideline MCP JSON are not source content and must be unwrapped and rendered into semantic Markdown sections before archive. A `.md` suffix must never be used merely to rename raw JSON.
 

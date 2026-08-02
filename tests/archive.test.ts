@@ -102,7 +102,7 @@ describe("source archive", () => {
     expect(output.text).toContain("Preview truncated at 5000 bytes");
     expect(output.text).toContain("Continue without gaps");
     expect(output.text).toMatch(/Continue without gaps.*offset=\d+, limit=200/);
-    expect(output.text).toContain("For evidence_add, use this readable archive path with the exact 1-based offset/limit");
+    expect(output.text).toContain("For evidence_add, use this readable archive path and copy a minimal, sufficient, continuous verbatim quote");
   });
 
   it("normalizes content before hashing, archiving, and returning model-visible text", async () => {

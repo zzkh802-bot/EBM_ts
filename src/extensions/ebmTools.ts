@@ -39,17 +39,18 @@ export function registerEbmTools(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "evidence_add",
     label: "Add Evidence",
-    description: "Archive an exact line slice from a session source as a traceable Markdown evidence record.",
-    promptSnippet: "Archive exact source lines as claim-linked EBM evidence",
+    description: "Locate and archive a continuous verbatim quote from a session source as a traceable Markdown evidence record.",
+    promptSnippet: "Archive a continuous verbatim source quote as claim-linked EBM evidence",
     promptGuidelines: [
-      "Use evidence_add only after reading the exact archived source window; pass the returned readable archive path as source_path with the exact offset and limit.",
+      "Use evidence_add only after reading the archived source. Pass a minimal, sufficient, continuous verbatim passage as quote; the tool derives and verifies its source coordinates.",
+      "If quote location fails, copy one of the returned canonical source candidates and retry. Never repair changed numbers, drug names, wording, OCR characters, or join discontinuous passages with ellipses.",
       "Classify provenance honestly. Search snippets and unverified mirrors are discovery-only and cannot support a final report. Use expert_consensus for consensus/position documents rather than calling them guidelines.",
       "For secondary sources, attribute claims to that source; never rewrite a paraphrase as the target guideline's direct recommendation.",
       "Evidence can be preliminary: use confidence=low or moderate for early candidate evidence instead of delaying all evidence_add calls until the end.",
     ],
     parameters: Type.Object({
       question: Type.String({ description: "Complete internal evidence question" }),
-      claim: Type.String({ description: "Claim interpreted from this exact source slice" }),
+      claim: Type.String({ description: "Claim interpreted from this exact source quote" }),
       relation: StringEnum(["supports", "partially_supports", "refutes"] as const),
       provenance: Type.Optional(StringEnum([
         "primary_full_text",
@@ -66,8 +67,7 @@ export function registerEbmTools(pi: ExtensionAPI): void {
       ] as const)),
       confidence: Type.Optional(StringEnum(["low", "moderate", "high"] as const)),
       source_path: Type.String({ description: "Use the returned readable archive path, or a session-relative sources/read/... path" }),
-      offset: Type.Integer({ minimum: 1, description: "One-based source line number, matching Pi read" }),
-      limit: Type.Integer({ minimum: 1, maximum: 200, description: "Number of consecutive exact source lines" }),
+      quote: Type.String({ minLength: 6, description: "Minimal, sufficient, continuous verbatim passage copied from the archived source" }),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const sessionId = ctx.sessionManager.getSessionId();
@@ -81,8 +81,7 @@ export function registerEbmTools(pi: ExtensionAPI): void {
         ...(params.provenance ? { provenance: params.provenance } : {}),
         ...(params.confidence ? { confidence: params.confidence } : {}),
         sourcePath: evidenceSourcePath(params.source_path, sessionId, sessionDir),
-        offset: params.offset,
-        limit: params.limit,
+        quote: params.quote,
       }));
       const evidencePath = path.posix.join("evidence", `${node.id}.md`);
       pi.events.emit("ebm:evidence_added", { sessionId, evidenceId: node.id, path: evidencePath });
@@ -132,7 +131,8 @@ export function registerEbmTools(pi: ExtensionAPI): void {
         `Confidence: ${node.confidence}`,
         `Citation eligible: ${node.citationEligible}`,
         `Verification: ${record.verification.ok ? "ok" : record.verification.errors.join("; ")}`,
-        `Source lines: ${sourceReadablePath}:${node.lineStart}-${node.lineEnd}`,
+        `Source: ${sourceReadablePath}`,
+        `Source match: ${node.matchMode ?? "legacy_line_record"}`,
         "",
         "Quote:",
         node.quote,

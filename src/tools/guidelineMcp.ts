@@ -510,18 +510,19 @@ export async function retrieveGuidelines(input: {
         layout: "file",
         ...(item.docId ? { sourceUrl: `mcp://guideline/${item.docId}${item.chunkId ? `#${encodeURIComponent(item.chunkId)}` : ""}` } : {}),
         title: ragChunkArchiveTitle(item),
+        ...(item.institution ? { sourceInstitution: item.institution } : {}),
         // Keep the citation source itself to the returned material. Provenance is
         // already carried by archive frontmatter (title + mcp:// doc/chunk URL),
-        // so duplicating Markdown metadata only shifts the evidence line range.
+        // so duplicating Markdown metadata would pollute the canonical quote source.
         content: item.candidateMaterial ?? "",
       });
       const window = retrievedChunkWindow(chunkArchive);
       item.sourcePath = chunkArchive.path;
       item.lineStart = window.lineStart;
       item.lineEnd = window.lineEnd;
-      // The model must see the same normalized body that evidence_add will read.
+      // The model must see the same normalized body that evidence_add will search.
       // archiveSource may decode entities and wrap long lines, so retaining the
-      // pre-archive MCP string would make its visible text diverge from offsets.
+      // pre-archive MCP string would make its visible text diverge from the archive.
       item.candidateMaterial = chunkArchive.content;
     }
     const content = renderGuidelineRetrieve(input.query, result.text);
@@ -600,6 +601,8 @@ export async function readGuideline(input: {
     const archive = await archiveSource({
       sessionDir: input.sessionDir,
       kind: "read",
+      ...(input.docId ? { sourceUrl: `mcp://guideline/${input.docId}` } : {}),
+      ...(metadata.institution ? { sourceInstitution: metadata.institution } : {}),
       title: document.title ?? input.title ?? input.docId ?? "guideline",
       content: document.content,
     });

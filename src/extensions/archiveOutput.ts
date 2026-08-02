@@ -52,7 +52,7 @@ export function archiveToolText(
       `Read any archive window with read(path=${JSON.stringify(readablePath)}, offset=N, limit=M).`,
       ...(options.citationEligible === false
         ? ["This search snapshot is discovery history and cannot be passed to evidence_add; use an individually archived sources/read document."]
-        : ["For evidence_add, use this readable archive path with the exact 1-based offset/limit."]),
+        : ["For evidence_add, use this readable archive path and copy a minimal, sufficient, continuous verbatim quote from the source."]),
       ...(excerpt.truncated ? [`Continue without gaps (the last preview line is intentionally repeated): read(path=${JSON.stringify(readablePath)}, offset=${Math.max(record.bodyLineStart, visibleEnd)}, limit=200).`] : []),
       ...(readableTocPath ? [`Read the complete section index with read(path=${JSON.stringify(readableTocPath)}).`] : []),
       ...(map.items.length ? ["", `Source map${map.total > map.items.length ? ` (first ${map.items.length} of ${map.total}; complete index is in toc.md)` : ""}:`, ...map.items] : []),

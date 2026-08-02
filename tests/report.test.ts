@@ -15,8 +15,7 @@ async function fixture() {
     claim: "Treatment reduced mortality.",
     relation: "supports",
     sourcePath: "sources/read/study.md",
-    offset: 2,
-    limit: 1,
+    quote: "reduced mortality",
   });
   return { sessionDir, evidence };
 }
@@ -81,8 +80,7 @@ describe("verified Markdown reports", () => {
       claim: "Second source supports treatment.",
       relation: "supports",
       sourcePath: "sources/read/study2.md",
-      offset: 1,
-      limit: 1,
+      quote: "second result",
     });
 
     const report = await writeReport({
@@ -111,8 +109,7 @@ describe("verified Markdown reports", () => {
       claim: "Second source supports treatment.",
       relation: "supports",
       sourcePath: "sources/read/study2.md",
-      offset: 1,
-      limit: 1,
+      quote: "second result",
     });
 
     const report = await writeReport({
@@ -142,8 +139,7 @@ describe("verified Markdown reports", () => {
       claim: "Second source supports treatment.",
       relation: "supports",
       sourcePath: "sources/read/study2.md",
-      offset: 1,
-      limit: 1,
+      quote: "second result",
     });
     await expect(writeReport({
       sessionDir,
@@ -245,8 +241,7 @@ describe("verified Markdown reports", () => {
       claim: "Second source supports treatment.",
       relation: "supports",
       sourcePath: "sources/read/study2.md",
-      offset: 1,
-      limit: 1,
+      quote: "second result",
     });
     const report = await writeReport({
       sessionDir,
@@ -313,8 +308,7 @@ describe("verified Markdown reports", () => {
       relation: "supports",
       provenance: "guideline_mirror_unverified",
       sourcePath: "mirror.md",
-      offset: 1,
-      limit: 1,
+      quote: "Unverified guideline recommendation.",
     });
     await expect(writeReport({
       sessionDir,

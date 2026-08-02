@@ -34,7 +34,7 @@ Expected:
 | Vertical flow | `tests/endToEnd.test.ts` | discovery archive is rejected as evidence; an individually read source becomes exact evidence and then a source-reverified report |
 | Pi resources | `tests/ebmToolsExtension.test.ts` | extension and both project skills load without diagnostics |
 | Compaction | `tests/compactionArtifact.test.ts` | Pi summaries are mirrored atomically without replacing native compaction |
-| Evidence | `tests/evidence.test.ts` | Markdown evidence stores and verifies exact source slices; traversal/symlink escape rejected |
+| Evidence | `tests/evidence.test.ts` | Markdown evidence locates and verifies continuous verbatim source quotes; traversal/symlink escape rejected |
 | Reports | `tests/report.test.ts` | unknown/stale evidence blocks report writes; evidence-gap reports require explicit opt-in |
 | Pi extension | `tests/ebmToolsExtension.test.ts` | project extension loads and evidence tools emit a domain event |
 | Providers | `tests/providerCatalog.test.ts` | Pi owns native DeepSeek; Xinqiong registers only its OpenAI-compatible endpoint |
