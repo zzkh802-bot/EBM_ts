@@ -1,13 +1,16 @@
 import { once } from "node:events";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildAgentPrompt, createAgentApiServer, type AgentExecutor, type AgentRunInput, type RuntimeConfig } from "../src/server/agentApi.js";
 import { buildPatientIntakePrompt, type PatientIntakeInput } from "../src/server/patientIntake.js";
+import { archiveSource } from "../src/tools/archive.js";
+import { addEvidence } from "../src/tools/evidence.js";
+import { writeReport } from "../src/tools/report.js";
 
-async function startApi(executor: AgentExecutor, runtimeConfig?: RuntimeConfig) {
-  const api = createAgentApiServer({ executor, ...(runtimeConfig ? { runtimeConfig } : {}) });
+async function startApi(executor: AgentExecutor, runtimeConfig?: RuntimeConfig, rootDir?: string) {
+  const api = createAgentApiServer({ executor, ...(runtimeConfig ? { runtimeConfig } : {}), ...(rootDir ? { rootDir } : {}) });
   api.server.listen(0, "127.0.0.1");
   await once(api.server, "listening");
   const address = api.server.address();
@@ -58,6 +61,66 @@ describe("循医研究服务 API", () => {
     expect(maximum).not.toContain("指南推荐等级")
     expect(publicPrompt).toContain("面向临床人员")
     expect(publicPrompt).toContain("本轮仅使用指南库")
+  });
+
+  it("returns verified source excerpts for a numbered report citation without exposing evidence IDs", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-citation-api-"));
+    const sessionId = "citation-session";
+    const workspaceName = "citation-workspace";
+    const workspace = path.join(rootDir, "data", "sessions", workspaceName);
+    await mkdir(path.join(rootDir, "data", "sessions", ".metadata", "workspaces"), { recursive: true });
+    await mkdir(workspace, { recursive: true });
+    await writeFile(
+      path.join(rootDir, "data", "sessions", ".metadata", "workspaces", `${sessionId}.json`),
+      JSON.stringify({ directory: workspaceName }),
+      "utf8",
+    );
+    const source = await archiveSource({
+      sessionDir: workspace,
+      kind: "read",
+      title: "Randomized trial",
+      sourceUrl: "https://pubmed.ncbi.nlm.nih.gov/12345678/",
+      content: "# Trial\n\nThe intervention reduced recurrence without increasing severe bleeding.",
+    });
+    const evidence = await addEvidence({
+      sessionDir: workspace,
+      question: "Does treatment reduce recurrence?",
+      claim: "Treatment reduced recurrence.",
+      relation: "supports",
+      provenance: "primary_abstract",
+      confidence: "high",
+      sourcePath: source.path,
+      offset: source.bodyLineStart + 2,
+      limit: 1,
+    });
+    const report = await writeReport({
+      sessionDir: workspace,
+      title: "Citation details",
+      content: "# Conclusion\n\nTreatment reduced recurrence [1].",
+      references: [{ number: 1, citation: "Randomized trial. PMID 12345678.", evidenceId: evidence.id }],
+    });
+    const executor: AgentExecutor = async () => ({ message: "unused" });
+    const { api, baseUrl } = await startApi(executor, undefined, rootDir);
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/research-sessions/${sessionId}/citations?report_path=${encodeURIComponent(report.path)}&number=1`);
+      const payload = await response.json() as any;
+
+      expect(response.status).toBe(200);
+      expect(payload).toMatchObject({
+        number: 1,
+        citation: "Randomized trial. PMID 12345678.",
+        evidence: [{
+          claim: "Treatment reduced recurrence.",
+          quote: "The intervention reduced recurrence without increasing severe bleeding.",
+          verified: true,
+          source: { title: "Randomized trial", url: "https://pubmed.ncbi.nlm.nih.gov/12345678/" },
+        }],
+      });
+      expect(JSON.stringify(payload)).not.toContain(evidence.id);
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
   });
 
   it("creates an async run and exposes the completed normalized response", async () => {

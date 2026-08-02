@@ -4,6 +4,7 @@ import { access, copyFile, mkdir, readFile, readdir, stat } from "node:fs/promis
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { readEvidence } from "../tools/evidence.js";
 import { initResearchFrame } from "../tools/researchFrame.js";
 import { piSessionDirectory } from "../extensions/sessionPath.js";
 import { PatientIntakeError, type PatientIntakeExecutor, PatientWorkspace, validatePatientIntakeInput } from "./patientIntake.js";
@@ -516,7 +517,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
         ok: true,
         service: "xunyi-research-service",
         contract_version: CONTRACT_VERSION,
-        endpoints: ["GET /api/v1/runtime-config", "POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel", "POST /api/v1/patient-intake/messages", "POST /api/v1/patient-intake/summary", "GET /api/v1/research-sessions/{session_id}/files"],
+        endpoints: ["GET /api/v1/runtime-config", "POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel", "POST /api/v1/patient-intake/messages", "POST /api/v1/patient-intake/summary", "GET /api/v1/research-sessions/{session_id}/files", "GET /api/v1/research-sessions/{session_id}/citations"],
       });
       return;
     }
@@ -551,6 +552,15 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
         const workspace = await sessionWorkspace(rootDir, sessionId);
         sendJson(response, 200, { session_id: sessionId, files: await listWorkspaceFiles(workspace) });
       }
+      return;
+    }
+    const citationMatch = /^\/api\/v1\/research-sessions\/([^/]+)\/citations$/.exec(pathname);
+    if (citationMatch && request.method === "GET") {
+      const sessionId = decodeURIComponent(citationMatch[1] ?? "");
+      const reportPath = url.searchParams.get("report_path") ?? "";
+      const number = Number(url.searchParams.get("number"));
+      if (!Number.isInteger(number) || number < 1) throw new ApiError(422, "invalid_citation_number", "引用编号必须是正整数。 ");
+      sendJson(response, 200, await readCitationDetail(rootDir, sessionId, reportPath, number));
       return;
     }
     if (accountConnections && request.method === "POST" && pathname === "/api/v1/account-connections") {
@@ -792,6 +802,84 @@ async function readWorkspaceFile(rootDir: string, sessionId: string, relativePat
   }
   if (!details.isFile()) throw new ApiError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
   return { session_id: sessionId, path: relativePath, kind: workspaceFileKind(relativePath), size: details.size, modified_at: details.mtime.toISOString(), content: await readFile(absolutePath, "utf8") };
+}
+
+type ReportMetadataReference = {
+  number: number;
+  citation: string;
+  evidence_ids?: string[];
+  evidence_id?: string;
+};
+
+function archiveFrontmatterValue(markdown: string, key: "title" | "source_url"): string {
+  if (!markdown.startsWith("---\n")) return "";
+  const end = markdown.indexOf("\n---\n", 4);
+  if (end < 0) return "";
+  const prefix = `${key}:`;
+  const line = markdown.slice(4, end).split("\n").find((item) => item.startsWith(prefix));
+  if (!line) return "";
+  const raw = line.slice(prefix.length).trim();
+  try {
+    return raw.startsWith('"') ? String(JSON.parse(raw)) : raw;
+  } catch {
+    return "";
+  }
+}
+
+function publicSourceUrl(value: string): string {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : "";
+  } catch {
+    return "";
+  }
+}
+
+async function readCitationDetail(rootDir: string, sessionId: string, reportPath: string, number: number): Promise<Record<string, unknown>> {
+  if (!/^reports\/(?!drafts\/).+\.md$/.test(reportPath)) {
+    throw new ApiError(422, "invalid_report_path", "请选择正式报告后查看引用。 ");
+  }
+  const workspace = await sessionWorkspace(rootDir, sessionId);
+  const reportAbsolute = path.resolve(workspace, reportPath);
+  if (!reportAbsolute.startsWith(`${workspace}${path.sep}`)) throw new ApiError(404, "report_not_found", "未找到该正式报告。 ");
+  let metadata: { references?: ReportMetadataReference[] };
+  try {
+    metadata = JSON.parse(await readFile(`${reportAbsolute}.metadata.json`, "utf8")) as { references?: ReportMetadataReference[] };
+  } catch {
+    throw new ApiError(404, "citation_metadata_not_found", "这份历史报告尚未保存可核验的引用映射。 ");
+  }
+  const reference = Array.isArray(metadata.references)
+    ? metadata.references.find((item) => item && item.number === number && typeof item.citation === "string")
+    : undefined;
+  if (!reference) throw new ApiError(404, "citation_not_found", `报告中未找到引用 [${number}]。`);
+  const evidenceIds = [...new Set([
+    ...(Array.isArray(reference.evidence_ids) ? reference.evidence_ids : []),
+    ...(typeof reference.evidence_id === "string" ? [reference.evidence_id] : []),
+  ])];
+  const pmid = /PMID[:\s]+(\d{6,9})/i.exec(reference.citation)?.[1] ?? "";
+  const fallbackUrl = pmid ? `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` : "";
+  const evidence = await Promise.all(evidenceIds.map(async (evidenceId) => {
+    try {
+      const record = await readEvidence(workspace, evidenceId);
+      const sourceAbsolute = path.resolve(workspace, record.node.sourcePath);
+      if (!sourceAbsolute.startsWith(`${workspace}${path.sep}`)) throw new Error("source outside workspace");
+      const sourceMarkdown = await readFile(sourceAbsolute, "utf8");
+      const sourceTitle = archiveFrontmatterValue(sourceMarkdown, "title") || reference.citation.slice(0, 180);
+      const sourceUrl = publicSourceUrl(archiveFrontmatterValue(sourceMarkdown, "source_url")) || fallbackUrl;
+      return {
+        claim: record.node.claim,
+        quote: record.node.quote,
+        relation: record.node.relation,
+        provenance: record.node.provenance,
+        confidence: record.node.confidence,
+        verified: record.verification.ok,
+        source: { title: sourceTitle, url: sourceUrl },
+      };
+    } catch {
+      throw new ApiError(409, "citation_evidence_unavailable", "该引用的证据片段暂时无法重新核验。 ");
+    }
+  }));
+  return { number, citation: reference.citation, evidence };
 }
 
 async function readLatestFinalReport(rootDir: string, sessionId: string): Promise<{ path: string; markdown: string } | undefined> {

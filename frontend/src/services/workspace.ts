@@ -1,4 +1,4 @@
-import type { ClinicianDocument, ClinicianDocumentsResponse, WorkspaceFile, WorkspaceFileResponse, WorkspaceFilesResponse } from '../types/domain'
+import type { CitationDetailResponse, ClinicianDocument, ClinicianDocumentsResponse, WorkspaceFile, WorkspaceFileResponse, WorkspaceFilesResponse } from '../types/domain'
 import { request } from './http'
 
 const base = (sessionId: string) => `/ts-api/api/v1/research-sessions/${encodeURIComponent(sessionId)}/files`
@@ -11,4 +11,7 @@ export const workspaceService = {
     return { ...workspace, files: workspace.files.filter(clinicianVisible) }
   },
   read: (sessionId: string, path: string) => request<WorkspaceFileResponse>(`${base(sessionId)}?path=${encodeURIComponent(path)}`),
+  citation: (sessionId: string, reportPath: string, number: string) => request<CitationDetailResponse>(
+    `/ts-api/api/v1/research-sessions/${encodeURIComponent(sessionId)}/citations?report_path=${encodeURIComponent(reportPath)}&number=${encodeURIComponent(number)}`,
+  ),
 }

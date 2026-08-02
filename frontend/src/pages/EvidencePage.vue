@@ -305,7 +305,10 @@ const share = async (message: Message) => {
 const retry = (message: Message, detail = '') => submit(`${detail}${message.sourceQuestion || ''}`, {
   audienceMode: message.audienceMode, thinkingLevel: message.thinkingLevel, searchEnabled: message.searchEnabled,
 })
-const openCitation = (reference: Reference) => ui.openCitation(reference)
+const openCitation = (reference: Reference, reportPath?: string) => {
+  const sessionId = sessions.active.researchSessionId
+  ui.openCitation(reference, sessionId && reportPath ? { sessionId, reportPath } : undefined)
+}
 const openWorkspace = async (preferredPath = '') => {
   if (!conversationFiles.value.length) await loadConversationFiles()
   const target = conversationFiles.value.find((file) => file.path === preferredPath)
@@ -473,7 +476,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
                 v-if="message.role === 'assistant' && !message.pending && !message.showMarkdown && !message.reportMarkdown"
                 :markdown="message.content"
                 :audience="message.audienceMode"
-                @citation="openCitation"
+                @citation="openCitation($event, message.reportPath)"
               />
               <pre v-else-if="message.showMarkdown">{{ message.reportMarkdown || message.content }}</pre>
               <section v-else-if="message.role === 'assistant' && message.reportMarkdown" class="final-report" aria-label="正式报告">
@@ -489,20 +492,16 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
                   <ReportRenderer
                     :markdown="message.content"
                     :audience="message.audienceMode"
-                    @citation="openCitation"
+                    @citation="openCitation($event, message.reportPath)"
                   />
                 </section>
                 <ReportRenderer
                   :markdown="message.reportMarkdown"
                   :audience="message.audienceMode"
-                  @citation="openCitation"
+                  @citation="openCitation($event, message.reportPath)"
                 />
               </section>
               <p v-else>{{ message.content }}</p>
-              <div v-if="message.role === 'assistant' && message.reportMarkdown" class="report-file-link">
-                <span>可在右侧打开最终报告或研究框架。</span>
-                <button type="button" @click="openWorkspace(message.reportPath)">打开最终报告</button>
-              </div>
               <div v-if="message.role === 'assistant' && !message.pending" class="message-actions">
                 <button class="message-action-primary" type="button" @click="focusQuestion">继续追问</button>
                 <button type="button" @click="retry(message, '请用更简洁、适合快速决策的方式回答：')">简化结论</button>
@@ -561,7 +560,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
           v-else-if="conversationFileContent"
           :markdown="conversationFileContent"
           audience="clinician"
-          @citation="openCitation"
+          @citation="openCitation($event, selectedConversationFile.kind === 'report' ? selectedConversationFile.path : undefined)"
         />
       </div>
     </aside>

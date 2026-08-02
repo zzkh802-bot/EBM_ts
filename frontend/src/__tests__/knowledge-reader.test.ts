@@ -4,6 +4,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import KnowledgePage from '../pages/KnowledgePage.vue'
 import { useKnowledgeStore } from '../stores/knowledge'
+import { useUiStore } from '../stores'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -14,7 +15,7 @@ describe('研究报告库阅读', () => {
     await router.push('/knowledge')
     await router.isReady()
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      content: '## 最终报告\n\n这是直接阅读的正式报告。',
+      content: '## 最终报告\n\n这是直接阅读的正式报告 [1]。\n\n## 参考文献\n\n1. [1] Randomized trial. PMID: 12345678',
     }), { headers: { 'Content-Type': 'application/json' } })))
     const wrapper = mount(KnowledgePage, { global: { plugins: [router] } })
     await flushPromises()
@@ -28,6 +29,11 @@ describe('研究报告库阅读', () => {
     await flushPromises()
 
     expect(wrapper.find('.asset-reader').exists()).toBe(true)
-    expect(wrapper.find('.asset-reader .report-markdown').text()).toContain('这是直接阅读的正式报告。')
+    expect(wrapper.find('.asset-reader .report-markdown').text()).toContain('这是直接阅读的正式报告')
+
+    await wrapper.get('.asset-reader .citation-pill').trigger('click')
+    expect(useUiStore().detailPayload).toMatchObject({
+      number: '1', sessionId: 'session-1', reportPath: 'reports/final.md',
+    })
   })
 })

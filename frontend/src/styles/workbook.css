@@ -369,8 +369,6 @@ body.chat-mode .conversation-context button { display: none; }
 .message-more-actions > div { position: absolute; z-index: 8; top: calc(100% + 6px); right: 0; display: grid; min-width: 118px; padding: 5px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper-bright); box-shadow: var(--shadow); }
 .message-more-actions > div button { padding: 7px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--ink-soft); font-size: 11px; text-align: left; }
 .message-more-actions > div button:hover { background: var(--evidence-soft); color: var(--evidence); }
-.report-file-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; margin-top: 14px; border: 1px solid rgba(49, 95, 155, .18); border-radius: 10px; background: var(--evidence-soft); color: var(--ink-soft); font-size: 12px; }
-.report-file-link button { flex: 0 0 auto; border: 0; background: transparent; color: var(--evidence); font-weight: 700; }
 .final-report { padding: 2px 0 0; }
 .final-report-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; padding: 14px 0 13px; margin-bottom: 14px; border-top: 2px solid var(--jade); border-bottom: 1px solid var(--line-strong); }
 .final-report-head > div { display: grid; gap: 3px; }
@@ -444,10 +442,11 @@ body.chat-mode .research-progress { margin-bottom: 18px; }
 .reference-panel > header strong { font-family: var(--serif); font-size: 18px; }
 .reference-panel > header span { color: var(--ink-faint); font-size: 11px; }
 .reference-panel-body { display: grid; gap: 0; padding-bottom: 10px; }
-.reference-card { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; padding: 10px 0; border-top: 1px solid var(--line); }
+.reference-card { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 8px; width: 100%; padding: 10px 0; border: 0; border-top: 1px solid var(--line); background: transparent; text-align: left; cursor: pointer; }
+.reference-card:hover { background: linear-gradient(90deg, var(--evidence-soft), transparent); }
+.reference-card:focus-visible { outline: 2px solid rgba(49, 95, 155, .45); outline-offset: 2px; }
 .reference-card-index { color: var(--ink-faint); font-family: var(--mono); font-size: 11px; line-height: 1.8; }
 .reference-card p { margin: 0; color: var(--ink-soft); font-family: var(--reading); font-size: 13px; line-height: 1.8; }
-.reference-card a { color: var(--jade); font-family: var(--sans); font-size: 12px; white-space: nowrap; }
 
 /* Context rail */
 .workspace-info-panel { align-self: start; display: grid; gap: 10px; padding-top: 39px; }
@@ -531,15 +530,32 @@ body.chat-mode .conversation-files-panel { position: sticky; top: 20px; display:
 .history-item-topline small { flex: 0 0 auto; margin-left: auto; color: var(--jade); font-size: 10px; }
 .history-question { overflow: hidden; color: var(--ink-soft); font-size: 11px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
 .history-meta { color: var(--ink-faint); font-family: var(--mono); font-size: 9px; letter-spacing: .01em; }
-.citation-sheet { position: fixed; z-index: 40; top: 0; right: 0; bottom: 0; width: min(500px, 95vw); padding: 26px; overflow: auto; transform: translateX(105%); border-left: 1px solid var(--line); background: var(--paper-bright); box-shadow: var(--shadow); transition: transform .25s ease; }
+.citation-sheet { position: fixed; z-index: 40; top: 0; right: 0; bottom: 0; width: min(560px, 95vw); padding: 26px clamp(22px, 3vw, 34px); overflow: auto; transform: translateX(105%); border-left: 1px solid var(--line); background: var(--paper-bright); box-shadow: var(--shadow); transition: transform .25s ease; }
 .citation-sheet[aria-hidden="false"] { transform: translateX(0); }
 .citation-head, .citation-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.citation-head h2 { margin: 0; font-family: var(--serif); }
+.citation-head > div { display: grid; gap: 3px; }
+.citation-head > div > span, .citation-source-card > span { color: var(--evidence); font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .09em; }
+.citation-head strong { color: var(--ink); font-family: var(--serif); font-size: 23px; }
 .citation-close, .pill-button { padding: 6px 8px; border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--ink-soft); font-size: 11px; text-decoration: none; }
 .citation-source-meta, .citation-source-card, .citation-body details { padding: 13px 0; border-bottom: 1px solid var(--line); }
 .citation-meta-row { display: flex; justify-content: space-between; gap: 12px; color: var(--ink-faint); font-size: 11px; }
-.citation-source-card strong { font-family: var(--serif); font-size: 18px; }
-.citation-body p { color: var(--ink-soft); }
+.citation-source-card p { margin: 7px 0 0; color: var(--ink-soft); font-family: var(--reading); font-size: 13px; line-height: 1.7; }
+.citation-detail-state { padding: 20px 0; margin: 0; color: var(--ink-faint); font-size: 13px; }
+.citation-detail-state.error { color: var(--danger); }
+.citation-evidence-list { display: grid; gap: 16px; padding: 18px 0 6px; }
+.citation-evidence-card { padding: 16px; border: 1px solid rgba(49, 95, 155, .17); border-left: 3px solid var(--evidence); border-radius: 4px 12px 12px 4px; background: linear-gradient(135deg, rgba(232, 240, 250, .62), rgba(252, 253, 252, .8)); }
+.citation-evidence-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.citation-evidence-head > span { color: var(--ink-faint); font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: .06em; }
+.citation-evidence-head > span.verified { color: var(--jade); }
+.citation-evidence-head small { color: var(--ink-faint); font-size: 10px; text-align: right; }
+.citation-evidence-claim { margin: 11px 0; color: var(--ink); font-size: 13px; font-weight: 650; line-height: 1.6; }
+.citation-evidence-quote { padding: 12px 14px; margin: 0; border-left: 2px solid rgba(49, 95, 155, .45); background: rgba(255, 255, 255, .66); color: #263b4d; font-family: var(--reading); font-size: 13px; line-height: 1.75; white-space: pre-wrap; }
+.citation-evidence-source { display: flex; align-items: end; justify-content: space-between; gap: 14px; padding-top: 12px; }
+.citation-evidence-source > span { display: grid; min-width: 0; gap: 3px; }
+.citation-evidence-source small { color: var(--ink-faint); font-size: 10px; }
+.citation-evidence-source strong { overflow: hidden; color: var(--ink-soft); font-size: 11px; font-weight: 600; line-height: 1.45; text-overflow: ellipsis; }
+.citation-evidence-source a { flex: 0 0 auto; color: var(--evidence); font-size: 11px; font-weight: 700; text-decoration: none; }
+.citation-actions { justify-content: flex-end; padding-top: 18px; }
 
 /* Research asset library */
 .asset-page { max-width: 1120px; padding: 42px 5.4vw 80px; margin: 0 auto; }
