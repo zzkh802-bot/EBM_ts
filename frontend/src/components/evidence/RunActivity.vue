@@ -89,16 +89,12 @@ const toolActivity = computed(() => (props.tools || [])
   .filter((tool) => tool.presentation !== 'preparation')
   .map((tool, index) => {
     const name = typeof tool.name === 'string' ? tool.name : 'tool'
-    const started = parseTime(typeof tool.started_at === 'string' ? tool.started_at : undefined)
-    const completed = parseTime(typeof tool.completed_at === 'string' ? tool.completed_at : undefined)
     const status = typeof tool.status === 'string' ? tool.status : 'completed'
-    const endedAt = completed ?? (status === 'running' ? currentTime.value : undefined)
     return {
       id: typeof tool.id === 'string' ? tool.id : `${name}-${index}`,
       label: name === 'bash' ? shellActionLabel(tool.arguments) : toolLabels[name] || name.replaceAll('_', ' '),
       detail: name === 'bash' ? shellCommandDetail(tool.arguments) : '',
       status,
-      duration: formatDuration(started === undefined || endedAt === undefined ? undefined : endedAt - started),
     }
   }))
 const activeTool = computed(() => toolActivity.value.find((tool) => tool.status === 'running'))
@@ -133,13 +129,13 @@ const hasActivity = computed(() => Boolean(props.pending || errors.value.length 
     <details v-if="toolActivity.length" class="research-progress-tools">
       <summary>
         <span>{{ activeTool ? `正在${activeTool.label}` : `研究操作 · ${toolActivity.length} 项` }}</span>
-        <small>{{ activeTool?.duration || '查看详情' }}</small>
+        <small>查看详情</small>
       </summary>
       <ol>
         <li v-for="tool in toolActivity" :key="tool.id" :class="tool.status">
           <i aria-hidden="true" />
           <span :title="tool.detail || tool.label">{{ tool.label }}</span>
-          <small>{{ tool.duration }}</small>
+          <small>{{ tool.status === 'running' ? '进行中' : tool.status === 'error' ? '失败' : '完成' }}</small>
         </li>
       </ol>
     </details>
