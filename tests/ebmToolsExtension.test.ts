@@ -28,7 +28,7 @@ describe("EBM Pi extension tools", () => {
     expect(finalizeGuidance).toContain("same non-blocking clinical preflight");
   });
 
-  it("exposes quote and source-span evidence modes without model-authored line coordinates", () => {
+  it("requires a source path and exposes read-id or line-range anchor locators", () => {
     const tools = new Map<string, { parameters?: { properties?: Record<string, { pattern?: string }>; required?: string[] } }>();
     vi.stubEnv("GUIDELINE_MCP_URL", "");
     registerEbmTools({
@@ -38,13 +38,18 @@ describe("EBM Pi extension tools", () => {
     } as never);
 
     const schema = tools.get("evidence_add")?.parameters;
-    expect(schema?.properties).toHaveProperty("quote");
-    expect(schema?.properties).toHaveProperty("source_id");
-    expect(schema?.properties).toHaveProperty("source_span_id");
-    expect(schema?.properties).not.toHaveProperty("offset");
-    expect(schema?.properties).not.toHaveProperty("limit");
-    expect(schema?.required).not.toContain("quote");
-    expect(new RegExp(schema?.properties?.source_span_id?.pattern ?? "$").test("span_e608f5fa5ce8dc51_6o_dk_fc7e76144dc0")).toBe(true);
+    expect(schema?.properties).toHaveProperty("source_path");
+    expect(schema?.properties).toHaveProperty("read_id");
+    expect(schema?.properties).toHaveProperty("line_start");
+    expect(schema?.properties).toHaveProperty("line_end");
+    expect(schema?.properties).toHaveProperty("start_text");
+    expect(schema?.properties).toHaveProperty("end_text");
+    expect(schema?.properties).not.toHaveProperty("quote");
+    expect(schema?.properties).not.toHaveProperty("source_span_id");
+    expect(schema?.required).toContain("source_path");
+    expect(schema?.required).toContain("start_text");
+    expect(schema?.required).toContain("end_text");
+    expect(schema?.properties).not.toHaveProperty("source_id");
   });
 
   it("returns evidence-ready PubMed abstract paths with a canonical quote instruction", () => {
@@ -52,16 +57,12 @@ describe("EBM Pi extension tools", () => {
       path: "sources/read/trial/full.md",
       title: "Trial",
       bodyLineStart: 8,
-      sourceId: "src_1234567890abcdef",
-      documentId: "doc_1234567890abcdef",
-      quoteReadySpans: [{ id: "span_1234567890abcdef_1_2_123456789abc", quote: "Result line one. Result line two.", charStart: 1, charEnd: 2, lineStart: 12, lineEnd: 13 }],
       content: "# Trial\n\n## Abstract\n\nResult line one.\nResult line two.\n\n## PubMed context\n\nNavigation/context only.\nDOI: 10.1000/test\n",
     }] as never);
     expect(output).toContain("PMID: unknown");
     expect(output).toContain("Abstract preview: Result line one. Result line two.");
     expect(output).toContain("Readable abstract path: data/sessions/session-1/sources/read/trial/full.md");
-    expect(output).toContain("copy a minimal, sufficient, continuous verbatim quote from the archived Abstract section");
-    expect(output).toContain("source_span_id: span_1234567890abcdef_1_2_123456789abc");
+    expect(output).toContain("use its read_id with source_path and exact start_text/end_text");
     expect(output).not.toContain("Navigation/context only");
     expect(output).not.toContain("10.1000/test");
     expect(output).not.toContain("Evidence source_path:");
@@ -114,7 +115,7 @@ describe("EBM Pi extension tools", () => {
     expect(text).toContain("readable chunk path: data/sessions/s1/sources/read/hypertension.md");
     expect(text).toContain("candidate material (identical to archived body):");
     expect(text).toContain("candidate materials, not evidence yet");
-    expect(text).toContain("minimal, sufficient, continuous verbatim quote");
+    expect(text).toContain("read_id plus exact start_text/end_text");
     expect(text).not.toContain("offset:");
     expect(text).not.toContain("limit:");
   });
@@ -173,7 +174,10 @@ describe("EBM Pi extension tools", () => {
       claim: "It works.",
       relation: "supports",
       source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
-      quote: "exact evidence",
+      line_start: 1,
+      line_end: 2,
+      start_text: "exact",
+      end_text: "evidence",
     }, undefined, undefined, ctx);
 
     const report = await tools.get("report_write")!.execute("call-2", {
@@ -188,7 +192,7 @@ describe("EBM Pi extension tools", () => {
     expect(report.details).toMatchObject({ readablePath: `${workspace}/reports/mortality-report.md`, sessionWorkspace: workspace });
   });
 
-  it("registers evidence by stable source_id without a model-authored session path", async () => {
+  it("registers evidence with a required source path and exact anchors", async () => {
     const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
     vi.stubEnv("GUIDELINE_MCP_URL", "");
     registerEbmTools({
@@ -206,14 +210,17 @@ describe("EBM Pi extension tools", () => {
       question: "Does it work?",
       claim: "The finding is stable.",
       relation: "supports",
-      source_id: archive.sourceId,
-      quote: "A stable exact finding.",
+      source_path: archive.path,
+      line_start: archive.bodyLineStart,
+      line_end: archive.bodyLineStart + archive.lines - 1,
+      start_text: "A stable exact",
+      end_text: "finding.",
     }, undefined, undefined, ctx);
 
     expect(evidence.details.node).toMatchObject({ sourceId: archive.sourceId, documentId: archive.documentId, sourcePath: archive.path });
   });
 
-  it("returns canonical source span candidates and registers the selected span without copying quote text", async () => {
+  it("rejects anchors outside the declared line range", async () => {
     const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
     vi.stubEnv("GUIDELINE_MCP_URL", "");
     registerEbmTools({
@@ -228,42 +235,16 @@ describe("EBM Pi extension tools", () => {
     await writeFile(path.join(sessionDir, "sources", "read", "study.md"), "严重出血年绝对增加率不超过 0.3%，低于卒中风险降低幅度。", "utf8");
     const ctx = { cwd, sessionManager: { getSessionId: () => sessionId } };
 
-    const failed = await tools.get("evidence_add")!.execute("call-1", {
+    await expect(tools.get("evidence_add")!.execute("call-1", {
       question: "What is the bleeding tradeoff?",
       claim: "The bleeding increase is smaller than the stroke reduction.",
       relation: "supports",
       source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
-      quote: "严重出血年绝对增加率约为 0.3%，低于卒中风险降低幅度。",
-    }, undefined, undefined, ctx);
-
-    expect(failed.details).toMatchObject({ archived: false, errorCode: "quote_not_located" });
-    expect(failed.content[0].text).toMatch(/候选 1[\s\S]*source_span_id: span_[a-z0-9_]+[\s\S]*不超过 0\.3%/);
-    const sourceSpanId = failed.details.candidates[0].sourceSpanId;
-    const recovered = await tools.get("evidence_add")!.execute("call-2", {
-      question: "What is the bleeding tradeoff?",
-      claim: "The bleeding increase is smaller than the stroke reduction.",
-      relation: "supports",
-      source_id: failed.details.sourceId,
-      source_span_id: sourceSpanId,
-    }, undefined, undefined, ctx);
-    expect(recovered.content[0].text).toContain("Evidence archived");
-    expect(recovered.details.node.quote).toBe("严重出血年绝对增加率不超过 0.3%，低于卒中风险降低幅度。");
-
-    await expect(tools.get("evidence_add")!.execute("call-mismatch", {
-      question: "What is the bleeding tradeoff?",
-      claim: "A mismatched source identity must not be accepted.",
-      relation: "supports",
-      source_id: "src_0000000000000000",
-      source_span_id: sourceSpanId,
-    }, undefined, undefined, ctx)).rejects.toThrow(/source_id does not match source_span_id/);
-
-    await writeFile(path.join(sessionDir, "sources", "read", "study.md"), "已修订来源\n严重出血年绝对增加率不超过 0.3%，低于卒中风险降低幅度。", "utf8");
-    await expect(tools.get("evidence_add")!.execute("call-3", {
-      question: "What is the bleeding tradeoff?",
-      claim: "A changed source must invalidate an old span.",
-      relation: "supports",
-      source_span_id: sourceSpanId,
-    }, undefined, undefined, ctx)).rejects.toThrow(/source_span_id no longer matches the archived source revision/);
+      line_start: 2,
+      line_end: 2,
+      start_text: "严重出血年",
+      end_text: "卒中风险降低幅度。",
+    }, undefined, undefined, ctx)).rejects.toThrow(/line_start/);
   });
 
   it("saves a failed report draft and finalizes it after local edit", async () => {
@@ -286,14 +267,20 @@ describe("EBM Pi extension tools", () => {
       claim: "Mortality improved.",
       relation: "supports",
       source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
-      quote: "mortality improved",
+      line_start: 1,
+      line_end: 1,
+      start_text: "mortality",
+      end_text: "improved",
     }, undefined, undefined, ctx);
     const ev2 = await tools.get("evidence_add")!.execute("call-2", {
       question: "Does it work?",
       claim: "Adverse events improved.",
       relation: "supports",
       source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
-      quote: "adverse events improved",
+      line_start: 2,
+      line_end: 2,
+      start_text: "adverse",
+      end_text: "improved",
     }, undefined, undefined, ctx);
 
     const failed = await tools.get("report_write")!.execute("call-3", {
@@ -352,6 +339,7 @@ describe("EBM Pi extension tools", () => {
       "pubmed_read",
       "pubmed_search",
       "pubmed_similar",
+      "read_list",
       "report_finalize",
       "report_write",
       "research_frame_init",
@@ -375,7 +363,10 @@ describe("EBM Pi extension tools", () => {
       claim: "It works.",
       relation: "supports",
       source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
-      quote: "exact evidence",
+      line_start: 1,
+      line_end: 2,
+      start_text: "exact",
+      end_text: "evidence",
     }, undefined, undefined, ctx);
 
     expect(result.content[0].text).toContain("Evidence archived");

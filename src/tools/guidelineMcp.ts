@@ -2,7 +2,6 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { archiveSource, type SourceArchiveRecord } from "./archive.js";
 import { preprocessExternalContent } from "./markdown.js";
-import { quoteReadySourceSpans, type QuoteReadySourceSpan } from "./sourceIdentity.js";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 
@@ -44,7 +43,6 @@ export type GuidelineRetrieveItem = GuidelineSearchItem & {
   lineEnd?: number;
   documentId?: string;
   sourceId?: string;
-  quoteReadySpans?: QuoteReadySourceSpan[];
 };
 
 export type GuidelineResult =
@@ -527,12 +525,6 @@ export async function retrieveGuidelines(input: {
       // archiveSource may decode entities and wrap long lines, so retaining the
       // pre-archive MCP string would make its visible text diverge from the archive.
       item.candidateMaterial = chunkArchive.content;
-      item.quoteReadySpans = await quoteReadySourceSpans({
-        sessionDir: input.sessionDir,
-        sourcePath: chunkArchive.path,
-        sourceId: chunkArchive.sourceId,
-        content: chunkArchive.content,
-      });
     }
     const content = renderGuidelineRetrieve(input.query, result.text);
     return {

@@ -4,8 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { archiveToolText, readableArchivePath } from "../src/extensions/archiveOutput.js";
 import { archiveSource, stableArchiveName } from "../src/tools/archive.js";
-import { addEvidenceFromSourceSpan } from "../src/tools/evidence.js";
-import { quoteReadySourceSpans } from "../src/tools/sourceIdentity.js";
+import { addEvidenceFromAnchors } from "../src/tools/evidence.js";
 
 describe("source archive", () => {
   it("uses semantic deterministic names and writes source metadata", async () => {
@@ -34,11 +33,11 @@ describe("source archive", () => {
     expect(first.sourceId).toMatch(/^src_[a-f0-9]{16}$/);
     expect(second.documentId).toBe(first.documentId);
     expect(second.sourceId).not.toBe(first.sourceId);
-    expect(archiveToolText(first).text).toContain(`Source ID: ${first.sourceId}`);
-    expect(archiveToolText(first).text).toContain(`Document ID: ${first.documentId}`);
+    expect(archiveToolText(first).text).toContain("After read, use the returned read_id");
+    expect(archiveToolText(first).text).toContain("    8│First recommendation.");
   });
 
-  it("renders quote-ready spans for any citation-capable archived source", async () => {
+  it("keeps archive previews free of source-span IDs while supporting exact anchors", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
     const record = await archiveSource({
       sessionDir,
@@ -47,25 +46,20 @@ describe("source archive", () => {
       sourceUrl: "https://example.test/trial",
       content: "The intervention reduced the primary outcome.",
     });
-    const spans = await quoteReadySourceSpans({
-      sessionDir,
-      sourcePath: record.path,
-      sourceId: record.sourceId,
-      content: record.content,
-    });
-    const output = archiveToolText(record, readableArchivePath("session-1", record.path), {
-      quoteReadySpans: spans,
-    }).text;
+    const output = archiveToolText(record, readableArchivePath("session-1", record.path)).text;
 
-    expect(output).toContain("Quote-ready continuous spans");
-    expect(output).toContain(`source_span_id: ${spans[0]!.id}`);
+    expect(output).not.toContain("source_span_id");
     expect(output).toContain("The intervention reduced the primary outcome.");
-    const evidence = await addEvidenceFromSourceSpan({
+    const evidence = await addEvidenceFromAnchors({
       sessionDir,
       question: "Does the intervention work?",
       claim: "The intervention reduced the primary outcome.",
       relation: "supports",
-      sourceSpanId: spans[0]!.id,
+      sourcePath: record.path,
+      lineStart: record.bodyLineStart,
+      lineEnd: record.bodyLineStart + record.lines - 1,
+      startText: "The intervention",
+      endText: "outcome.",
     });
     expect(evidence).toMatchObject({ sourceId: record.sourceId, documentId: record.documentId, quote: record.content });
   });
@@ -155,7 +149,7 @@ describe("source archive", () => {
     expect(output.text).toContain("Preview truncated at 5000 bytes");
     expect(output.text).toContain("Continue without gaps");
     expect(output.text).toMatch(/Continue without gaps.*offset=\d+, limit=200/);
-    expect(output.text).toContain("For evidence_add, pass the Source ID above with a minimal, sufficient, continuous verbatim quote");
+    expect(output.text).toContain("After read, use the returned read_id");
   });
 
   it("normalizes content before hashing, archiving, and returning model-visible text", async () => {

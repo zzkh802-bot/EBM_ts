@@ -44,7 +44,8 @@ export type EvidenceAttemptAnalysis = EvidenceAttemptBreakdown & {
   first_attempt_failure_rate: number;
   retry_success_rate: number;
   by_source: Partial<Record<EvidenceSourceKind, EvidenceAttemptBreakdown>>;
-  by_input_mode: Partial<Record<"source_span" | "source_id_quote" | "source_path_quote", EvidenceAttemptBreakdown>>;
+  /** source_span/source_id_quote/source_path_quote are retained only to read historical traces. */
+  by_input_mode: Partial<Record<"read_id_anchors" | "line_anchors" | "source_span" | "source_id_quote" | "source_path_quote", EvidenceAttemptBreakdown>>;
   failure_reasons: Partial<Record<"input_contract" | "source_path" | "quote_not_located" | "quote_ambiguous" | "quote_quality" | "other", number>>;
 };
 
@@ -185,7 +186,7 @@ function evidenceFailureReason(result: unknown): keyof EvidenceAttemptAnalysis["
   if (details?.errorCode === "quote_ambiguous") return "quote_ambiguous";
   if (details?.errorCode === "quote_not_located") return "quote_not_located";
   const text = toolResultText(result);
-  if (/provide .*source_span_id|exactly one of source_id|source_id does not match source_span_id/i.test(text)) return "input_contract";
+  if (/provide .*source_span_id|provide read_id or line_start|exactly one of source_id|source_id does not match source_span_id/i.test(text)) return "input_contract";
   if (/source_path|ENOENT|no such file|unsafe relative path|outside session|different session workspace/i.test(text)) return "source_path";
   if (/匹配到\s*\d+\s*处|排版归一化后的 quote .*匹配到/i.test(text)) return "quote_ambiguous";
   if (/quality check failed|quote appears to be|citation evidence/i.test(text)) return "quote_quality";
@@ -244,7 +245,7 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
   const activeEvidenceAttempts = new Map<string, {
     first: boolean;
     source: EvidenceSourceKind;
-    mode: "source_span" | "source_id_quote" | "source_path_quote";
+    mode: "read_id_anchors" | "line_anchors" | "source_span" | "source_id_quote" | "source_path_quote";
     question: string;
     claim: string;
   }>();
@@ -321,7 +322,9 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
         const pathSource = sourceKinds.get(`${record.session_id}:${sourcePath}`);
         const sourceId = typeof args.source_id === "string" ? args.source_id : spanSourceId ? `src_${spanSourceId}` : pathSource?.sourceId;
         const source = (sourceId ? sourceIdKinds.get(`${record.session_id}:${sourceId}`) : undefined) ?? pathSource?.kind ?? "unknown";
-        const mode = args.source_span_id ? "source_span" : args.source_id ? "source_id_quote" : "source_path_quote";
+        const mode = args.read_id ? "read_id_anchors"
+          : args.line_start !== undefined || args.line_end !== undefined ? "line_anchors"
+            : args.source_span_id ? "source_span" : args.source_id ? "source_id_quote" : "source_path_quote";
         const question = String(args.question ?? "").trim();
         const claim = String(args.claim ?? "").trim();
         const target = [record.session_id, sourceId ?? sourcePath, question, claim].join("\u0000");

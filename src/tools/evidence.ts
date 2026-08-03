@@ -1,8 +1,9 @@
 import { mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { locateEvidenceQuote, type EvidenceMatchMode } from "./evidenceLocator.js";
-import { resolveSourceId, resolveSourceSpan, sourceIdentityForPath } from "./sourceIdentity.js";
+import { locateEvidenceAnchors, locateEvidenceQuote, type EvidenceMatchMode } from "./evidenceLocator.js";
+import { resolveReadReceipt } from "./readRegistry.js";
+import { resolveSourceId, sourceIdentityForPath } from "./sourceIdentity.js";
 import { formatBeijingTimestamp } from "./time.js";
 
 export type EvidenceRelation = "supports" | "partially_supports" | "refutes";
@@ -53,8 +54,13 @@ export type EvidenceAddInput = {
   quote: string;
 };
 
-export type EvidenceSpanAddInput = Omit<EvidenceAddInput, "sourcePath" | "sourceId" | "quote"> & {
-  sourceSpanId: string;
+export type EvidenceAnchorAddInput = Omit<EvidenceAddInput, "sourcePath" | "sourceId" | "quote"> & {
+  sourcePath: string;
+  readId?: string;
+  lineStart?: number;
+  lineEnd?: number;
+  startText: string;
+  endText: string;
 };
 
 function evidenceQuoteQualityErrors(input: {
@@ -184,6 +190,11 @@ async function updateEvidenceIndex(outDir: string, node: EvidenceNode): Promise<
   await writeFile(indexPath, `${current}${current.endsWith("\n") ? "" : "\n"}${entry}`, "utf8");
 }
 
+/**
+ * Legacy programmatic quote API retained for report/import callers. The Pi
+ * model-facing evidence_add tool uses addEvidenceFromAnchors instead, so this
+ * fuzzy recovery path is not part of the normal research trajectory.
+ */
 export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode> {
   if (Boolean(input.sourcePath) === Boolean(input.sourceId)) throw new Error("provide exactly one of sourcePath or sourceId");
   const sourcePath = input.sourceId ? (await resolveSourceId(input.sessionDir, input.sourceId)).path : input.sourcePath!;
@@ -200,6 +211,44 @@ export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode
   const text = await readFile(sourceAbs, "utf8");
   const located = locateEvidenceQuote(text, input.quote);
   return persistLocatedEvidence(input, sourcePath, text, located);
+}
+
+export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Promise<EvidenceNode> {
+  if (!input.sourcePath.trim()) throw new Error("source_path is required");
+  if (Boolean(input.lineStart) !== Boolean(input.lineEnd)) throw new Error("line_start and line_end must be provided together");
+  const sourcePath = input.sourcePath.replaceAll("\\", "/");
+  assertRelativeSafe(sourcePath);
+  const normalizedSourcePath = path.posix.normalize(sourcePath);
+  if (normalizedSourcePath.startsWith("data/sessions/")) throw new Error("source_path must be relative to the current session workspace");
+  if (normalizedSourcePath.startsWith("sources/search/")) {
+    throw new Error("search snapshots are discovery artifacts; create evidence from an individually archived sources/read document");
+  }
+  const sourceAbs = await resolveExistingSessionPath(input.sessionDir, normalizedSourcePath);
+  const source = await readFile(sourceAbs, "utf8");
+  let lineStart = input.lineStart;
+  let lineEnd = input.lineEnd;
+  if (input.readId) {
+    const receipt = await resolveReadReceipt(input.sessionDir, input.readId);
+    if (receipt.sourcePath !== normalizedSourcePath) throw new Error("read_id does not match source_path");
+    const sourceHash = createHash("sha256").update(source).digest("hex");
+    if (sourceHash !== receipt.sourceHash) throw new Error("read_id no longer matches the archived source revision");
+    if (lineStart !== undefined && (lineStart !== receipt.lineStart || lineEnd !== receipt.lineEnd)) {
+      throw new Error("line range does not match read_id");
+    }
+    lineStart = receipt.lineStart;
+    lineEnd = receipt.lineEnd;
+  } else if (lineStart === undefined || lineEnd === undefined) {
+    throw new Error("provide read_id or line_start and line_end");
+  }
+  const located = locateEvidenceAnchors(source, input.startText, input.endText, { lineStart, lineEnd });
+  return persistLocatedEvidence({
+    sessionDir: input.sessionDir,
+    question: input.question,
+    claim: input.claim,
+    relation: input.relation,
+    ...(input.provenance ? { provenance: input.provenance } : {}),
+    ...(input.confidence ? { confidence: input.confidence } : {}),
+  }, normalizedSourcePath, source, located);
 }
 
 async function persistLocatedEvidence(
@@ -248,21 +297,6 @@ async function persistLocatedEvidence(
   await writeFile(path.join(outDir, `${node.id}.md`), renderEvidenceMarkdown(node), "utf8");
   await updateEvidenceIndex(outDir, node);
   return node;
-}
-
-export async function addEvidenceFromSourceSpan(input: EvidenceSpanAddInput): Promise<EvidenceNode> {
-  if (!input.question.trim()) throw new Error("question is required");
-  if (!input.claim.trim()) throw new Error("claim is required");
-  const resolved = await resolveSourceSpan(input.sessionDir, input.sourceSpanId);
-  const located = {
-    quote: resolved.span.quote,
-    charStart: resolved.span.charStart,
-    charEnd: resolved.span.charEnd,
-    lineStart: resolved.span.lineStart,
-    lineEnd: resolved.span.lineEnd,
-    matchMode: "exact" as const,
-  };
-  return persistLocatedEvidence(input, resolved.sourcePath, resolved.source, located);
 }
 
 function parseScalar(value: string): string | number | boolean {

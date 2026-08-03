@@ -293,6 +293,7 @@ export class EvidenceQuoteLocationError extends Error {
   }
 }
 
+/** Legacy full-quote recovery used only by the non-model programmatic API. */
 export function locateEvidenceQuote(source: string, attemptedQuote: string): LocatedEvidenceQuote {
   const attempted = attemptedQuote.trim();
   if (!attempted) throw new Error("quote is required");
@@ -343,4 +344,54 @@ export function locateEvidenceQuote(source: string, attemptedQuote: string): Loc
     ].join("\n\n")
     : "未能在归档来源中唯一定位提交的 quote，也没有找到可靠的原文候选。请重新读取归档来源，复制最小、充分、连续原文后重试。";
   throw new EvidenceQuoteLocationError(detail, candidates);
+}
+
+function lineScope(source: string, lineStart?: number, lineEnd?: number): { start: number; end: number } {
+  if (lineStart === undefined && lineEnd === undefined) return { start: 0, end: source.length };
+  if (lineStart === undefined || lineEnd === undefined || !Number.isInteger(lineStart) || !Number.isInteger(lineEnd) || lineStart < 1 || lineEnd < lineStart) {
+    throw new Error("line_start and line_end must be provided together as a valid 1-based range");
+  }
+  const lines = source.split("\n");
+  if (lineStart > lines.length) throw new Error(`line_start ${lineStart} is beyond the archived source`);
+  const start = lines.slice(0, lineStart - 1).reduce((offset, line) => offset + line.length + 1, 0);
+  const end = lines.slice(0, Math.min(lineEnd, lines.length)).reduce((offset, line) => offset + line.length + 1, 0);
+  return { start, end: Math.min(source.length, end) };
+}
+
+/**
+ * Locate a quote using exact beginning/end text anchors inside a bounded read
+ * result or source line range. Unlike quote recovery, this never edits or
+ * fuzzily repairs model-provided text.
+ */
+export function locateEvidenceAnchors(
+  source: string,
+  startText: string,
+  endText: string,
+  options: { lineStart?: number; lineEnd?: number } = {},
+): LocatedEvidenceQuote {
+  const startNeedle = startText.trim();
+  const endNeedle = endText.trim();
+  if (!startNeedle || !endNeedle) throw new Error("start_text and end_text are required");
+  const scope = lineScope(source, options.lineStart, options.lineEnd);
+  const starts = occurrences(source, startNeedle).filter((index) => index >= scope.start && index + startNeedle.length <= scope.end);
+  const ends = occurrences(source, endNeedle).filter((index) => index >= scope.start && index + endNeedle.length <= scope.end);
+  const pairs: Array<{ start: number; end: number }> = [];
+  for (const start of starts) {
+    for (const end of ends) {
+      if (end >= start + startNeedle.length) pairs.push({ start, end: end + endNeedle.length });
+    }
+  }
+  if (pairs.length === 1) return locationFromOriginal(source, pairs[0]!.start, pairs[0]!.end, "exact");
+  const candidates = pairs.slice(0, 3).map((pair) => ({
+    quote: source.slice(pair.start, pair.end),
+    lineStart: lineAt(source, pair.start),
+    lineEnd: lineAt(source, Math.max(pair.start, pair.end - 1)),
+    charStart: pair.start,
+    charEnd: pair.end,
+    matchedBy: "boundary_anchors" as const,
+  }));
+  if (pairs.length > 1) {
+    throw new EvidenceQuoteLocationError(`start_text/end_text 在限定范围内匹配到 ${pairs.length} 处，无法唯一定位。请提供更具体的边界文本。`, candidates);
+  }
+  throw new EvidenceQuoteLocationError("未能在限定的 read 片段或行号范围内找到 start_text/end_text。请重新读取来源并使用原文边界。", candidates);
 }

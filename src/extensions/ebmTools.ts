@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
 import {
@@ -9,9 +8,7 @@ import {
   withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { addEvidence, addEvidenceFromSourceSpan, listEvidence, readEvidence } from "../tools/evidence.js";
-import { EvidenceQuoteLocationError } from "../tools/evidenceLocator.js";
-import { createSourceSpanId, resolveSourceId, sourceIdentityForPath } from "../tools/sourceIdentity.js";
+import { addEvidenceFromAnchors, listEvidence, readEvidence } from "../tools/evidence.js";
 import { registerCompactionArtifacts } from "./compactionArtifacts.js";
 import { registerContextPruner } from "./contextPruner.js";
 import { registerEbmIdentity } from "./ebmIdentity.js";
@@ -20,6 +17,7 @@ import { registerPubMedTools } from "./pubmedTools.js";
 import { registerReportTools } from "./reportTools.js";
 import { registerResearchRoundHint } from "./researchRoundHint.js";
 import { registerResearchFrameTools } from "./researchFrameTools.js";
+import { registerReadRegistry } from "./readRegistry.js";
 import { piReadableSessionPath, piSessionDirectory, registerSessionWorkspace } from "./sessionPath.js";
 import { registerStreamStallWatchdog } from "./streamStallWatchdog.js";
 import { registerTrajectoryRecorder } from "./trajectoryRecorder.js";
@@ -37,6 +35,7 @@ function evidenceSourcePath(value: string, sessionId: string, sessionDir: string
 export function registerEbmTools(pi: ExtensionAPI): void {
   const retrievalPolicy = process.env.EBM_RETRIEVAL_POLICY?.trim() || "all";
   registerSessionWorkspace(pi);
+  registerReadRegistry(pi);
   registerEbmIdentity(pi);
   registerResearchRoundHint(pi);
   registerStreamStallWatchdog(pi);
@@ -44,11 +43,11 @@ export function registerEbmTools(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "evidence_add",
     label: "Add Evidence",
-    description: "Locate and archive a continuous verbatim quote from a session source as a traceable Markdown evidence record.",
-    promptSnippet: "Archive a continuous verbatim source quote as claim-linked EBM evidence",
+    description: "Locate and archive a continuous verbatim passage from an archived session source using a read receipt or source line range plus exact boundary text.",
+    promptSnippet: "Archive claim-linked evidence with source path and exact text boundaries",
     promptGuidelines: [
-      "Use evidence_add only after reading the archived source. Prefer a source_span_id returned by a retrieval tool because it selects already verified continuous archived text without copying; pass that span ID by itself. Otherwise pass source_id plus a minimal, sufficient, continuous verbatim quote.",
-      "If quote location fails, retry with one returned source_span_id. Never repair changed numbers, drug names, wording, OCR characters, or join discontinuous passages with ellipses.",
+      "Use evidence_add only after reading the archived source. Always pass source_path. Prefer the read_id appended to the most recent read result; provide exact start_text and end_text copied from that read. If the read_id is unavailable, pass source_path plus line_start and line_end as the locator fallback.",
+      "start_text and end_text are boundary snippets, not paraphrases or character offsets. They must be exact source text and must identify one continuous passage. Never repair changed numbers, drug names, wording, OCR characters, or join discontinuous passages with ellipses.",
       "Classify provenance honestly. Search snippets and unverified mirrors are discovery-only and cannot support a final report. Use expert_consensus for consensus/position documents rather than calling them guidelines.",
       "For secondary sources, attribute claims to that source; never rewrite a paraphrase as the target guideline's direct recommendation.",
       "Evidence can be preliminary: use confidence=low or moderate for early candidate evidence instead of delaying all evidence_add calls until the end.",
@@ -71,10 +70,12 @@ export function registerEbmTools(pi: ExtensionAPI): void {
         "other",
       ] as const)),
       confidence: Type.Optional(StringEnum(["low", "moderate", "high"] as const)),
-      source_path: Type.Optional(Type.String({ description: "Legacy/readable archive path. Prefer source_id when one was returned." })),
-      source_id: Type.Optional(Type.String({ pattern: "^src_[a-f0-9]{16}$", description: "Stable source identity returned by read/retrieval tools" })),
-      source_span_id: Type.Optional(Type.String({ pattern: "^span_[a-f0-9]{16}_[a-z0-9]+_[a-z0-9]+_[a-f0-9]{12}$", description: "Verified continuous source span returned by retrieval or a prior failed quote attempt; sufficient by itself" })),
-      quote: Type.Optional(Type.String({ minLength: 6, description: "Minimal, sufficient, continuous verbatim passage; required with source_id or source_path" })),
+      source_path: Type.String({ description: "Archive path for the source; always required, including when read_id is provided" }),
+      read_id: Type.Optional(Type.String({ pattern: "^r[0-9]+$", description: "Read receipt ID returned by read for the same source" })),
+      line_start: Type.Optional(Type.Integer({ minimum: 1, description: "1-based fallback source line range start; use with line_end when read_id is unavailable" })),
+      line_end: Type.Optional(Type.Integer({ minimum: 1, description: "1-based fallback source line range end; use with line_start when read_id is unavailable" })),
+      start_text: Type.String({ minLength: 2, description: "Exact source text at the beginning of the passage" }),
+      end_text: Type.String({ minLength: 2, description: "Exact source text at the end of the passage" }),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const sessionId = ctx.sessionManager.getSessionId();
@@ -88,51 +89,15 @@ export function registerEbmTools(pi: ExtensionAPI): void {
         ...(params.provenance ? { provenance: params.provenance } : {}),
         ...(params.confidence ? { confidence: params.confidence } : {}),
       };
-      const spanMode = Boolean(params.source_span_id);
-      const quoteMode = Boolean(params.quote) && Boolean(params.source_id) !== Boolean(params.source_path);
-      if (!spanMode && !quoteMode) {
-        throw new Error("provide source_span_id, or quote with exactly one of source_id/source_path");
-      }
-      if (spanMode && params.source_id && !params.source_span_id!.startsWith(`span_${params.source_id.slice(4)}_`)) {
-        throw new Error("source_id does not match source_span_id");
-      }
-      let node;
-      try {
-        node = await withFileMutationQueue(indexPath, () => spanMode
-          ? addEvidenceFromSourceSpan({ ...base, sourceSpanId: params.source_span_id! })
-          : addEvidence({
-            ...base,
-            ...(params.source_id ? { sourceId: params.source_id } : { sourcePath: evidenceSourcePath(params.source_path!, sessionId, sessionDir) }),
-            quote: params.quote!,
-          }));
-      } catch (error) {
-        if (!(error instanceof EvidenceQuoteLocationError) || spanMode) throw error;
-        const identity = params.source_id
-          ? await resolveSourceId(sessionDir, params.source_id)
-          : await sourceIdentityForPath(sessionDir, evidenceSourcePath(params.source_path!, sessionId, sessionDir));
-        const source = await readFile(path.join(sessionDir, identity.path), "utf8");
-        const candidates = error.candidates.map((candidate) => ({
-          ...candidate,
-          sourceSpanId: createSourceSpanId(identity.sourceId, source, candidate.charStart, candidate.charEnd),
-        }));
-        const errorCode = /匹配到\s*\d+\s*处/.test(error.message) ? "quote_ambiguous" : "quote_not_located";
-        const candidateText = candidates.map((candidate, index) => [
-          `候选 ${index + 1} · 第 ${candidate.lineStart}${candidate.lineEnd === candidate.lineStart ? "" : `–${candidate.lineEnd}`} 行`,
-          `source_span_id: ${candidate.sourceSpanId}`,
-          candidate.quote,
-        ].join("\n")).join("\n\n");
-        return {
-          content: [{
-            type: "text",
-            text: [
-              `Evidence was not archived (${errorCode}). Select one verified continuous candidate by retrying evidence_add with its source_span_id; do not copy or rewrite the quote.`,
-              "",
-              candidateText || error.message,
-            ].join("\n"),
-          }],
-          details: { archived: false, errorCode, sourceId: identity.sourceId, documentId: identity.documentId, candidates },
-        };
-      }
+      const node = await withFileMutationQueue(indexPath, () => addEvidenceFromAnchors({
+        ...base,
+        sourcePath: evidenceSourcePath(params.source_path, sessionId, sessionDir),
+        ...(params.read_id ? { readId: params.read_id } : {}),
+        ...(params.line_start === undefined ? {} : { lineStart: params.line_start }),
+        ...(params.line_end === undefined ? {} : { lineEnd: params.line_end }),
+        startText: params.start_text,
+        endText: params.end_text,
+      }));
       const evidencePath = path.posix.join("evidence", `${node.id}.md`);
       pi.events.emit("ebm:evidence_added", { sessionId, evidenceId: node.id, path: evidencePath });
       return {

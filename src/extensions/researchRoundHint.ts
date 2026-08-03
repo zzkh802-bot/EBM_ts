@@ -46,7 +46,7 @@ export function registerResearchRoundHint(pi: Pick<ExtensionAPI, "on">): void {
     const roundText = rounds ? `当前为第 ${currentTurn} 个研究轮次；建议预算为 ${rounds} 轮。` : `当前为第 ${currentTurn} 个研究轮次。`;
     const reviewText = exhausted
       ? `完整来源复核预算已用 ${sourceReviews}/${reviewBudget}。停止继续翻阅来源；除非能明确指出仍缺少哪一项足以逆转临床结论的信息，否则请登记已有证据、披露缺口并进入正式报告。`
-      : `完整来源复核预算已用 ${sourceReviews}/${reviewBudget}。优先使用 quote-ready source_span_id；只为适用性、冲突或决策关键缺口继续打开完整来源。`;
+      : `完整来源复核预算已用 ${sourceReviews}/${reviewBudget}。优先使用已读取片段的 read_id + 起止原文锚点归档证据；只为适用性、冲突或决策关键缺口继续打开完整来源。`;
     return {
       messages: [...event.messages, {
         role: "user",

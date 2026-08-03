@@ -7,19 +7,9 @@ export type SourceIdentity = {
   sourceId: string;
 };
 
-export type QuoteReadySourceSpan = {
-  id: string;
-  quote: string;
-  charStart: number;
-  charEnd: number;
-  lineStart: number;
-  lineEnd: number;
-};
-
 export type ArchivedSourceIdentity = SourceIdentity & { path: string };
 
 const sessionSources = new Map<string, Map<string, ArchivedSourceIdentity>>();
-const SOURCE_SPAN = /^span_([a-f0-9]{16})_([a-z0-9]+)_([a-z0-9]+)_([a-f0-9]{12})$/;
 
 function hashId(prefix: "doc" | "src", value: string): string {
   return `${prefix}_${createHash("sha256").update(value).digest("hex").slice(0, 16)}`;
@@ -139,88 +129,4 @@ export async function sourceIdentityForPath(sessionDir: string, sourcePath: stri
   if (!identity) throw new Error("archived source identity cannot be derived");
   registerArchivedSource(sessionDir, normalized, identity);
   return { ...identity, path: normalized };
-}
-
-function lineAt(source: string, offset: number): number {
-  let line = 1;
-  for (let index = 0; index < offset; index += 1) if (source[index] === "\n") line += 1;
-  return line;
-}
-
-export function createSourceSpanId(sourceId: string, source: string, charStart: number, charEnd: number): string {
-  if (!/^src_[a-f0-9]{16}$/.test(sourceId)) throw new Error("invalid source_id");
-  if (!Number.isInteger(charStart) || !Number.isInteger(charEnd) || charStart < 0 || charEnd <= charStart || charEnd > source.length) {
-    throw new Error("invalid source span coordinates");
-  }
-  const quoteHash = createHash("sha256").update(source.slice(charStart, charEnd)).digest("hex").slice(0, 12);
-  return `span_${sourceId.slice(4)}_${charStart.toString(36)}_${charEnd.toString(36)}_${quoteHash}`;
-}
-
-export async function resolveSourceSpan(sessionDir: string, sourceSpanId: string): Promise<{
-  sourcePath: string;
-  source: string;
-  span: QuoteReadySourceSpan;
-}> {
-  const match = sourceSpanId.match(SOURCE_SPAN);
-  if (!match) throw new Error("invalid source_span_id");
-  const sourceId = `src_${match[1]}`;
-  const charStart = Number.parseInt(match[2]!, 36);
-  const charEnd = Number.parseInt(match[3]!, 36);
-  const identity = await resolveSourceId(sessionDir, sourceId);
-  const source = await readFile(path.join(sessionDir, identity.path), "utf8");
-  const currentIdentity = archivedIdentity(source);
-  if (!currentIdentity || currentIdentity.sourceId !== sourceId) throw new Error("source_span_id no longer matches the archived source revision");
-  if (!Number.isSafeInteger(charStart) || !Number.isSafeInteger(charEnd) || charStart < 0 || charEnd <= charStart || charEnd > source.length) {
-    throw new Error("source_span_id coordinates are outside the archived source");
-  }
-  const quote = source.slice(charStart, charEnd);
-  const quoteHash = createHash("sha256").update(quote).digest("hex").slice(0, 12);
-  if (quoteHash !== match[4]) throw new Error("source_span_id no longer matches the archived source");
-  return {
-    sourcePath: identity.path,
-    source,
-    span: {
-      id: sourceSpanId,
-      quote,
-      charStart,
-      charEnd,
-      lineStart: lineAt(source, charStart),
-      lineEnd: lineAt(source, Math.max(charStart, charEnd - 1)),
-    },
-  };
-}
-
-export async function quoteReadySourceSpans(input: {
-  sessionDir: string;
-  sourcePath: string;
-  sourceId: string;
-  content: string;
-  maxSpans?: number;
-}): Promise<QuoteReadySourceSpan[]> {
-  const source = await readFile(path.join(input.sessionDir, input.sourcePath), "utf8");
-  const bodyStart = source.indexOf(input.content, source.indexOf("\n---\n") + 5);
-  if (bodyStart < 0) throw new Error("archived source body cannot be located for source spans");
-  const spans: QuoteReadySourceSpan[] = [];
-  const paragraph = /\S[\s\S]*?(?=\n\s*\n|$)/g;
-  for (const match of input.content.matchAll(paragraph)) {
-    if (spans.length >= (input.maxSpans ?? 12)) break;
-    const relativeStart = match.index;
-    if (relativeStart === undefined) continue;
-    const raw = match[0];
-    const leading = raw.length - raw.trimStart().length;
-    const trailing = raw.length - raw.trimEnd().length;
-    const charStart = bodyStart + relativeStart + leading;
-    const charEnd = bodyStart + relativeStart + raw.length - trailing;
-    if (charEnd - charStart < 6) continue;
-    const quote = source.slice(charStart, charEnd);
-    spans.push({
-      id: createSourceSpanId(input.sourceId, source, charStart, charEnd),
-      quote,
-      charStart,
-      charEnd,
-      lineStart: lineAt(source, charStart),
-      lineEnd: lineAt(source, Math.max(charStart, charEnd - 1)),
-    });
-  }
-  return spans;
 }

@@ -2,7 +2,6 @@ import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { readPubMed, searchPubMed, similarPubMed, type PubMedError } from "../tools/pubmed.js";
-import { quoteReadySourceSpans, type QuoteReadySourceSpan } from "../tools/sourceIdentity.js";
 import { upsertSourceLibraryFromArchive } from "../tools/sourceLibrary.js";
 import { archiveDetails, archiveToolText } from "./archiveOutput.js";
 import { piReadableSessionPath, piSessionDirectory } from "./sessionPath.js";
@@ -15,7 +14,7 @@ function compactAbstractText(value: string): string {
   return value.replace(/\s+/g, " ").trim().slice(0, 500);
 }
 
-function abstractPreview(archive: { content: string }): string {
+function abstractPreview(archive: { content: string; bodyLineStart: number }): { text: string; startLine: number; endLine: number } {
   const sourceLines = archive.content.split("\n");
   const headingIndex = sourceLines.findIndex((line) => line.trim() === "## Abstract");
   let firstIndex = headingIndex >= 0 ? headingIndex + 1 : 0;
@@ -23,7 +22,12 @@ function abstractPreview(archive: { content: string }): string {
   const nextHeadingIndex = sourceLines.findIndex((line, index) => index > firstIndex && /^##\s+/.test(line.trim()));
   let lastIndex = (nextHeadingIndex >= 0 ? nextHeadingIndex : sourceLines.length) - 1;
   while (lastIndex >= firstIndex && !sourceLines[lastIndex]!.trim()) lastIndex -= 1;
-  return compactAbstractText(sourceLines.slice(firstIndex, lastIndex + 1).join(" "));
+  const selected = sourceLines.slice(firstIndex, lastIndex + 1);
+  return {
+    text: compactAbstractText(selected.join(" ")),
+    startLine: archive.bodyLineStart + firstIndex,
+    endLine: archive.bodyLineStart + lastIndex,
+  };
 }
 
 function pmidFromAbstract(content: string): string {
@@ -32,7 +36,7 @@ function pmidFromAbstract(content: string): string {
 
 export function renderAbstractNavigation(
   sessionDirectoryName: string,
-  archives: Array<{ path: string; title?: string; content: string; bodyLineStart: number; sourceId?: string; documentId?: string; quoteReadySpans?: QuoteReadySourceSpan[] }>,
+  archives: Array<{ path: string; title?: string; content: string; bodyLineStart: number }>,
   options: { searchArchivePath?: string; pmids?: string[] } = {},
 ): string {
   if (!archives.length) {
@@ -59,34 +63,14 @@ export function renderAbstractNavigation(
     lines.push(
       `${index + 1}. ${archive.title ?? archive.path}`,
       `   PMID: ${pmidFromAbstract(archive.content)}`,
-      `   Abstract preview: ${preview}`,
+      `   Abstract lines: ${preview.startLine}-${preview.endLine}`,
+      `   Abstract preview: ${preview.text}`,
       `   Readable abstract path: ${readablePath}`,
-      ...(archive.sourceId ? [`   Source ID: ${archive.sourceId}`] : []),
-      ...(archive.documentId ? [`   Document ID: ${archive.documentId}`] : []),
-      ...(archive.quoteReadySpans?.length ? [
-        "   Quote-ready Abstract spans (prefer one source_span_id with evidence_add):",
-        ...archive.quoteReadySpans.flatMap((span) => [`   source_span_id: ${span.id}`, ...span.quote.split("\n").map((line) => `     ${line}`)]),
-      ] : []),
-      "   Evidence use: prefer one source_span_id above; otherwise pass source_id and copy a minimal, sufficient, continuous verbatim quote from the archived Abstract section.",
+      "   Evidence use: call pubmed_read first, then use its read_id with source_path and exact start_text/end_text in evidence_add; if unavailable, use the displayed source line range.",
       "",
     );
   });
   return lines.join("\n");
-}
-
-function abstractSection(content: string): string {
-  const match = /(?:^|\n)## Abstract\s*\n+([\s\S]*?)(?=\n##\s|$)/.exec(content);
-  return match?.[1]?.trim() || content;
-}
-
-async function pubMedQuoteReadySpans(sessionDir: string, archive: { path: string; sourceId: string; content: string }): Promise<QuoteReadySourceSpan[]> {
-  return quoteReadySourceSpans({
-    sessionDir,
-    sourcePath: archive.path,
-    sourceId: archive.sourceId,
-    content: abstractSection(archive.content),
-    maxSpans: 8,
-  });
 }
 
 function ncbiOptions() {
@@ -137,20 +121,16 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
         sourceLibraryPath: sourceLibraryWrites[index]?.path,
         sourceLibraryWritten: sourceLibraryWrites[index]?.written,
       }));
-      const abstractCards = await Promise.all(result.abstractArchives.map(async (archive) => ({
-        ...archive,
-        quoteReadySpans: await pubMedQuoteReadySpans(sessionDir, archive),
-      })));
       return {
         content: [{
           type: "text",
-          text: renderAbstractNavigation(path.basename(sessionDir), abstractCards, { searchArchivePath: result.archive.path, pmids: result.pmids }),
+          text: renderAbstractNavigation(path.basename(sessionDir), result.abstractArchives, { searchArchivePath: result.archive.path, pmids: result.pmids }),
         }],
         details: {
           pmids: result.pmids,
           relatedPmids: result.relatedPmids,
           abstractCount: result.abstractCount,
-          abstractArchives: result.abstractArchives.map((archive, index) => ({ ...archiveDetails(archive), sourceSpanIds: abstractCards[index]?.quoteReadySpans.map((span) => span.id) ?? [] })),
+          abstractArchives: result.abstractArchives.map((archive) => archiveDetails(archive)),
           sourceLibrary: sourceLibraryWrites,
           warnings: result.warnings,
           archive: archiveDetails(result.archive),
@@ -193,16 +173,12 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
         sourceLibraryPath: sourceLibraryWrites[index]?.path,
         sourceLibraryWritten: sourceLibraryWrites[index]?.written,
       }));
-      const abstractCards = await Promise.all(result.abstractArchives.map(async (archive) => ({
-        ...archive,
-        quoteReadySpans: await pubMedQuoteReadySpans(sessionDir, archive),
-      })));
       return {
-        content: [{ type: "text", text: renderAbstractNavigation(path.basename(sessionDir), abstractCards) }],
+        content: [{ type: "text", text: renderAbstractNavigation(path.basename(sessionDir), result.abstractArchives) }],
         details: {
           seedPmid: result.seedPmid,
           relatedPmids: result.relatedPmids,
-          abstractArchives: result.abstractArchives.map((archive, index) => ({ ...archiveDetails(archive), sourceSpanIds: abstractCards[index]?.quoteReadySpans.map((span) => span.id) ?? [] })),
+          abstractArchives: result.abstractArchives.map((archive) => archiveDetails(archive)),
           sourceLibrary: sourceLibraryWrites,
           archive: archiveDetails(result.archive),
           warnings: result.warnings,
@@ -233,8 +209,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
         ...(signal ? { signal } : {}),
       });
       if (!result.ok) throw toolError(result.error);
-      const quoteReadySpans = await pubMedQuoteReadySpans(sessionDir, result.archive);
-      const output = archiveToolText(result.archive, piReadableSessionPath(ctx.cwd, sessionId, result.archive.path), { compactRead: true, quoteReadySpans });
+      const output = archiveToolText(result.archive, piReadableSessionPath(ctx.cwd, sessionId, result.archive.path), { compactRead: true });
       const sourceLibraryDir = process.env.SOURCE_LIBRARY_DIR || "data/source_library/guidelines";
       const library = await upsertSourceLibraryFromArchive({ sourceLibraryDir, archive: result.archive, provider: "pubmed", sessionId, sourceStatus: result.fullText ? result.fullTextSource : "abstract_only" });
       const warningText = result.warnings.length ? `\n\nWarnings:\n${result.warnings.map((warning) => `- ${warning}`).join("\n")}` : "";
@@ -248,7 +223,6 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
           fullTextSource: result.fullTextSource,
           warnings: result.warnings,
           archive: archiveDetails(result.archive),
-          sourceSpanIds: quoteReadySpans.map((span) => span.id),
           sourceLibrary: library,
           truncated: output.truncated,
         },
