@@ -187,8 +187,8 @@ describe("EBM Pi extension tools", () => {
     }, undefined, undefined, ctx);
 
     const workspace = `data/sessions/${path.basename(sessionDir)}`;
-    expect(report.content[0].text).toContain(`Session workspace: ${workspace}`);
-    expect(report.content[0].text).toContain(`Verified report written: ${workspace}/reports/mortality-report.md`);
+    expect(report.content[0].text).toContain(`会话工作区：${workspace}`);
+    expect(report.content[0].text).toContain(`已写入并核验正式报告：${workspace}/reports/mortality-report.md`);
     expect(report.details).toMatchObject({ readablePath: `${workspace}/reports/mortality-report.md`, sessionWorkspace: workspace });
   });
 
@@ -291,13 +291,13 @@ describe("EBM Pi extension tools", () => {
         { number: 1, citation: "Study citation.", evidence_id: ev2.details.evidenceId },
       ],
     }, undefined, undefined, ctx);
-    expect(failed.content[0].text).toContain("Report verification failed");
+    expect(failed.content[0].text).toContain("报告核验失败");
     expect(failed.details.verified).toBe(false);
     expect(failed.details.draft.path).toBe("reports/drafts/draft-finalize-report.draft.md");
 
     const draftAbs = path.join(sessionDir, failed.details.draft.path);
     const draft = await readFile(draftAbs, "utf8");
-    expect(draft).toContain("Draft preview only");
+    expect(draft).toContain("这里只是草稿预览");
     await writeFile(draftAbs, draft.replace("Treatment works but citation is missing.", "Treatment works for mortality and adverse events [1]."), "utf8");
 
     const finalized = await tools.get("report_finalize")!.execute("call-4", {
@@ -309,9 +309,9 @@ describe("EBM Pi extension tools", () => {
       ],
     }, undefined, undefined, ctx);
 
-    expect(finalized.content[0].text).toContain("Final report written");
+    expect(finalized.content[0].text).toContain("正式报告：");
     const finalMd = await readFile(path.join(sessionDir, finalized.details.path), "utf8");
-    expect(finalMd).not.toContain("Draft preview only");
+    expect(finalMd).not.toContain("这里只是草稿预览");
     expect(finalMd.match(/^1\. \[1\]/gm)).toHaveLength(1);
     const metadata = JSON.parse(await readFile(path.join(sessionDir, `${finalized.details.path}.metadata.json`), "utf8")) as { references: Array<{ evidence_ids: string[] }> };
     expect(metadata.references[0]!.evidence_ids).toEqual([ev1.details.evidenceId, ev2.details.evidenceId].sort());

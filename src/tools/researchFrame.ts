@@ -20,6 +20,21 @@ export type ResearchFrameRecord = {
 const FRAME_PATH = path.posix.join("notes", "research_frame.md");
 
 export const RESEARCH_FRAME_SECTIONS = [
+  "病例 / 场景事实",
+  "需要回答的临床决策",
+  "循证医学子问题",
+  "主张画布",
+  "证据综合笔记",
+  "当前判断草稿",
+  "来源与证据缺口",
+  "报告逻辑计划",
+  "引用映射草稿",
+] as const;
+
+// Frames created before the localization change keep their English headings.
+// Accept them so an existing session can still be updated, while all new
+// frames use the Chinese canvas above.
+const LEGACY_RESEARCH_FRAME_SECTIONS = [
   "Case / scenario facts",
   "Clinical decision to answer",
   "EBM sub-questions",
@@ -37,7 +52,10 @@ function headingPattern(heading: string): RegExp {
 }
 
 export function researchFrameValidationError(content: string): string {
-  const matches = RESEARCH_FRAME_SECTIONS.map((section) => ({ section, match: headingPattern(section).exec(content) }));
+  const matches = RESEARCH_FRAME_SECTIONS.map((section, index) => ({
+    section,
+    match: findSectionHeading(content, index),
+  }));
   const missing = matches.filter((item) => !item.match).map((item) => item.section);
   if (missing.length) {
     return `research_frame update rejected: keep the fixed canvas spine; missing sections: ${missing.join(", ")}. Required order: ${RESEARCH_FRAME_SECTIONS.join(" → ")}.`;
@@ -55,53 +73,53 @@ function listLines(items?: string[]): string[] {
 }
 
 function frameTemplate(input: Omit<ResearchFrameInput, "sessionDir">): string {
-  return normalizeMarkdown(`# Research Frame
+  return normalizeMarkdown(`# 研究框架
 
-This is the working canvas for the current EBM question. The section headings and order are fixed; section content is free Markdown. Do not turn this into a final report, search log, or TodoList.
+这是当前循证问题的工作画布。章节标题和顺序固定，章节内容可以使用 Markdown 自由填写。不要把它写成最终报告、检索日志或 TodoList。
 
-## Case / scenario facts
+## 病例 / 场景事实
 
-${input.caseFacts?.trim() || `- User question: ${input.userQuestion.trim()}\n- Known patient/scenario facts: 未填写\n- Unknown facts that may change the decision: 未填写`}
+${input.caseFacts?.trim() || `- 用户问题：${input.userQuestion.trim()}\n- 已知患者 / 场景事实：未填写\n- 可能改变决策的未知事实：未填写`}
 
-## Clinical decision to answer
+## 需要回答的临床决策
 
-${input.clinicalDecision?.trim() || "Clarify the concrete decision the user needs, and state what kind of answer would change management or interpretation."}
+${input.clinicalDecision?.trim() || "明确用户需要作出的具体决策，并说明什么样的答案会改变处理方案或解释。"}
 
-## EBM sub-questions
+## 循证医学子问题
 
-<!-- Keep only decision-changing questions. They should be complete natural-language EBM questions, not source names. -->
+<!-- 只保留会改变决策的问题。问题应是完整的自然语言循证问题，而不是来源名称。 -->
 
 ${listLines(input.evidenceQuestions).join("\n")}
 
-## Claim canvas
+## 主张画布
 
-<!-- Each claim should be specific enough to be supported, limited, or refuted by evidence. Add evidence early. -->
+<!-- 每条主张都应足够具体，能够被证据支持、限定或反驳。尽早添加证据。 -->
 
-| Claim ID | Claim to adjudicate | Status | Evidence refs | Applicability / limits |
+| 主张 ID | 待裁决主张 | 状态 | 证据引用 | 适用性 / 局限性 |
 | --- | --- | --- | --- | --- |
-| C1 |  | unresolved |  |  |
+| C1 |  | 未解决 |  |  |
 
-## Evidence synthesis notes
+## 证据综合笔记
 
-<!-- Write reasoning, not source lists. Explain how evidence changes each claim and how claims combine. -->
+<!-- 记录推理而不是来源清单。说明证据如何改变每条主张，以及各条主张如何合并。 -->
 
-## Working belief scratchpad
+## 当前判断草稿
 
-<!-- Free-form scratchpad for POMDP-like research state. Track current belief, observations, uncertainty, actions considered, why one next observation is most valuable, and stop/continue conditions. This is not final report prose. -->
+<!-- 用于记录类似 POMDP 的研究状态。跟踪当前判断、观察、不确定性、考虑过的行动、下一条观察为何最有价值，以及停止/继续条件。这不是最终报告正文。 -->
 
-## Source and evidence gaps
+## 来源与证据缺口
 
-<!-- Missing patient facts, inaccessible sources, indirectness, conflicts, weak provenance, or evidence quality limits. -->
+<!-- 记录缺失的患者事实、无法访问的来源、间接性、冲突、来源链薄弱或证据质量限制。 -->
 
-## Report logic plan
+## 报告逻辑计划
 
-<!-- Human-readable argument order: opening answer -> sub-question reasoning -> synthesis -> limitations -> references. -->
+<!-- 用人类可读的顺序组织论证：开头答案 → 子问题推理 → 综合 → 局限性 → 参考文献。 -->
 
-## Citation map draft
+## 引用映射草稿
 
-<!-- Numbered citations for the final report. Raw ev_ IDs are internal working notes only and should be passed to report_write.references, not shown in final Markdown. -->
+<!-- 为最终报告准备编号引用。原始 ev_ ID 仅用于内部工作记录，应传给 report_write.references，不要显示在最终 Markdown 中。 -->
 
-| Ref | Real citation | Evidence ID | Supports claim |
+| 编号 | 正式引用 | 证据 ID | 支持的主张 |
 | --- | --- | --- | --- |
 `);
 }
@@ -140,16 +158,30 @@ export async function readResearchFrame(sessionDir: string): Promise<ResearchFra
 
 export async function appendResearchFrameScratchpad(sessionDir: string, note: string): Promise<ResearchFrameRecord> {
   const current = await readResearchFrame(sessionDir).catch(async () => initResearchFrame({ sessionDir, userQuestion: "Unspecified EBM question" }));
-  const heading = "## Working belief scratchpad";
-  const nextHeading = "## Source and evidence gaps";
-  const start = current.content.indexOf(heading);
-  const end = current.content.indexOf(nextHeading);
+  const scratchpad = findSectionHeading(current.content, 5);
+  const gaps = findSectionHeading(current.content, 6);
+  const start = scratchpad?.index ?? -1;
+  const end = gaps?.index ?? -1;
   if (start < 0 || end < 0 || end <= start) throw new Error("research_frame scratchpad section is missing or reordered");
   const insertAt = end;
   const timestamp = formatBeijingTimestamp();
   const entry = `\n### Scratchpad update ${timestamp}\n\n${normalizeMarkdown(note)}\n`;
   const content = `${current.content.slice(0, insertAt).replace(/\s*$/, "\n")}${entry}\n${current.content.slice(insertAt)}`;
   return updateResearchFrame(sessionDir, content);
+}
+
+function findSectionHeading(content: string, index: number): { section: string; index: number } | null {
+  const candidates: string[] = [];
+  const localized = RESEARCH_FRAME_SECTIONS[index];
+  const legacy = LEGACY_RESEARCH_FRAME_SECTIONS[index];
+  if (localized) candidates.push(localized);
+  if (legacy) candidates.push(legacy);
+  const matches = candidates
+    .filter((section): section is string => Boolean(section))
+    .map((section) => ({ section, index: headingPattern(section).exec(content)?.index ?? -1 }))
+    .filter((match) => match.index >= 0)
+    .sort((left, right) => left.index - right.index);
+  return matches[0] ?? null;
 }
 
 export async function updateResearchFrame(sessionDir: string, content: string): Promise<ResearchFrameRecord> {

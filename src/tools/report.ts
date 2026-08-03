@@ -190,7 +190,7 @@ export async function writeReportDraft(input: ReportWriteInput, error: string): 
   const content = (draftReferences.length
     ? ensureReferenceSection(normalizeMarkdown(input.content), draftReferences).replace(
       "## 参考文献\n\n",
-      "## 参考文献\n\n<!-- Draft preview only: report_finalize/report_write will regenerate this section from the references parameter. Edit the references parameter, not only this preview, when changing citations. -->\n\n",
+      "## 参考文献\n\n<!-- 这里只是草稿预览：report_finalize/report_write 会根据 references 参数重新生成本节。修改引用时请同时修改 references 参数，不要只改这段预览。 -->\n\n",
     )
     : normalizeMarkdown(input.content));
   const sha256 = createHash("sha256").update(`${title}\n${content}`).digest("hex");

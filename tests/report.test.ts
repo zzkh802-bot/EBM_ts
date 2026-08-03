@@ -174,7 +174,7 @@ describe("verified Markdown reports", () => {
     expect(draft.path).toMatch(/reports\/drafts\/draft-report\.draft\.md$/);
     const saved = await readFile(path.join(sessionDir, draft.path), "utf8");
     expect(saved).toContain("## 参考文献");
-    expect(saved).toContain("Draft preview only");
+    expect(saved).toContain("这里只是草稿预览");
     expect(saved).toContain("1. [1] Randomized trial of the intervention.");
     await expect(readFile(path.join(sessionDir, `${draft.path}.metadata.json`), "utf8")).rejects.toThrow();
   });
