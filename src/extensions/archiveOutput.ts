@@ -1,5 +1,6 @@
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, truncateHead } from "@earendil-works/pi-coding-agent";
 import type { SourceArchiveRecord } from "../tools/archive.js";
+import type { QuoteReadySourceSpan } from "../tools/sourceIdentity.js";
 
 const READ_PREVIEW_BYTES = 5_000;
 const MAP_MAX_ITEMS = 20;
@@ -24,7 +25,7 @@ function sourceMap(content: string, bodyLineStart: number): { items: string[]; t
 export function archiveToolText(
   record: SourceArchiveRecord,
   readablePath = record.path,
-  options: { compactRead?: boolean; citationEligible?: boolean } = {},
+  options: { compactRead?: boolean; citationEligible?: boolean; quoteReadySpans?: QuoteReadySourceSpan[] } = {},
 ): { text: string; truncated: boolean } {
   const previewBytes = options.compactRead ? READ_PREVIEW_BYTES : DEFAULT_MAX_BYTES;
   const excerpt = truncateHead(record.content, {
@@ -42,6 +43,7 @@ export function archiveToolText(
   const readableResources = record.resourcePaths?.map((resourcePath) => record.archiveDir && readablePrefix
     ? `${readablePrefix}${record.archiveDir}/${resourcePath}`
     : resourcePath) ?? [];
+  const quoteReadySpans = options.quoteReadySpans ?? [];
   return {
     text: [
       `Readable archive path: ${readablePath}`,
@@ -55,6 +57,11 @@ export function archiveToolText(
       ...(options.citationEligible === false
         ? ["This search snapshot is discovery history and cannot be passed to evidence_add; use an individually archived sources/read document."]
         : ["For evidence_add, pass the Source ID above with a minimal, sufficient, continuous verbatim quote from the source; use the readable path only for navigation."]),
+      ...(quoteReadySpans.length ? [
+        "",
+        "Quote-ready continuous spans (prefer one source_span_id with evidence_add; do not copy or join text):",
+        ...quoteReadySpans.flatMap((span) => [`source_span_id: ${span.id}`, span.quote, ""]),
+      ] : []),
       ...(excerpt.truncated ? [`Continue without gaps (the last preview line is intentionally repeated): read(path=${JSON.stringify(readablePath)}, offset=${Math.max(record.bodyLineStart, visibleEnd)}, limit=200).`] : []),
       ...(readableTocPath ? [`Read the complete section index with read(path=${JSON.stringify(readableTocPath)}).`] : []),
       ...(map.items.length ? ["", `Source map${map.total > map.items.length ? ` (first ${map.items.length} of ${map.total}; complete index is in toc.md)` : ""}:`, ...map.items] : []),

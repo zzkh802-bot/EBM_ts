@@ -8,6 +8,24 @@ function record(sequence: number, timestamp: string, event: string, data: unknow
 }
 
 describe("trajectory analysis", () => {
+  it("distinguishes stalls before and after the first model delta", () => {
+    const records: TrajectoryRecord[] = [
+      record(1, "2026-01-01T00:00:00.000Z", "provider_request", { request_index: 1 }),
+      record(2, "2026-01-01T00:00:00.100Z", "provider_response", { request_index: 1, status: 200, duration_seconds: 0.1 }),
+      record(3, "2026-01-01T00:01:30.100Z", "stream_stalled", { request_index: 1, timeout_ms: 90_000 }),
+      record(4, "2026-01-01T00:01:31.000Z", "provider_request", { request_index: 2 }),
+      record(5, "2026-01-01T00:01:31.100Z", "provider_response", { request_index: 2, status: 200, duration_seconds: 0.1 }),
+      record(6, "2026-01-01T00:01:31.200Z", "model_first_delta", { request_index: 2, duration_seconds: 0.2 }),
+    ];
+
+    const analysis = analyzeTrajectory(records);
+    expect(analysis.provider_requests).toBe(2);
+    expect(analysis.provider_errors).toBe(0);
+    expect(analysis.provider_stream_stalls).toBe(1);
+    expect(analysis.provider_incomplete_after_headers).toBe(2);
+    expect(analysis.provider_incomplete_after_first_delta).toBe(1);
+  });
+
   it("summarizes rounds, thinking, tools, evidence timing, usage, and duplicate actions", () => {
     const records: TrajectoryRecord[] = [
       record(1, "2026-01-01T00:00:00.000Z", "run_start", { prompt: "question" }),

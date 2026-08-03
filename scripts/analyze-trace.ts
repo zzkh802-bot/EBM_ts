@@ -59,6 +59,8 @@ function markdown(analysis: ReturnType<typeof analyzeTrajectory>, tracePath: str
     `- Duplicate tool actions: ${analysis.duplicate_tool_actions}`,
     `- Thinking/response characters: ${analysis.thinking_chars}/${analysis.response_chars}`,
     `- Provider requests/errors: ${analysis.provider_requests}/${analysis.provider_errors}`,
+    `- Provider stream stalls: ${analysis.provider_stream_stalls}`,
+    `- Incomplete after headers/after first delta: ${analysis.provider_incomplete_after_headers}/${analysis.provider_incomplete_after_first_delta}`,
     `- Full-text/abstract-only reads: ${analysis.full_text_reads}/${analysis.abstract_only_reads}`,
     `- First model delta: ${analysis.average_first_delta_seconds ?? "not observed"} s average`,
     `- Model completion: ${analysis.average_model_completion_seconds ?? "not observed"} s average`,

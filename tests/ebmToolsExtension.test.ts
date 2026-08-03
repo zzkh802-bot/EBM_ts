@@ -52,12 +52,16 @@ describe("EBM Pi extension tools", () => {
       path: "sources/read/trial/full.md",
       title: "Trial",
       bodyLineStart: 8,
+      sourceId: "src_1234567890abcdef",
+      documentId: "doc_1234567890abcdef",
+      quoteReadySpans: [{ id: "span_1234567890abcdef_1_2_123456789abc", quote: "Result line one. Result line two.", charStart: 1, charEnd: 2, lineStart: 12, lineEnd: 13 }],
       content: "# Trial\n\n## Abstract\n\nResult line one.\nResult line two.\n\n## PubMed context\n\nNavigation/context only.\nDOI: 10.1000/test\n",
-    }]);
+    }] as never);
     expect(output).toContain("PMID: unknown");
     expect(output).toContain("Abstract preview: Result line one. Result line two.");
     expect(output).toContain("Readable abstract path: data/sessions/session-1/sources/read/trial/full.md");
     expect(output).toContain("copy a minimal, sufficient, continuous verbatim quote from the archived Abstract section");
+    expect(output).toContain("source_span_id: span_1234567890abcdef_1_2_123456789abc");
     expect(output).not.toContain("Navigation/context only");
     expect(output).not.toContain("10.1000/test");
     expect(output).not.toContain("Evidence source_path:");

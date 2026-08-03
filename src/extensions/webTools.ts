@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { quoteReadySourceSpans } from "../tools/sourceIdentity.js";
 import { readWeb, renderSearchCandidatesText, searchWeb, type WebToolError } from "../tools/web.js";
 import { searchSourceLibrary, upsertSourceLibraryFromArchive } from "../tools/sourceLibrary.js";
 import { archiveDetails, archiveToolText } from "./archiveOutput.js";
@@ -66,7 +67,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
     label: "Read Web Source",
     description: "Read documents through MinerU Premium or web pages through Jina with Firecrawl fallback, then normalize and archive before exposure.",
     promptSnippet: "Read and archive a public web source for quote-verified citation",
-    promptGuidelines: ["Use the returned archive path and copy a continuous verbatim passage when creating evidence."],
+    promptGuidelines: ["Prefer a returned source_span_id when it directly supports the claim. Otherwise use source_id with a continuous verbatim passage; never reconstruct or join source text."],
     parameters: Type.Object({
       url: Type.String({ description: "Public HTTP(S) URL" }),
       pdf_pages: Type.Optional(Type.String({ description: "Optional focused PDF page range such as 1-5. Use only when the relevant pages are known; max 25 pages." })),
@@ -90,7 +91,14 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
         ...(signal ? { signal } : {}),
       });
       if (!result.ok) throw toolError(result.error);
-      const output = archiveToolText(result.archive, piReadableSessionPath(ctx.cwd, sessionId, result.archive.path), { compactRead: true });
+      const quoteReadySpans = await quoteReadySourceSpans({
+        sessionDir: piSessionDirectory(ctx.cwd, sessionId),
+        sourcePath: result.archive.path,
+        sourceId: result.archive.sourceId,
+        content: result.archive.content,
+        maxSpans: 8,
+      });
+      const output = archiveToolText(result.archive, piReadableSessionPath(ctx.cwd, sessionId, result.archive.path), { compactRead: true, quoteReadySpans });
       const library = result.provider === "library" ? { written: false } : await upsertSourceLibraryFromArchive({ sourceLibraryDir, archive: result.archive, provider: result.provider, sessionId });
       pi.events.emit("ebm:source_archived", { sessionId, provider: result.provider, path: result.archive.path, kind: "read", sourceLibraryPath: library.path, sourceLibraryWritten: library.written });
       const libraryTrustNote = result.provider === "library"
@@ -98,7 +106,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
         : "";
       return {
         content: [{ type: "text", text: `${output.text}${libraryTrustNote}` }],
-        details: { provider: result.provider, archive: archiveDetails(result.archive), sourceLibrary: library, truncated: output.truncated },
+        details: { provider: result.provider, archive: archiveDetails(result.archive), sourceSpanIds: quoteReadySpans.map((span) => span.id), sourceLibrary: library, truncated: output.truncated },
       };
     },
   });

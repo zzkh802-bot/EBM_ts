@@ -60,6 +60,9 @@ export type TrajectoryAnalysis = {
   duplicate_tool_actions: number;
   provider_requests: number;
   provider_errors: number;
+  provider_stream_stalls: number;
+  provider_incomplete_after_headers: number;
+  provider_incomplete_after_first_delta: number;
   compactions: number;
   total_elapsed_seconds: number;
   average_first_delta_seconds?: number;
@@ -212,6 +215,8 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
   let toolErrors = 0;
   let providerRequests = 0;
   let providerErrors = 0;
+  let providerStreamStalls = 0;
+  const providerLifecycles = new Map<string, { responseOk: boolean; firstDelta: boolean; completed: boolean }>();
   let compactions = 0;
   const firstDeltaSeconds: number[] = [];
   const modelCompletionSeconds: number[] = [];
@@ -399,11 +404,29 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
         if (fullText === false) abstractOnlyReads += 1;
       }
     }
-    if (record.event === "provider_request") providerRequests += 1;
+    const providerRequestIndex = String(data?.request_index ?? "unknown");
+    const providerKey = `${record.session_id}:${record.run_id ?? "unknown"}:${providerRequestIndex}`;
+    if (record.event === "provider_request") {
+      providerRequests += 1;
+      providerLifecycles.set(providerKey, { responseOk: false, firstDelta: false, completed: false });
+    }
     if (record.event === "provider_response") {
       if (Number(data?.status ?? 0) >= 400) providerErrors += 1;
       if (numeric(data?.duration_seconds) > 0) providerHeadersSeconds.push(numeric(data.duration_seconds));
+      const lifecycle = providerLifecycles.get(providerKey);
+      if (lifecycle) lifecycle.responseOk = Number(data?.status ?? 0) >= 200 && Number(data?.status ?? 0) < 400;
     }
+    if (record.event === "model_first_delta") {
+      const lifecycle = providerLifecycles.get(providerKey);
+      if (lifecycle) lifecycle.firstDelta = true;
+    }
+    if (record.event === "assistant_message") {
+      const requestTiming = recordValue(data?.request_timing);
+      const completedKey = `${record.session_id}:${record.run_id ?? "unknown"}:${String(requestTiming?.request_index ?? "unknown")}`;
+      const lifecycle = providerLifecycles.get(completedKey);
+      if (lifecycle) lifecycle.completed = true;
+    }
+    if (record.event === "stream_stalled") providerStreamStalls += 1;
     if (record.event === "model_first_delta" && numeric(data?.duration_seconds) > 0) firstDeltaSeconds.push(numeric(data.duration_seconds));
     if (record.event === "assistant_message" && numeric(data?.request_timing?.duration_seconds) > 0) modelCompletionSeconds.push(numeric(data.request_timing.duration_seconds));
     if (record.event === "compaction") compactions += 1;
@@ -427,6 +450,8 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
   const averageFirstDelta = average(firstDeltaSeconds);
   const averageModelCompletion = average(modelCompletionSeconds);
   const averageProviderHeaders = average(providerHeadersSeconds);
+  const providerIncompleteAfterHeaders = [...providerLifecycles.values()].filter((lifecycle) => lifecycle.responseOk && !lifecycle.completed).length;
+  const providerIncompleteAfterFirstDelta = [...providerLifecycles.values()].filter((lifecycle) => lifecycle.responseOk && lifecycle.firstDelta && !lifecycle.completed).length;
 
   const phases: Record<string, PhaseAnalysis> = {};
   const runOrderedTurns = new Map<string, TurnState[]>();
@@ -490,6 +515,9 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
     duplicate_tool_actions: [...actionCounts.values()].reduce((sum, count) => sum + Math.max(0, count - 1), 0),
     provider_requests: providerRequests,
     provider_errors: providerErrors,
+    provider_stream_stalls: providerStreamStalls,
+    provider_incomplete_after_headers: providerIncompleteAfterHeaders,
+    provider_incomplete_after_first_delta: providerIncompleteAfterFirstDelta,
     compactions,
     total_elapsed_seconds: Math.round(runDurations.reduce((sum, value) => sum + value, 0)) / 1000,
     ...(averageFirstDelta === undefined ? {} : { average_first_delta_seconds: averageFirstDelta }),

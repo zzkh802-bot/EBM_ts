@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { GuidelineMcpClient, readGuideline, retrieveGuidelines, searchGuidelines, type GuidelineRetrieveItem, type GuidelineSearchItem } from "../tools/guidelineMcp.js";
+import { quoteReadySourceSpans, type QuoteReadySourceSpan } from "../tools/sourceIdentity.js";
 import { upsertSourceLibraryFromArchive } from "../tools/sourceLibrary.js";
 import { archiveDetails } from "./archiveOutput.js";
 import { piReadableSessionPath, piSessionDirectory } from "./sessionPath.js";
@@ -49,6 +50,7 @@ export function renderGuidelineReadText(
   readablePath: string,
   record: { content: string; bodyLineStart: number; lines: number; tocPath?: string; sourceId?: string; documentId?: string },
   document?: GuidelineSearchItem,
+  quoteReadySpans: QuoteReadySourceSpan[] = [],
 ): string {
   const lines = record.content.split("\n");
   const totalLines = record.bodyLineStart + record.lines - 1;
@@ -90,6 +92,11 @@ export function renderGuidelineReadText(
     record.sourceId
       ? "For evidence_add, pass the Source ID above with a minimal, sufficient, continuous verbatim quote; use the readable path only for navigation."
       : "For evidence_add, use this readable guideline path and copy a minimal, sufficient, continuous verbatim quote.",
+    ...(quoteReadySpans.length ? [
+      "",
+      "Quote-ready continuous spans (prefer one source_span_id with evidence_add; do not copy or join text):",
+      ...quoteReadySpans.flatMap((span) => [`source_span_id: ${span.id}`, span.quote, ""]),
+    ] : []),
     ...(headings.length ? ["", "Best-effort navigation index (generated from cleaned Markdown; verify against full text):", ...headings] : []),
     "",
     `Informative preview lines ${previewStart}-${previewEnd}:`,
@@ -225,12 +232,19 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
       });
       if (!result.ok) throw new Error(JSON.stringify(result.error));
       const readablePath = piReadableSessionPath(ctx.cwd, sessionId, result.archive.path);
+      const quoteReadySpans = await quoteReadySourceSpans({
+        sessionDir: piSessionDirectory(ctx.cwd, sessionId),
+        sourcePath: result.archive.path,
+        sourceId: result.archive.sourceId,
+        content: result.archive.content,
+        maxSpans: 8,
+      });
       const sourceLibraryDir = process.env.SOURCE_LIBRARY_DIR || "data/source_library/guidelines";
       const library = await upsertSourceLibraryFromArchive({ sourceLibraryDir, archive: result.archive, provider: "guideline_mcp", sessionId });
       pi.events.emit("ebm:source_archived", { sessionId, provider: "guideline_mcp", path: result.archive.path, kind: "read", sourceLibraryPath: library.path, sourceLibraryWritten: library.written });
       return {
-        content: [{ type: "text", text: renderGuidelineReadText(readablePath, result.archive, result.document) }],
-        details: { archive: archiveDetails(result.archive), sourceLibrary: library, truncated: false },
+        content: [{ type: "text", text: renderGuidelineReadText(readablePath, result.archive, result.document, quoteReadySpans) }],
+        details: { archive: archiveDetails(result.archive), sourceSpanIds: quoteReadySpans.map((span) => span.id), sourceLibrary: library, truncated: false },
       };
     },
   });

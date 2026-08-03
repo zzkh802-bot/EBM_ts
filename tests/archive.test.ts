@@ -4,6 +4,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { archiveToolText, readableArchivePath } from "../src/extensions/archiveOutput.js";
 import { archiveSource, stableArchiveName } from "../src/tools/archive.js";
+import { addEvidenceFromSourceSpan } from "../src/tools/evidence.js";
+import { quoteReadySourceSpans } from "../src/tools/sourceIdentity.js";
 
 describe("source archive", () => {
   it("uses semantic deterministic names and writes source metadata", async () => {
@@ -34,6 +36,38 @@ describe("source archive", () => {
     expect(second.sourceId).not.toBe(first.sourceId);
     expect(archiveToolText(first).text).toContain(`Source ID: ${first.sourceId}`);
     expect(archiveToolText(first).text).toContain(`Document ID: ${first.documentId}`);
+  });
+
+  it("renders quote-ready spans for any citation-capable archived source", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
+    const record = await archiveSource({
+      sessionDir,
+      kind: "read",
+      title: "Web trial",
+      sourceUrl: "https://example.test/trial",
+      content: "The intervention reduced the primary outcome.",
+    });
+    const spans = await quoteReadySourceSpans({
+      sessionDir,
+      sourcePath: record.path,
+      sourceId: record.sourceId,
+      content: record.content,
+    });
+    const output = archiveToolText(record, readableArchivePath("session-1", record.path), {
+      quoteReadySpans: spans,
+    }).text;
+
+    expect(output).toContain("Quote-ready continuous spans");
+    expect(output).toContain(`source_span_id: ${spans[0]!.id}`);
+    expect(output).toContain("The intervention reduced the primary outcome.");
+    const evidence = await addEvidenceFromSourceSpan({
+      sessionDir,
+      question: "Does the intervention work?",
+      claim: "The intervention reduced the primary outcome.",
+      relation: "supports",
+      sourceSpanId: spans[0]!.id,
+    });
+    expect(evidence).toMatchObject({ sourceId: record.sourceId, documentId: record.documentId, quote: record.content });
   });
 
   it("preserves non-Latin semantics and never overwrites a different source revision", async () => {

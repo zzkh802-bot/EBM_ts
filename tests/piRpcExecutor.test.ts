@@ -50,6 +50,37 @@ class FakeRpcClient implements PiRpcClientLike {
   async getLastAssistantText() { return `answer ${this.prompts.length}`; }
 }
 
+class StallingRpcClient implements PiRpcClientLike {
+  private listeners = new Set<(event: Record<string, unknown>) => void>();
+  private rejectIdle?: (error: Error) => void;
+  abortCount = 0;
+
+  constructor(private readonly sessionId: string) {}
+  async start() {}
+  async stop() {}
+  onEvent(listener: (event: Record<string, unknown>) => void) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+  async getState() { return { sessionId: this.sessionId, thinkingLevel: "medium", isStreaming: false }; }
+  async setThinkingLevel() {}
+  async prompt() {
+    for (const listener of this.listeners) listener({ type: "agent_start" });
+    for (const listener of this.listeners) listener({ type: "message_update", assistantMessageEvent: { type: "thinking_delta", delta: "checking" } });
+  }
+  async waitForIdle() {
+    return new Promise<void>((_resolve, reject) => {
+      this.rejectIdle = reject;
+      setTimeout(() => reject(new Error("fake idle timeout")), 100);
+    });
+  }
+  async abort() {
+    this.abortCount += 1;
+    this.rejectIdle?.(new Error("aborted"));
+  }
+  async getLastAssistantText() { return null; }
+}
+
 const request = (sessionId?: string): AgentRunInput => ({
   question: "无并发症成人普通感冒是否应使用抗生素？",
   ...(sessionId ? { sessionId } : {}),
@@ -72,6 +103,30 @@ const hooks = (signal = new AbortController().signal): AgentExecutionHooks => ({
 });
 
 describe("Pi RPC clinician executor", () => {
+  it("aborts a model stream that stops producing activity before the total request timeout", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-rpc-stall-"));
+    const cli = path.join(rootDir, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
+    await mkdir(path.dirname(cli), { recursive: true });
+    await writeFile(cli, "", "utf8");
+    await mkdir(path.join(rootDir, ".pi"), { recursive: true });
+    await writeFile(path.join(rootDir, ".pi", "models.json"), "{}\n", "utf8");
+    const client = new StallingRpcClient("rpc-stall-1");
+    const trace: string[] = [];
+    const executor = createPiRpcExecutor({
+      rootDir,
+      clientFactory: () => client,
+      streamStallTimeoutMs: 10,
+    });
+
+    await expect(executor(request(), {
+      ...hooks(),
+      onTrace: (event) => trace.push(event.kind),
+    })).rejects.toThrow(/model stream stalled/i);
+    expect(client.abortCount).toBe(1);
+    expect(trace).toContain("runtime.stream_stalled");
+    await executor.dispose();
+  });
+
   it("keeps one native RPC process for consecutive turns in the same session", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-rpc-"));
     const cli = path.join(rootDir, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");

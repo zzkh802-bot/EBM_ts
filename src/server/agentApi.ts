@@ -18,6 +18,7 @@ const PATIENT_CONTRACT_VERSION = "xunyi-patient/v1";
 const MAX_REQUEST_BYTES = 1_048_576;
 const MAX_TRACE_EVENTS = 240;
 const MAX_TOOL_EVENTS = 160;
+const DEFAULT_STREAM_STALL_TIMEOUT_MS = 90_000;
 
 export type AgentRunStatus = "queued" | "running" | "cancelling" | "succeeded" | "failed" | "cancelled";
 export type ResearchStage = "idle" | "planning" | "retrieving" | "tooling" | "generating" | "network_wait";
@@ -244,7 +245,7 @@ export class AgentRunStore {
 
   private addTrace(run: InternalRun, event: AgentTraceEvent): void {
     if (event.kind === "tool.started") run.stage = event.label.includes("report") ? "generating" : "tooling";
-    if (event.kind === "model.error" || event.kind === "run.cancelling") run.stage = "network_wait";
+    if (event.kind === "model.error" || event.kind === "run.cancelling" || event.kind === "runtime.stream_stalled" || event.kind === "runtime.request_timed_out") run.stage = "network_wait";
     run.agentTrace.push(event);
     if (run.agentTrace.length > MAX_TRACE_EVENTS) run.agentTrace.splice(0, run.agentTrace.length - MAX_TRACE_EVENTS);
   }
@@ -523,10 +524,15 @@ async function subscriptionAuthStatus(rootDir: string): Promise<{ openaiCodex: b
 export function createPiRpcExecutor(input: {
   rootDir: string;
   clientFactory?: (options: PiRpcClientOptions) => PiRpcClientLike;
+  streamStallTimeoutMs?: number;
 }): PiRpcExecutor {
   const rootDir = path.resolve(input.rootDir);
   const pool = new PiRpcSessionPool<PiRpcClientLike>();
   const factory = input.clientFactory ?? createDefaultPiRpcClient;
+  const configuredStreamStallTimeoutMs = input.streamStallTimeoutMs ?? Number(process.env.EBM_STREAM_STALL_TIMEOUT_MS);
+  const streamStallTimeoutMs = Number.isFinite(configuredStreamStallTimeoutMs) && configuredStreamStallTimeoutMs > 0
+    ? configuredStreamStallTimeoutMs
+    : DEFAULT_STREAM_STALL_TIMEOUT_MS;
 
   const execute = async (request: AgentRunInput, hooks: AgentExecutionHooks): Promise<AgentExecutionResult> => {
     if (hooks.signal.aborted) throw abortError();
@@ -559,10 +565,11 @@ export function createPiRpcExecutor(input: {
             PI_CODING_AGENT_DIR: path.join(rootDir, "data", "pi-agent"),
             EBM_RETRIEVAL_POLICY: request.retrievalPolicy,
             EBM_MAX_ITERATIONS: String(request.maxIterations),
+            EBM_STREAM_STALL_TIMEOUT_MS: "0",
           },
         }));
       },
-      execute: (client, sessionId) => runPiRpc({ rootDir, request, hooks, client, sessionId }),
+      execute: (client, sessionId) => runPiRpc({ rootDir, request, hooks, client, sessionId, streamStallTimeoutMs }),
     });
   };
 
@@ -807,8 +814,8 @@ async function readJsonBody(request: IncomingMessage): Promise<unknown> {
   }
 }
 
-async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks: AgentExecutionHooks; client: PiRpcClientLike; sessionId: string }): Promise<AgentExecutionResult> {
-  const { rootDir, request, hooks, client, sessionId } = input;
+async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks: AgentExecutionHooks; client: PiRpcClientLike; sessionId: string; streamStallTimeoutMs: number }): Promise<AgentExecutionResult> {
+  const { rootDir, request, hooks, client, sessionId, streamStallTimeoutMs } = input;
   let latestAnswer = "";
   const tools: Array<Record<string, unknown>> = [];
   const traceEvents: AgentTraceEvent[] = [];
@@ -827,8 +834,52 @@ async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks:
     if (tools.length > MAX_TOOL_EVENTS) tools.splice(0, tools.length - MAX_TOOL_EVENTS);
     hooks.onTool(event);
   };
+  let activeToolExecutions = 0;
+  let streamStallTimer: ReturnType<typeof setTimeout> | undefined;
+  let terminalError: Error | undefined;
+  let rejectTermination: (error: Error) => void = () => undefined;
+  const termination = new Promise<never>((_resolve, reject) => { rejectTermination = reject; });
+  const clearStreamStallTimer = () => {
+    if (streamStallTimer) clearTimeout(streamStallTimer);
+    streamStallTimer = undefined;
+  };
+  const terminate = (error: Error) => {
+    if (terminalError) return;
+    terminalError = error;
+    clearStreamStallTimer();
+    void client.abort().catch(() => undefined);
+    rejectTermination(error);
+  };
+  const armStreamStallTimer = () => {
+    clearStreamStallTimer();
+    if (activeToolExecutions > 0 || terminalError) return;
+    streamStallTimer = setTimeout(() => {
+      addTrace(trace("runtime.stream_stalled", "模型流长时间无响应", `连续 ${Math.round(streamStallTimeoutMs / 1000)} 秒未收到模型活动，已中止本轮请求。`));
+      terminate(new Error(`Model stream stalled for ${streamStallTimeoutMs}ms`));
+    }, streamStallTimeoutMs);
+  };
+  const observeRuntimeActivity = (event: Record<string, unknown>) => {
+    if (event.type === "tool_execution_start") {
+      activeToolExecutions += 1;
+      clearStreamStallTimer();
+      return;
+    }
+    if (event.type === "tool_execution_end") {
+      activeToolExecutions = Math.max(0, activeToolExecutions - 1);
+      armStreamStallTimer();
+      return;
+    }
+    if (event.type === "agent_end" || event.type === "agent_settled") {
+      clearStreamStallTimer();
+      return;
+    }
+    if (event.type === "agent_start" || event.type === "message_start" || event.type === "message_update" || event.type === "message_end" || event.type === "turn_start" || event.type === "turn_end") {
+      armStreamStallTimer();
+    }
+  };
   const consume = (event: unknown) => {
     if (!isRecord(event)) return;
+    observeRuntimeActivity(event);
     if (event.type === "tool_execution_start") {
       const name = typeof event.toolName === "string" ? event.toolName : "tool";
       const id = typeof event.toolCallId === "string" ? event.toolCallId : undefined;
@@ -900,20 +951,22 @@ async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks:
     addTrace(trace("runtime.thinking", "推理强度已由运行时调整", `${request.thinkingLevel} → ${state.thinkingLevel}`));
   }
   const unsubscribe = client.onEvent(consume);
-  let timedOut = false;
   const timeout = setTimeout(() => {
-    timedOut = true;
-    void client.abort().catch(() => undefined);
+    addTrace(trace("runtime.request_timed_out", "研究请求达到总时限", `总运行时间超过 ${request.requestTimeoutSeconds} 秒，已中止本轮请求。`));
+    terminate(new Error(`Agent request timed out after ${request.requestTimeoutSeconds}s`));
   }, request.requestTimeoutSeconds * 1000);
-  const abort = () => void client.abort().catch(() => undefined);
+  const abort = () => terminate(abortError());
   hooks.signal.addEventListener("abort", abort, { once: true });
   try {
     const reportsBefore = new Map((await readFinalReportRevisions(rootDir, sessionId)).map((report) => [report.path, report.revision]));
-    const settled = client.waitForIdle((request.requestTimeoutSeconds + 5) * 1000);
-    await client.prompt(buildAgentPrompt(request));
-    await settled;
+    armStreamStallTimer();
+    const operation = (async () => {
+      const settled = client.waitForIdle((request.requestTimeoutSeconds + 5) * 1000);
+      await client.prompt(buildAgentPrompt(request));
+      await settled;
+    })();
+    await Promise.race([operation, termination]);
     if (hooks.signal.aborted) throw abortError();
-    if (timedOut) throw new Error(`Agent request timed out after ${request.requestTimeoutSeconds}s`);
     const message = ((await client.getLastAssistantText()) || latestAnswer).trim();
     if (!message) {
       const modelError = traceEvents.findLast((event) => event.kind === "model.error")?.detail;
@@ -931,6 +984,7 @@ async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks:
     };
   } finally {
     clearTimeout(timeout);
+    clearStreamStallTimer();
     hooks.signal.removeEventListener("abort", abort);
     unsubscribe();
   }

@@ -21,6 +21,7 @@ import { registerReportTools } from "./reportTools.js";
 import { registerResearchRoundHint } from "./researchRoundHint.js";
 import { registerResearchFrameTools } from "./researchFrameTools.js";
 import { piReadableSessionPath, piSessionDirectory, registerSessionWorkspace } from "./sessionPath.js";
+import { registerStreamStallWatchdog } from "./streamStallWatchdog.js";
 import { registerTrajectoryRecorder } from "./trajectoryRecorder.js";
 import { registerWebTools } from "./webTools.js";
 
@@ -38,6 +39,7 @@ export function registerEbmTools(pi: ExtensionAPI): void {
   registerSessionWorkspace(pi);
   registerEbmIdentity(pi);
   registerResearchRoundHint(pi);
+  registerStreamStallWatchdog(pi);
 
   pi.registerTool({
     name: "evidence_add",
