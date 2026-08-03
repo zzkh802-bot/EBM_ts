@@ -206,6 +206,22 @@ describe("循医研究服务 API", () => {
     }
   });
 
+  it("classifies malformed route encoding as a client error", async () => {
+    const { api, baseUrl } = await startApi(async () => ({ message: "unused" }));
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/agent-runs/%`);
+      const payload = await response.json() as any;
+      expect(response.status).toBe(400);
+      expect(payload).toMatchObject({
+        ok: false,
+        error: { code: "invalid_path_encoding" },
+      });
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
+  });
+
   it("redacts credential-shaped diagnostics before returning an executor failure", async () => {
     const executor: AgentExecutor = async () => {
       throw new Error("provider failed: Authorization: Bearer RPC_TEST_SENTINEL");

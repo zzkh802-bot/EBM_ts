@@ -594,7 +594,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     }
     const workspaceMatch = /^\/api\/v1\/research-sessions\/([^/]+)\/files$/.exec(pathname);
     if (workspaceMatch && request.method === "GET") {
-      const sessionId = decodeURIComponent(workspaceMatch[1] ?? "");
+      const sessionId = decodePathSegment(workspaceMatch[1] ?? "");
       const requestedPath = url.searchParams.get("path");
       if (requestedPath) {
         sendJson(response, 200, await readWorkspaceFile(rootDir, sessionId, requestedPath));
@@ -606,7 +606,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     }
     const citationMatch = /^\/api\/v1\/research-sessions\/([^/]+)\/citations$/.exec(pathname);
     if (citationMatch && request.method === "GET") {
-      const sessionId = decodeURIComponent(citationMatch[1] ?? "");
+      const sessionId = decodePathSegment(citationMatch[1] ?? "");
       const reportPath = url.searchParams.get("report_path") ?? "";
       const number = Number(url.searchParams.get("number"));
       if (!Number.isInteger(number) || number < 1) throw new ApiError(422, "invalid_citation_number", "引用编号必须是正整数。 ");
@@ -621,7 +621,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     }
     const connectionMatch = /^\/api\/v1\/account-connections\/([^/]+)(?:\/(input|cancel))?$/.exec(pathname);
     if (accountConnections && connectionMatch) {
-      const id = decodeURIComponent(connectionMatch[1] ?? "");
+      const id = decodePathSegment(connectionMatch[1] ?? "");
       if (request.method === "GET" && !connectionMatch[2]) {
         const connection = accountConnections.get(id);
         if (!connection) throw new ApiError(404, "connection_not_found", "未找到该账户连接。");
@@ -650,7 +650,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     }
     const match = /^\/api\/v1\/agent-runs\/([^/]+)(?:\/(cancel))?$/.exec(pathname);
     if (match) {
-      const runId = decodeURIComponent(match[1] ?? "");
+      const runId = decodePathSegment(match[1] ?? "");
       if (request.method === "GET" && !match[2]) {
         const run = store.get(runId);
         if (!run) throw new ApiError(404, "run_not_found", "未找到该 Agent 任务。");
@@ -680,6 +680,15 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
         : new ApiError(500, "internal_error", errorMessage(error));
     const responseContract = pathname.startsWith("/api/v1/patient-intake/") ? PATIENT_CONTRACT_VERSION : CONTRACT_VERSION;
     sendJson(response, apiError.status, { ok: false, contract_version: responseContract, error: { code: apiError.code, message: apiError.message } });
+  }
+}
+
+function decodePathSegment(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch (error) {
+    if (error instanceof URIError) throw new ApiError(400, "invalid_path_encoding", "路径参数编码无效。");
+    throw error;
   }
 }
 

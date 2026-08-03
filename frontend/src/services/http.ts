@@ -25,9 +25,9 @@ export async function request<T>(
       headers: { 'Content-Type': 'application/json', ...init.headers },
     })
     const text = await response.text()
-    let payload: T & { message?: string }
+    let payload: T & { message?: string; error?: { message?: string } }
     try {
-      payload = (text ? JSON.parse(text) : {}) as T & { message?: string }
+      payload = (text ? JSON.parse(text) : {}) as T & { message?: string; error?: { message?: string } }
     } catch {
       throw new HttpError(
         `后端返回了非 JSON 响应 (${response.status})：${text.slice(0, 120) || '空响应'}`,
@@ -36,7 +36,7 @@ export async function request<T>(
       )
     }
     if (!response.ok || (payload as { ok?: boolean }).ok === false) {
-      throw new HttpError(payload.message || `请求失败 (${response.status})`, response.status, payload)
+      throw new HttpError(payload.error?.message || payload.message || `请求失败 (${response.status})`, response.status, payload)
     }
     return payload
   } finally {
