@@ -1,13 +1,17 @@
-import { createHash, randomUUID } from "node:crypto";
-import { access, copyFile, mkdir, readFile, readdir, stat } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { readFile, realpath, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
-import { ModelRuntime, RpcClient } from "@earendil-works/pi-coding-agent";
-import { readEvidence } from "../tools/evidence.js";
+import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { initResearchFrame } from "../tools/researchFrame.js";
-import { initializePiSessionDirectory, piSessionDirectory } from "../extensions/sessionPath.js";
+import { initializePiSessionDirectory, piSessionDirectory } from "../session/sessionPath.js";
 import { PatientIntakeError, type PatientIntakeExecutor, PatientWorkspace, validatePatientIntakeInput } from "./patientIntake.js";
 import { PiRpcSessionPool } from "./piRpcPool.js";
+import { buildPiRpcClientOptions, createDefaultPiRpcClient, preparePiRuntime, type PiRpcClientLike, type PiRpcClientOptions } from "./piRuntime.js";
+import { loadProjectEnv } from "./projectEnv.js";
+import { readCitationDetail } from "./citationService.js";
+import { listWorkspaceFiles, readWorkspaceFile, sessionWorkspace, WorkspaceServiceError } from "./workspaceService.js";
+import { readFinalReportRevisions } from "./reportPublication.js";
 
 const CONTRACT_VERSION = "xunyi-research/v1";
 const PATIENT_CONTRACT_VERSION = "xunyi-patient/v1";
@@ -16,6 +20,7 @@ const MAX_TRACE_EVENTS = 240;
 const MAX_TOOL_EVENTS = 160;
 
 export type AgentRunStatus = "queued" | "running" | "cancelling" | "succeeded" | "failed" | "cancelled";
+export type ResearchStage = "idle" | "planning" | "retrieving" | "tooling" | "generating" | "network_wait";
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 export type AudienceMode = "clinician" | "public";
 export type RetrievalPolicy = "all" | "mcp_only";
@@ -68,6 +73,7 @@ type AccountConnection = {
   provider: "openai-codex" | "anthropic";
   status: AccountConnectionStatus;
   message: string;
+  createdAt: number;
   authorization?: { url?: string; instructions?: string; device_code?: string; verification_url?: string };
   prompt?: { type: "text" | "select" | "manual_code"; message: string; placeholder?: string; options?: Array<{ id: string; label: string; description?: string }> };
   resolvePrompt?: (value: string) => void;
@@ -95,26 +101,7 @@ export type AgentExecutionHooks = {
 
 export type AgentExecutor = (input: AgentRunInput, hooks: AgentExecutionHooks) => Promise<AgentExecutionResult>;
 
-export type PiRpcClientOptions = {
-  cliPath: string;
-  cwd: string;
-  env: Record<string, string>;
-  provider: string;
-  model: string;
-  args: string[];
-};
-
-export interface PiRpcClientLike {
-  start(): Promise<void>;
-  stop(): Promise<void>;
-  onEvent(listener: (event: Record<string, unknown>) => void): () => void;
-  getState(): Promise<{ sessionId: string; thinkingLevel: string; isStreaming: boolean }>;
-  setThinkingLevel(level: ThinkingLevel): Promise<void>;
-  prompt(message: string): Promise<void>;
-  waitForIdle(timeout?: number): Promise<void>;
-  abort(): Promise<void>;
-  getLastAssistantText(): Promise<string | null>;
-}
+export type { PiRpcClientOptions, PiRpcClientLike } from "./piRuntime.js";
 
 export type PiRpcExecutor = AgentExecutor & { dispose(): Promise<void> };
 
@@ -122,6 +109,7 @@ export type AgentRunResponse = {
   contract_version: string;
   run_id: string;
   status: AgentRunStatus;
+  stage: ResearchStage;
   created_at: string;
   started_at?: string;
   completed_at?: string;
@@ -142,6 +130,7 @@ type InternalRun = {
   id: string;
   input: AgentRunInput;
   status: AgentRunStatus;
+  stage: ResearchStage;
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
@@ -167,6 +156,7 @@ export class AgentRunStore {
       id: randomUUID(),
       input,
       status: "queued",
+      stage: "planning",
       createdAt: new Date().toISOString(),
       message: "任务已创建，等待循证研究服务运行。",
       agentTrace: [trace("run.queued", "任务已创建", "等待研究引擎启动")],
@@ -201,6 +191,7 @@ export class AgentRunStore {
       return;
     }
     run.status = "running";
+    run.stage = "retrieving";
     run.startedAt = new Date().toISOString();
     run.message = "循证研究服务正在检索和生成回答。";
     this.addTrace(run, trace("run.started", "任务已启动", `推理强度：${run.input.thinkingLevel}`));
@@ -225,6 +216,7 @@ export class AgentRunStore {
       for (const update of result.progressUpdates ?? []) this.addProgress(run, update);
       for (const tool of result.tools ?? []) this.addTool(run, tool);
       run.status = "succeeded";
+      run.stage = "idle";
       run.completedAt = new Date().toISOString();
       run.message = result.message.trim() || "Agent 已完成，但没有生成可展示的文本。";
       this.addTrace(run, trace("run.completed", "任务完成", "已收到最终回答"));
@@ -234,6 +226,7 @@ export class AgentRunStore {
         return;
       }
       run.status = "failed";
+      run.stage = "idle";
       run.completedAt = new Date().toISOString();
       run.message = "循证研究服务未能完成本次任务。";
       run.error = { code: "agent_execution_failed", message: errorMessage(error) };
@@ -243,17 +236,22 @@ export class AgentRunStore {
 
   private markCancelled(run: InternalRun): void {
     run.status = "cancelled";
+    run.stage = "idle";
     run.completedAt = new Date().toISOString();
     run.message = "任务已中断。";
     this.addTrace(run, trace("run.cancelled", "任务已中断", "研究引擎已收到取消信号"));
   }
 
   private addTrace(run: InternalRun, event: AgentTraceEvent): void {
+    if (event.kind === "tool.started") run.stage = event.label.includes("report") ? "generating" : "tooling";
+    if (event.kind === "model.error" || event.kind === "run.cancelling") run.stage = "network_wait";
     run.agentTrace.push(event);
     if (run.agentTrace.length > MAX_TRACE_EVENTS) run.agentTrace.splice(0, run.agentTrace.length - MAX_TRACE_EVENTS);
   }
 
   private addTool(run: InternalRun, event: Record<string, unknown>): void {
+    const name = typeof event.name === "string" ? event.name : "";
+    if (event.status === "running") run.stage = name === "report_write" || name === "report_finalize" ? "generating" : "tooling";
     const id = typeof event.id === "string" ? event.id : undefined;
     const existing = id ? run.tools.findIndex((item) => item.id === id) : -1;
     if (existing >= 0) run.tools[existing] = { ...run.tools[existing], ...event };
@@ -275,6 +273,7 @@ export class AgentRunStore {
       contract_version: CONTRACT_VERSION,
       run_id: run.id,
       status: run.status,
+      stage: run.stage,
       created_at: run.createdAt,
       ...(run.startedAt ? { started_at: run.startedAt } : {}),
       ...(run.completedAt ? { completed_at: run.completedAt } : {}),
@@ -340,7 +339,7 @@ export function createAgentApiServer(options: AgentApiServerOptions): { server: 
 }
 
 export async function loadRuntimeConfig(rootDir: string): Promise<RuntimeConfig> {
-  const env = { ...(await projectEnv(rootDir)), ...process.env };
+  const env = { ...(await loadProjectEnv(rootDir)), ...process.env };
   const accountAuth = await subscriptionAuthStatus(rootDir);
   const models: RuntimeModel[] = [
     {
@@ -376,15 +375,22 @@ export async function loadRuntimeConfig(rootDir: string): Promise<RuntimeConfig>
 }
 
 export class AccountConnectionStore {
+  private static readonly maxRetainedConnections = 32;
+  private static readonly completedRetentionMs = 15 * 60 * 1_000;
   private readonly connections = new Map<string, AccountConnection>();
 
   constructor(private readonly rootDir: string) {}
 
   async start(provider: string): Promise<AccountConnection> {
+    this.pruneConnections();
     if (provider !== "openai-codex" && provider !== "anthropic") {
       throw new ApiError(422, "unsupported_connection", "该服务暂不支持账户连接。");
     }
-    await preparePiAgentDirectory(this.rootDir);
+    await preparePiRuntime(this.rootDir, {
+      runtimeDirectory: "data/pi-agent",
+      sessionDirectory: "data/pi-sessions",
+      workspaceDirectory: "data/sessions",
+    });
     const runtime = await ModelRuntime.create({
       authPath: path.join(this.rootDir, "data", "pi-agent", "auth.json"),
       modelsPath: path.join(this.rootDir, "data", "pi-agent", "models.json"),
@@ -393,7 +399,7 @@ export class AccountConnectionStore {
       throw new ApiError(422, "subscription_login_unavailable", "当前运行时未提供该账户的订阅登录。");
     }
     const connection: AccountConnection = {
-      id: randomUUID(), provider, status: "waiting", message: "正在准备账户授权。", controller: new AbortController(),
+      id: randomUUID(), provider, status: "waiting", message: "正在准备账户授权。", createdAt: Date.now(), controller: new AbortController(),
     };
     this.connections.set(connection.id, connection);
     void runtime.login(provider, "oauth", {
@@ -414,10 +420,12 @@ export class AccountConnectionStore {
   }
 
   get(id: string): AccountConnection | undefined {
+    this.pruneConnections();
     return this.connections.get(id);
   }
 
   respond(id: string, value: unknown): AccountConnection {
+    this.pruneConnections();
     const connection = this.connections.get(id);
     if (!connection) throw new ApiError(404, "connection_not_found", "未找到该账户连接。");
     if (!connection.resolvePrompt || !connection.prompt) throw new ApiError(409, "connection_not_waiting", "当前连接不需要输入。");
@@ -430,6 +438,7 @@ export class AccountConnectionStore {
   }
 
   cancel(id: string): AccountConnection {
+    this.pruneConnections();
     const connection = this.connections.get(id);
     if (!connection) throw new ApiError(404, "connection_not_found", "未找到该账户连接。");
     if (connection.status === "waiting") {
@@ -438,6 +447,20 @@ export class AccountConnectionStore {
       connection.controller.abort();
     }
     return connection;
+  }
+
+  private pruneConnections(): void {
+    const now = Date.now();
+    for (const [id, connection] of this.connections) {
+      if (connection.status !== "waiting" && now - connection.createdAt >= AccountConnectionStore.completedRetentionMs) {
+        this.connections.delete(id);
+      }
+    }
+    const completed = [...this.connections.entries()]
+      .filter(([, connection]) => connection.status !== "waiting")
+      .sort(([, left], [, right]) => left.createdAt - right.createdAt);
+    const excess = this.connections.size - AccountConnectionStore.maxRetainedConnections;
+    for (const [id] of completed.slice(0, Math.max(0, excess))) this.connections.delete(id);
   }
 
   private handleNotification(connection: AccountConnection, event: { type: string; [key: string]: unknown }): void {
@@ -479,8 +502,8 @@ export class AccountConnectionStore {
   }
 }
 
-function publicConnection(connection: AccountConnection): Omit<AccountConnection, "controller" | "resolvePrompt"> {
-  const { controller: _controller, resolvePrompt: _resolvePrompt, ...visible } = connection;
+function publicConnection(connection: AccountConnection): Omit<AccountConnection, "controller" | "resolvePrompt" | "createdAt"> {
+  const { controller: _controller, resolvePrompt: _resolvePrompt, createdAt: _createdAt, ...visible } = connection;
   return visible;
 }
 
@@ -503,7 +526,7 @@ export function createPiRpcExecutor(input: {
 }): PiRpcExecutor {
   const rootDir = path.resolve(input.rootDir);
   const pool = new PiRpcSessionPool<PiRpcClientLike>();
-  const factory = input.clientFactory ?? ((options: PiRpcClientOptions) => new RpcClient(options) as unknown as PiRpcClientLike);
+  const factory = input.clientFactory ?? createDefaultPiRpcClient;
 
   const execute = async (request: AgentRunInput, hooks: AgentExecutionHooks): Promise<AgentExecutionResult> => {
     if (hooks.signal.aborted) throw abortError();
@@ -512,9 +535,6 @@ export function createPiRpcExecutor(input: {
       ...(request.sessionId ? { requestedSessionId: request.sessionId } : {}),
       runtimeKey,
       createClient: async () => {
-        const piEntrypoint = path.join(rootDir, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
-        await access(piEntrypoint);
-        await preparePiAgentDirectory(rootDir);
         const args = [
           "--approve",
           "--session-dir", path.join(rootDir, "data", "pi-sessions"),
@@ -527,20 +547,20 @@ export function createPiRpcExecutor(input: {
         ];
         if (request.sessionId) args.push("--session", request.sessionId);
         else args.push("--name", sessionWorkspaceLabel(request.question));
-        return factory({
-          cliPath: piEntrypoint,
-          cwd: rootDir,
-          env: {
-            ...(await projectEnv(rootDir)),
+        return factory(await buildPiRpcClientOptions(rootDir, {
+          runtimeDirectory: "data/pi-agent",
+          sessionDirectory: "data/pi-sessions",
+          workspaceDirectory: "data/sessions",
+          provider: request.provider,
+          model: request.model,
+          args,
+          extraEnv: {
             PI_SKIP_VERSION_CHECK: "1",
             PI_CODING_AGENT_DIR: path.join(rootDir, "data", "pi-agent"),
             EBM_RETRIEVAL_POLICY: request.retrievalPolicy,
             EBM_MAX_ITERATIONS: String(request.maxIterations),
           },
-          provider: request.provider,
-          model: request.model,
-          args,
-        });
+        }));
       },
       execute: (client, sessionId) => runPiRpc({ rootDir, request, hooks, client, sessionId }),
     });
@@ -677,6 +697,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       ? error
       : error instanceof PatientIntakeError
         ? new ApiError(error.status, error.code, error.message)
+        : error instanceof WorkspaceServiceError
+          ? new ApiError(error.status, error.code, error.message)
         : new ApiError(500, "internal_error", errorMessage(error));
     const responseContract = pathname.startsWith("/api/v1/patient-intake/") ? PATIENT_CONTRACT_VERSION : CONTRACT_VERSION;
     sendJson(response, apiError.status, { ok: false, contract_version: responseContract, error: { code: apiError.code, message: apiError.message } });
@@ -697,8 +719,15 @@ async function serveStatic(response: ServerResponse, staticDir: string, pathname
   const target = path.resolve(staticDir, requested);
   const insideStaticDir = target === staticDir || target.startsWith(`${staticDir}${path.sep}`);
   if (!insideStaticDir) return false;
-  const file = await readableFile(target) ? target : path.extname(requested) ? undefined : path.join(staticDir, "index.html");
-  if (!file || !await readableFile(file)) return false;
+  let staticRoot: string;
+  try {
+    staticRoot = await realpath(staticDir);
+  } catch {
+    return false;
+  }
+  const file = await safeStaticFile(staticRoot, target)
+    ?? (path.extname(requested) ? undefined : await safeStaticFile(staticRoot, path.join(staticDir, "index.html")));
+  if (!file) return false;
   const extension = path.extname(file);
   const contentType = ({
     ".css": "text/css; charset=utf-8",
@@ -714,11 +743,14 @@ async function serveStatic(response: ServerResponse, staticDir: string, pathname
   return true;
 }
 
-async function readableFile(file: string): Promise<boolean> {
+async function safeStaticFile(staticRoot: string, candidate: string): Promise<string | undefined> {
   try {
-    return (await stat(file)).isFile();
+    const resolved = await realpath(candidate);
+    const relative = path.relative(staticRoot, resolved);
+    if (relative && (relative.startsWith("..") || path.isAbsolute(relative))) return undefined;
+    return (await stat(resolved)).isFile() ? resolved : undefined;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
@@ -772,225 +804,6 @@ async function readJsonBody(request: IncomingMessage): Promise<unknown> {
     return JSON.parse(text) as unknown;
   } catch {
     throw new ApiError(400, "invalid_json", "请求体不是有效 JSON。");
-  }
-}
-
-async function preparePiAgentDirectory(rootDir: string): Promise<void> {
-  const agentDir = path.join(rootDir, "data", "pi-agent");
-  await mkdir(agentDir, { recursive: true });
-  await copyFile(path.join(rootDir, ".pi", "models.json"), path.join(agentDir, "models.json"));
-  await mkdir(path.join(rootDir, "data", "pi-sessions"), { recursive: true });
-  await mkdir(path.join(rootDir, "data", "sessions"), { recursive: true });
-}
-
-type WorkspaceFile = {
-  path: string;
-  kind: "report" | "research_frame" | "evidence" | "source";
-  size: number;
-  modified_at: string;
-};
-
-function safeSessionId(sessionId: string): string {
-  if (!sessionId || path.basename(sessionId) !== sessionId) throw new ApiError(422, "invalid_session_id", "无效的研究会话标识。 ");
-  return sessionId;
-}
-
-async function sessionWorkspace(rootDir: string, sessionId: string): Promise<string> {
-  const safeId = safeSessionId(sessionId);
-  const sessionsRoot = path.join(rootDir, "data", "sessions");
-  let mapping: { directory?: unknown };
-  try {
-    mapping = JSON.parse(await readFile(path.join(sessionsRoot, ".metadata", "workspaces", `${safeId}.json`), "utf8")) as { directory?: unknown };
-  } catch {
-    throw new ApiError(404, "workspace_not_found", "未找到该研究会话的工作区。 ");
-  }
-  if (typeof mapping.directory !== "string" || !mapping.directory || path.basename(mapping.directory) !== mapping.directory) {
-    throw new ApiError(404, "workspace_not_found", "未找到该研究会话的工作区。 ");
-  }
-  return path.join(sessionsRoot, mapping.directory);
-}
-
-function workspaceFileKind(relativePath: string): WorkspaceFile["kind"] {
-  if (relativePath === "notes/research_frame.md") return "research_frame";
-  if (relativePath.startsWith("reports/")) return "report";
-  if (relativePath.startsWith("evidence/")) return "evidence";
-  return "source";
-}
-
-function visibleWorkspacePath(relativePath: string): boolean {
-  return relativePath === "notes/research_frame.md"
-    || relativePath === "evidence/EVIDENCE.md"
-    || /^reports\/(?!drafts\/).+\.md$/.test(relativePath)
-    || /^evidence\/ev_[a-f0-9]{16}\.md$/.test(relativePath)
-    || /^sources\/(?:read|search)\/.+\/(?:full|toc)\.md$/.test(relativePath);
-}
-
-async function listWorkspaceFiles(workspace: string): Promise<WorkspaceFile[]> {
-  const files: WorkspaceFile[] = [];
-  const walk = async (relative = ""): Promise<void> => {
-    const directory = path.join(workspace, relative);
-    let entries;
-    try {
-      entries = await readdir(directory, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const child = path.posix.join(relative, entry.name);
-      if (entry.isDirectory()) await walk(child);
-      else if (entry.isFile() && visibleWorkspacePath(child)) {
-        const details = await stat(path.join(workspace, child));
-        files.push({ path: child, kind: workspaceFileKind(child), size: details.size, modified_at: details.mtime.toISOString() });
-      }
-    }
-  };
-  await Promise.all(["notes", "reports", "evidence", "sources"].map((directory) => walk(directory)));
-  return files.sort((left, right) => right.modified_at.localeCompare(left.modified_at));
-}
-
-async function readWorkspaceFile(rootDir: string, sessionId: string, relativePath: string): Promise<WorkspaceFile & { session_id: string; content: string }> {
-  if (!visibleWorkspacePath(relativePath)) throw new ApiError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
-  const workspace = await sessionWorkspace(rootDir, sessionId);
-  const absolutePath = path.resolve(workspace, relativePath);
-  if (!absolutePath.startsWith(`${workspace}${path.sep}`)) throw new ApiError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
-  let details;
-  try {
-    details = await stat(absolutePath);
-  } catch {
-    throw new ApiError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
-  }
-  if (!details.isFile()) throw new ApiError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
-  return { session_id: sessionId, path: relativePath, kind: workspaceFileKind(relativePath), size: details.size, modified_at: details.mtime.toISOString(), content: await readFile(absolutePath, "utf8") };
-}
-
-type ReportMetadataReference = {
-  number: number;
-  citation: string;
-  evidence_ids?: string[];
-  evidence_id?: string;
-};
-
-function archiveFrontmatterValue(markdown: string, key: "title" | "source_url" | "source_institution"): string {
-  if (!markdown.startsWith("---\n")) return "";
-  const end = markdown.indexOf("\n---\n", 4);
-  if (end < 0) return "";
-  const prefix = `${key}:`;
-  const line = markdown.slice(4, end).split("\n").find((item) => item.startsWith(prefix));
-  if (!line) return "";
-  const raw = line.slice(prefix.length).trim();
-  try {
-    return raw.startsWith('"') ? String(JSON.parse(raw)) : raw;
-  } catch {
-    return "";
-  }
-}
-
-function publicSourceUrl(value: string): string {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : "";
-  } catch {
-    return "";
-  }
-}
-
-type ResolvedCitation = {
-  workspace: string;
-  reference: ReportMetadataReference;
-  evidenceIds: string[];
-  fallbackUrl: string;
-};
-
-async function resolveCitation(rootDir: string, sessionId: string, reportPath: string, number: number): Promise<ResolvedCitation> {
-  if (!/^reports\/(?!drafts\/).+\.md$/.test(reportPath)) {
-    throw new ApiError(422, "invalid_report_path", "请选择正式报告后查看引用。 ");
-  }
-  const workspace = await sessionWorkspace(rootDir, sessionId);
-  const reportAbsolute = path.resolve(workspace, reportPath);
-  if (!reportAbsolute.startsWith(`${workspace}${path.sep}`)) throw new ApiError(404, "report_not_found", "未找到该正式报告。 ");
-  let metadata: { references?: ReportMetadataReference[] };
-  try {
-    metadata = JSON.parse(await readFile(`${reportAbsolute}.metadata.json`, "utf8")) as { references?: ReportMetadataReference[] };
-  } catch {
-    throw new ApiError(404, "citation_metadata_not_found", "这份历史报告尚未保存可核验的引用映射。 ");
-  }
-  const reference = Array.isArray(metadata.references)
-    ? metadata.references.find((item) => item && item.number === number && typeof item.citation === "string")
-    : undefined;
-  if (!reference) throw new ApiError(404, "citation_not_found", `报告中未找到引用 [${number}]。`);
-  const evidenceIds = [...new Set([
-    ...(Array.isArray(reference.evidence_ids) ? reference.evidence_ids : []),
-    ...(typeof reference.evidence_id === "string" ? [reference.evidence_id] : []),
-  ])];
-  const pmid = /PMID[:\s]+(\d{6,9})/i.exec(reference.citation)?.[1] ?? "";
-  const fallbackUrl = pmid ? `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` : "";
-  return { workspace, reference, evidenceIds, fallbackUrl };
-}
-
-async function citationArchive(workspace: string, reference: ReportMetadataReference, fallbackUrl: string, evidenceId: string) {
-  const record = await readEvidence(workspace, evidenceId);
-  const sourceAbsolute = path.resolve(workspace, record.node.sourcePath);
-  if (!sourceAbsolute.startsWith(`${workspace}${path.sep}`)) throw new Error("source outside workspace");
-  const sourceMarkdown = await readFile(sourceAbsolute, "utf8");
-  const sourceTitle = archiveFrontmatterValue(sourceMarkdown, "title") || reference.citation.slice(0, 180);
-  const archivedSourceUrl = archiveFrontmatterValue(sourceMarkdown, "source_url");
-  const sourceUrl = publicSourceUrl(archivedSourceUrl) || fallbackUrl;
-  const sourceInstitution = archiveFrontmatterValue(sourceMarkdown, "source_institution");
-  return { record, sourceTitle, sourceUrl, sourceInstitution };
-}
-
-async function readCitationDetail(rootDir: string, sessionId: string, reportPath: string, number: number): Promise<Record<string, unknown>> {
-  const { workspace, reference, evidenceIds, fallbackUrl } = await resolveCitation(rootDir, sessionId, reportPath, number);
-  const evidence = await Promise.all(evidenceIds.map(async (evidenceId) => {
-    try {
-      const { record, sourceTitle, sourceUrl, sourceInstitution } = await citationArchive(workspace, reference, fallbackUrl, evidenceId);
-      if (!record.verification.ok) throw new Error("evidence verification failed");
-      return {
-        claim: record.node.claim,
-        quote: record.node.quote,
-        relation: record.node.relation,
-        provenance: record.node.provenance,
-        confidence: record.node.confidence,
-        verified: true,
-        source: {
-          title: sourceTitle,
-          institution: sourceInstitution,
-          url: sourceUrl,
-        },
-      };
-    } catch {
-      throw new ApiError(409, "citation_evidence_unavailable", "该引用的证据片段暂时无法重新核验。 ");
-    }
-  }));
-  return { number, citation: reference.citation, evidence };
-}
-
-type FinalReportRevision = { path: string; markdown: string; modified: number; revision: string };
-
-async function readFinalReportRevisions(rootDir: string, sessionId: string): Promise<FinalReportRevision[]> {
-  try {
-    const workspace = await sessionWorkspace(rootDir, sessionId);
-    const reportsDir = path.join(workspace, "reports");
-    const entries = (await readdir(reportsDir, { withFileTypes: true }))
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".md"));
-    return await Promise.all(entries.map(async (entry) => {
-      const file = path.join(reportsDir, entry.name);
-      const [details, markdown, metadata] = await Promise.all([
-        stat(file),
-        readFile(file, "utf8"),
-        readFile(`${file}.metadata.json`, "utf8").catch(() => ""),
-      ]);
-      const normalizedMarkdown = markdown.trim();
-      const contentHash = createHash("sha256").update(normalizedMarkdown).update("\0").update(metadata).digest("hex");
-      return {
-        path: path.posix.join("reports", entry.name),
-        markdown: normalizedMarkdown,
-        modified: details.mtimeMs,
-        revision: `${details.mtimeMs}:${contentHash}`,
-      };
-    }));
-  } catch {
-    return [];
   }
 }
 
@@ -1159,23 +972,6 @@ function modelErrorSummary(value: string): string {
   const status = /\b(401|402|403|429|5\d\d)\b/.exec(value)?.[1];
   const message = /"message"\s*:\s*"([^"]+)"/.exec(value)?.[1] ?? value;
   return `${status ? `模型服务返回 ${status}：` : "模型服务错误："}${message}`.slice(0, 500);
-}
-
-async function projectEnv(rootDir: string): Promise<Record<string, string>> {
-  try {
-    const raw = await readFile(path.join(rootDir, ".env"), "utf8");
-    const values: Record<string, string> = {};
-    for (const line of raw.split(/\r?\n/)) {
-      const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line);
-      if (!match) continue;
-      const key = match[1] ?? "";
-      const rawValue = match[2] ?? "";
-      values[key] = rawValue.replace(/^(?:"([\s\S]*)"|'([\s\S]*)')$/, "$1$2");
-    }
-    return values;
-  } catch {
-    return {};
-  }
 }
 
 export function buildAgentPrompt(input: AgentRunInput): string {

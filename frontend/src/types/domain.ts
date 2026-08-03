@@ -27,6 +27,7 @@ export interface ResearchProgressUpdate {
 }
 
 export type AgentRunStatus = 'queued' | 'running' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled'
+export type AgentStage = 'idle' | 'planning' | 'retrieving' | 'tooling' | 'generating' | 'network_wait'
 
 export interface AgentRunRequest {
   question: string
@@ -72,6 +73,7 @@ export interface AgentRunResponse {
   contract_version: string
   run_id: string
   status: AgentRunStatus
+  stage?: AgentStage
   created_at?: string
   started_at?: string
   completed_at?: string
@@ -219,5 +221,3 @@ export interface WorkspaceAsset extends ClinicianDocument {
   sessionTitle: string
   sessionUpdatedAt: string
 }
-
-export type AgentStage = 'idle' | 'planning' | 'retrieving' | 'tooling' | 'generating' | 'network_wait'

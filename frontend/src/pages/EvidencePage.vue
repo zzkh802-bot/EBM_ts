@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { agentService, workspaceService } from '../services'
+import { agentService } from '../services'
 import { useAgentRunStore, usePreferencesStore, useSessionsStore, useUiStore } from '../stores'
-import type { AccountConnection, ClinicianDocument, Message, ModeSnapshot, RuntimeConfig } from '../types/domain'
+import type { ClinicianDocument, Message, ModeSnapshot, RuntimeConfig } from '../types/domain'
 import { buildResearchRunRequest, newId, nowIso, responseText } from '../utils/core'
 import { parseReport, reportPlainText, type Reference } from '../utils/report'
 import { copyText } from '../utils/browser'
 import ReportRenderer from '../components/report/ReportRenderer.vue'
 import RunActivity from '../components/evidence/RunActivity.vue'
 import { goodCases } from '../data/goodCases'
+import { useAccountConnection } from '../composables/useAccountConnection'
+import { useResearchDocuments } from '../composables/useResearchDocuments'
 
 const preferences = usePreferencesStore()
 const sessions = useSessionsStore()
@@ -21,15 +23,22 @@ const question = ref('')
 const feed = ref<HTMLElement | null>(null)
 const runtimeConfig = ref<RuntimeConfig | null>(null)
 const runtimeConfigError = ref('')
-const accountConnection = ref<AccountConnection | null>(null)
-const conversationFiles = ref<ClinicianDocument[]>([])
-const conversationFilesLoading = ref(false)
-const selectedConversationFile = ref<ClinicianDocument | null>(null)
-const conversationFileContent = ref('')
-const conversationFileError = ref('')
-const conversationFileLoading = ref(false)
-const connectionInput = ref('')
-let connectionTimer: number | undefined
+const {
+  conversationFiles,
+  conversationFilesLoading,
+  selectedConversationFile,
+  conversationFileContent,
+  conversationFileError,
+  conversationFileLoading,
+  readFormalReport,
+  loadConversationFiles,
+  openConversationFile,
+  closeConversationFile,
+} = useResearchDocuments(() => sessions.active.researchSessionId)
+const { accountConnection, connectionInput, connect: connectAccount, submitInput: submitConnectionInput, cancel: cancelConnection } = useAccountConnection(async () => {
+  runtimeConfig.value = await agentService.getRuntimeConfig()
+  preferences.applyRuntimeConfig(runtimeConfig.value)
+})
 const stages = {
   planning: '正在梳理问题与检索范围', retrieving: '正在检索可用证据', tooling: '正在阅读与核验资料',
   generating: '正在生成正式循证报告', network_wait: '正在等待研究服务响应', idle: '',
@@ -64,42 +73,6 @@ const researchCount = computed(() => sessions.active.messages.filter((message) =
 const sessionStatusLabel = computed(() => ({ draft: '待开始', active: '正在研究', complete: '可继续追踪' })[sessions.active.status])
 const documentKindLabel = (kind: ClinicianDocument['kind']) => kind === 'report' ? '最终报告' : '研究框架'
 const documentTitle = (file: ClinicianDocument) => file.path.split('/').at(-1)?.replace(/\.md$/, '') || documentKindLabel(file.kind)
-let conversationReadSequence = 0
-let conversationListSequence = 0
-const readFormalReport = async (sessionId: string | undefined, preferredPath?: string) => {
-  if (!sessionId) return ''
-  try {
-    if (preferredPath) return (await workspaceService.read(sessionId, preferredPath)).content
-    const files = await workspaceService.list(sessionId)
-    const report = files.files.find((file) => file.kind === 'report')
-    return report ? (await workspaceService.read(sessionId, report.path)).content : ''
-  } catch {
-    return ''
-  }
-}
-const loadConversationFiles = async () => {
-  const sessionId = sessions.active.researchSessionId
-  if (!sessionId) {
-    conversationFiles.value = []
-    return
-  }
-  const request = ++conversationListSequence
-  conversationFilesLoading.value = true
-  try {
-    const files = (await workspaceService.list(sessionId)).files
-    if (request !== conversationListSequence) return
-    conversationFiles.value = files
-    if (selectedConversationFile.value && !files.some((file) => file.path === selectedConversationFile.value?.path)) {
-      closeConversationFile()
-    }
-  } catch {
-    if (request !== conversationListSequence) return
-    conversationFiles.value = []
-    closeConversationFile()
-  } finally {
-    if (request === conversationListSequence) conversationFilesLoading.value = false
-  }
-}
 const hydrateHistoricalReports = async () => {
   const localSessionId = sessions.activeSessionId
   const sessionId = sessions.active.researchSessionId
@@ -110,29 +83,6 @@ const hydrateHistoricalReports = async () => {
     const markdown = await readFormalReport(sessionId, message.reportPath)
     if (markdown) sessions.patchMessageIn(localSessionId, message.id, { reportMarkdown: markdown })
   }))
-}
-const openConversationFile = async (file: ClinicianDocument) => {
-  const sessionId = sessions.active.researchSessionId
-  if (!sessionId) return
-  const request = ++conversationReadSequence
-  selectedConversationFile.value = file
-  conversationFileContent.value = ''
-  conversationFileError.value = ''
-  conversationFileLoading.value = true
-  try {
-    const content = (await workspaceService.read(sessionId, file.path)).content
-    if (request === conversationReadSequence) conversationFileContent.value = content
-  } catch (error) {
-    if (request === conversationReadSequence) conversationFileError.value = error instanceof Error ? error.message : '无法读取该文档。'
-  } finally {
-    if (request === conversationReadSequence) conversationFileLoading.value = false
-  }
-}
-const closeConversationFile = () => {
-  conversationReadSequence += 1
-  selectedConversationFile.value = null
-  conversationFileContent.value = ''
-  conversationFileError.value = ''
 }
 watch(() => [route.path, sessions.activeSessionId, sessions.active.researchSessionId], () => {
   closeConversationFile()
@@ -155,51 +105,6 @@ onMounted(async () => {
     runtimeConfigError.value = error instanceof Error ? error.message : '无法读取服务器运行配置'
   }
 })
-onBeforeUnmount(() => { if (connectionTimer) window.clearInterval(connectionTimer) })
-
-const refreshRuntimeConfig = async () => {
-  runtimeConfig.value = await agentService.getRuntimeConfig()
-  preferences.applyRuntimeConfig(runtimeConfig.value)
-}
-const stopConnectionPolling = () => {
-  if (connectionTimer) window.clearInterval(connectionTimer)
-  connectionTimer = undefined
-}
-const refreshConnection = async () => {
-  if (!accountConnection.value) return
-  try {
-    accountConnection.value = await agentService.getAccountConnection(accountConnection.value.id)
-    if (accountConnection.value.status !== 'waiting') {
-      stopConnectionPolling()
-      if (accountConnection.value.status === 'connected') await refreshRuntimeConfig()
-    }
-  } catch (error) {
-    accountConnection.value = { ...accountConnection.value, status: 'failed', message: error instanceof Error ? error.message : '无法读取账户连接状态' }
-    stopConnectionPolling()
-  }
-}
-const connectAccount = async (provider: string) => {
-  if (provider !== 'openai-codex' && provider !== 'anthropic') return
-  try {
-    stopConnectionPolling()
-    accountConnection.value = await agentService.startAccountConnection(provider)
-    connectionInput.value = ''
-    connectionTimer = window.setInterval(() => { void refreshConnection() }, 1_500)
-  } catch (error) {
-    accountConnection.value = { id: '', provider, status: 'failed', message: error instanceof Error ? error.message : '无法启动账户连接' }
-  }
-}
-const submitConnectionInput = async (value = connectionInput.value) => {
-  if (!accountConnection.value || !value.trim()) return
-  accountConnection.value = await agentService.respondAccountConnection(accountConnection.value.id, value.trim())
-  connectionInput.value = ''
-}
-const cancelConnection = async () => {
-  if (!accountConnection.value?.id) return
-  accountConnection.value = await agentService.cancelAccountConnection(accountConnection.value.id)
-  stopConnectionPolling()
-}
-
 watch(() => sessions.active.messages.length, async () => {
   await nextTick()
   feed.value?.scrollTo?.({ top: feed.value.scrollHeight, behavior: 'smooth' })
@@ -245,13 +150,10 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
               sessions.setResearchSessionId(localSessionId, status.session_id)
               void loadConversationFiles()
             }
-            if (status.status === 'queued') run.setStage('planning')
-            if (status.status === 'running') {
-              const activeTool = status.tools?.some((item) => item.status === 'running')
-              const reportStarted = status.tools?.some((item) => item.name === 'report_write' || item.name === 'report_finalize')
-              run.setStage(activeTool ? 'tooling' : reportStarted ? 'generating' : 'retrieving')
-            }
-            if (status.status === 'cancelling') run.setStage('network_wait')
+            if (status.stage) run.setStage(status.stage)
+            else if (status.status === 'queued') run.setStage('planning')
+            else if (status.status === 'running') run.setStage('retrieving')
+            else if (status.status === 'cancelling') run.setStage('network_wait')
             sessions.patchMessageIn(localSessionId, pendingId, {
               trace: status.agent_trace || [],
               progressUpdates: status.progress_updates || [],

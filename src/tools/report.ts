@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { readEvidence } from "./evidence.js";
 import { normalizeMarkdown } from "./markdown.js";
@@ -271,27 +271,55 @@ export async function writeReport(input: ReportWriteInput): Promise<ReportRecord
   };
   await mkdir(outDir, { recursive: true });
   const archived = `${content}\n`;
+  const serializedMetadata = `${JSON.stringify(metadata, null, 2)}\n`;
   for (let suffix = 1; ; suffix += 1) {
     const name = `${baseName}${suffix === 1 ? "" : `-${suffix}`}.md`;
     const rel = path.posix.join("reports", name);
     const abs = path.join(outDir, name);
+    const metadataPath = path.join(outDir, `${name}.metadata.json`);
+    let createdReport = false;
     try {
       await writeFile(abs, archived, { encoding: "utf8", flag: "wx" });
-      await writeFile(path.join(outDir, `${name}.metadata.json`), `${JSON.stringify(metadata, null, 2)}\n`, { encoding: "utf8", flag: "wx" });
+      createdReport = true;
+      await writeFile(metadataPath, serializedMetadata, { encoding: "utf8", flag: "wx" });
       return { path: rel, title, evidenceIds, sha256, createdAt };
     } catch (error) {
-      if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
-      const existing = await readFile(abs, "utf8");
-      const metadataPath = path.join(outDir, `${name}.metadata.json`);
+      const alreadyExists = error instanceof Error && "code" in error && error.code === "EEXIST";
+      if (!alreadyExists) {
+        if (createdReport) await rm(abs, { force: true });
+        throw error;
+      }
+      let existing: string;
+      try {
+        existing = await readFile(abs, "utf8");
+      } catch {
+        if (createdReport) await rm(abs, { force: true });
+        continue;
+      }
       let existingMetadata: { sha256?: string; created_at?: string } | undefined;
       try {
         existingMetadata = JSON.parse(await readFile(metadataPath, "utf8")) as { sha256?: string; created_at?: string };
       } catch {
         existingMetadata = undefined;
       }
-      if (existing === archived || existingMetadata?.sha256 === sha256) {
+      if (existing === archived && existingMetadata?.sha256 === sha256) {
         return { path: rel, title, evidenceIds, sha256, createdAt: existingMetadata?.created_at ?? createdAt };
       }
+      if (existing === archived && !existingMetadata && !createdReport) {
+        try {
+          await writeFile(metadataPath, serializedMetadata, { encoding: "utf8", flag: "wx" });
+          return { path: rel, title, evidenceIds, sha256, createdAt };
+        } catch (metadataError) {
+          if (!(metadataError instanceof Error && "code" in metadataError && metadataError.code === "EEXIST")) throw metadataError;
+          try {
+            const recovered = JSON.parse(await readFile(metadataPath, "utf8")) as { sha256?: string; created_at?: string };
+            if (recovered.sha256 === sha256) return { path: rel, title, evidenceIds, sha256, createdAt: recovered.created_at ?? createdAt };
+          } catch {
+            // A concurrent writer may still be completing the sidecar; use a fresh suffix below.
+          }
+        }
+      }
+      if (createdReport) await rm(abs, { force: true });
     }
   }
 }
