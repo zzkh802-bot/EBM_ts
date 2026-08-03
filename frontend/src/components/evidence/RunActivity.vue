@@ -66,6 +66,7 @@ const parseTime = (value?: string) => {
 
 const formatDuration = (milliseconds?: number) => {
   if (milliseconds === undefined || !Number.isFinite(milliseconds) || milliseconds < 0) return '—'
+  if (milliseconds < 1_000) return '<1 秒'
   const seconds = Math.max(0, Math.floor(milliseconds / 1_000))
   if (seconds < 60) return `${seconds} 秒`
   const minutes = Math.floor(seconds / 60)
