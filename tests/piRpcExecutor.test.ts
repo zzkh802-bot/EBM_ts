@@ -38,6 +38,8 @@ class FakeRpcClient implements PiRpcClientLike {
     if (this.writeReport) {
       await writeFile(path.join(workspace, "reports", "verified.md"), `# Verified report ${this.prompts.length}\n`, "utf8");
     }
+    for (const listener of this.listeners) listener({ type: "tool_execution_start", toolName: "pubmed_search", toolCallId: "call-1", args: { query: "common cold" } });
+    for (const listener of this.listeners) listener({ type: "tool_execution_end", toolName: "pubmed_search", toolCallId: "call-1", result: "found candidate study", isError: false });
     const assistant = { role: "assistant", content: [{ type: "text", text: `answer ${this.prompts.length}` }] };
     for (const listener of this.listeners) listener({ type: "message_end", message: assistant });
     for (const listener of this.listeners) listener({ type: "agent_end", messages: [assistant] });
@@ -101,5 +103,36 @@ describe("Pi RPC clinician executor", () => {
 
     await executor.dispose();
     expect(clients[0]?.stopped).toBe(true);
+  });
+
+  it("projects native tool lifecycle events into the typed execution hooks", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-rpc-events-"));
+    const cli = path.join(rootDir, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
+    await mkdir(path.dirname(cli), { recursive: true });
+    await writeFile(cli, "", "utf8");
+    await mkdir(path.join(rootDir, ".pi"), { recursive: true });
+    await writeFile(path.join(rootDir, ".pi", "models.json"), "{}\n", "utf8");
+    const executor = createPiRpcExecutor({
+      rootDir,
+      clientFactory: () => new FakeRpcClient("rpc-events-1", rootDir),
+    });
+    const trace: Array<{ kind: string; label: string }> = [];
+    const tools: Array<Record<string, unknown>> = [];
+    const result = await executor(request(), {
+      signal: new AbortController().signal,
+      setSessionId: () => undefined,
+      onTrace: (event) => trace.push({ kind: event.kind, label: event.label }),
+      onProgress: () => undefined,
+      onTool: (event) => tools.push(event),
+    });
+
+    expect(result.message).toBe("answer 1");
+    expect(tools).toEqual([
+      expect.objectContaining({ id: "call-1", name: "pubmed_search", status: "running" }),
+      expect.objectContaining({ id: "call-1", name: "pubmed_search", status: "completed", result: "found candidate study" }),
+    ]);
+    expect(trace.map((event) => event.kind)).toContain("tool.started");
+    expect(trace.map((event) => event.kind)).toContain("tool.completed");
+    await executor.dispose();
   });
 });

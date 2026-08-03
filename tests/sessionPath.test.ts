@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { registerTrajectoryRecorder } from "../src/extensions/trajectoryRecorder.js";
-import { initializePiSessionDirectory, piReadableSessionPath, piSessionCreatedDate, piSessionDirectory, registerSessionWorkspace } from "../src/extensions/sessionPath.js";
+import { existingPiSessionDirectory, initializePiSessionDirectory, piReadableSessionPath, piSessionCreatedDate, piSessionDirectory, registerSessionWorkspace } from "../src/extensions/sessionPath.js";
 
 describe("semantic session workspaces", () => {
   it("initializes the semantic workspace before the trajectory recorder writes its first artifact", async () => {
@@ -50,6 +50,7 @@ describe("semantic session workspaces", () => {
 
     expect(path.basename(workspace)).toBe("019f892b_急性卒中-rt-pa-与血压管理");
     expect(piSessionDirectory(cwd, sessionId)).toBe(workspace);
+    expect(existingPiSessionDirectory(cwd, sessionId)).toBe(workspace);
     expect(piReadableSessionPath(cwd, sessionId, "sources/read/trial/full.md")).toBe("data/sessions/019f892b_急性卒中-rt-pa-与血压管理/sources/read/trial/full.md");
     await expect(readFile(path.join(workspace, ".metadata", "session.json"), "utf8")).resolves.toContain(`"sessionId": "${sessionId}"`);
   });
@@ -115,6 +116,7 @@ describe("semantic session workspaces", () => {
     await symlink(outside, path.join(root, "mapped"), "dir");
     await writeFile(path.join(root, ".metadata", "workspaces", `${sessionId}.json`), JSON.stringify({ sessionId, directory: "mapped" }));
     expect(piSessionDirectory(cwd, sessionId)).toBe(path.join(root, sessionId));
+    expect(existingPiSessionDirectory(cwd, sessionId)).toBeUndefined();
   });
 
   it("rejects traversal in model-readable session paths", async () => {

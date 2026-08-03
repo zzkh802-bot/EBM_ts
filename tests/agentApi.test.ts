@@ -1,16 +1,23 @@
 import { once } from "node:events";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildAgentPrompt, createAgentApiServer, type AgentExecutor, type AgentRunInput, type RuntimeConfig } from "../src/server/agentApi.js";
+import { buildAgentPrompt, createAgentApiServer, type AgentExecutor, type AgentRunInput, type AgentRunResponse, type RuntimeConfig } from "../src/server/agentApi.js";
 import { buildPatientIntakePrompt, type PatientIntakeInput } from "../src/server/patientIntake.js";
 import { archiveSource } from "../src/tools/archive.js";
 import { addEvidence } from "../src/tools/evidence.js";
 import { writeReport } from "../src/tools/report.js";
 
-async function startApi(executor: AgentExecutor, runtimeConfig?: RuntimeConfig, rootDir?: string) {
-  const api = createAgentApiServer({ executor, ...(runtimeConfig ? { runtimeConfig } : {}), ...(rootDir ? { rootDir } : {}) });
+type TestRunResponse = Omit<AgentRunResponse, "agent_trace" | "progress_updates" | "tools" | "summary"> & {
+  agent_trace: Array<{ kind: string; label?: string }>;
+  progress_updates: Array<Record<string, unknown>>;
+  tools: Array<Record<string, unknown>>;
+  summary: Record<string, unknown>;
+};
+
+async function startApi(executor: AgentExecutor, runtimeConfig?: RuntimeConfig, rootDir?: string, staticDir?: string) {
+  const api = createAgentApiServer({ executor, ...(runtimeConfig ? { runtimeConfig } : {}), ...(rootDir ? { rootDir } : {}), ...(staticDir ? { staticDir } : {}) });
   api.server.listen(0, "127.0.0.1");
   await once(api.server, "listening");
   const address = api.server.address();
@@ -72,6 +79,8 @@ describe("循医研究服务 API", () => {
     const workspace = path.join(rootDir, "data", "sessions", workspaceName);
     await mkdir(path.join(rootDir, "data", "sessions", ".metadata", "workspaces"), { recursive: true });
     await mkdir(workspace, { recursive: true });
+    await mkdir(path.join(workspace, ".metadata"), { recursive: true });
+    await writeFile(path.join(workspace, ".metadata", "session.json"), JSON.stringify({ sessionId, directory: workspaceName }), "utf8");
     await writeFile(
       path.join(rootDir, "data", "sessions", ".metadata", "workspaces", `${sessionId}.json`),
       JSON.stringify({ directory: workspaceName }),
@@ -125,7 +134,7 @@ describe("循医研究服务 API", () => {
     const { api, baseUrl } = await startApi(executor, undefined, rootDir);
     try {
       const response = await fetch(`${baseUrl}/api/v1/research-sessions/${sessionId}/citations?report_path=${encodeURIComponent(report.path)}&number=1`);
-      const payload = await response.json() as any;
+      const payload = await response.json() as Record<string, unknown>;
 
       expect(response.status).toBe(200);
       expect(payload).toMatchObject({
@@ -144,17 +153,26 @@ describe("循医研究服务 API", () => {
       expect(JSON.stringify(payload)).not.toContain(evidence.id);
 
       const mcpResponse = await fetch(`${baseUrl}/api/v1/research-sessions/${sessionId}/citations?report_path=${encodeURIComponent(report.path)}&number=2`);
-      const mcpPayload = await mcpResponse.json() as any;
+      const mcpPayload = await mcpResponse.json() as { evidence: Array<{ source: Record<string, string> }> };
       expect(mcpResponse.status).toBe(200);
-      expect(mcpPayload.evidence[0].source).toMatchObject({
+      expect(mcpPayload.evidence[0]!.source).toMatchObject({
         title: "Chinese clinical guideline",
         institution: "Chinese Medical Association",
         url: "",
       });
 
+      const outside = await mkdtemp(path.join(os.tmpdir(), "ebm-citation-outside-"));
+      const secret = path.join(outside, "secret.md");
+      await writeFile(secret, "must not be served", "utf8");
+      await symlink(secret, path.join(workspace, "reports", "leaked.md"));
+      const escapedFileResponse = await fetch(
+        `${baseUrl}/api/v1/research-sessions/${sessionId}/files?path=${encodeURIComponent("reports/leaked.md")}`,
+      );
+      expect(escapedFileResponse.status).toBe(404);
+
       await writeFile(path.join(workspace, source.path), "# Trial\n\nThe archived source was changed after report generation.", "utf8");
       const invalidResponse = await fetch(`${baseUrl}/api/v1/research-sessions/${sessionId}/citations?report_path=${encodeURIComponent(report.path)}&number=1`);
-      const invalidPayload = await invalidResponse.json() as any;
+      const invalidPayload = await invalidResponse.json() as { error: { code: string } };
       expect(invalidResponse.status).toBe(409);
       expect(invalidPayload.error.code).toBe("citation_evidence_unavailable");
     } finally {
@@ -187,10 +205,10 @@ describe("循医研究服务 API", () => {
       expect(accepted.status).toBe("queued");
 
       const result = await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "succeeded",
       );
-      expect(result).toMatchObject({ status: "succeeded", session_id: "pi-session-1", message: "这是可追溯的循证回答。" });
+      expect(result).toMatchObject({ status: "succeeded", stage: "idle", session_id: "pi-session-1", message: "这是可追溯的循证回答。" });
       expect(result.report_markdown).toContain("完整循证报告");
       expect(result.summary.request_timeout_seconds).toBe(600);
       expect(result.summary.retrieval_policy).toBe("all");
@@ -210,12 +228,36 @@ describe("循医研究服务 API", () => {
     const { api, baseUrl } = await startApi(async () => ({ message: "unused" }));
     try {
       const response = await fetch(`${baseUrl}/api/v1/agent-runs/%`);
-      const payload = await response.json() as any;
+      const payload = await response.json() as Record<string, unknown>;
       expect(response.status).toBe(400);
       expect(payload).toMatchObject({
         ok: false,
         error: { code: "invalid_path_encoding" },
       });
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
+  });
+
+  it("does not serve static files through symlinks outside the configured directory", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-static-api-"));
+    const staticDir = path.join(rootDir, "public");
+    const outside = await mkdtemp(path.join(os.tmpdir(), "ebm-static-outside-"));
+    await mkdir(staticDir, { recursive: true });
+    await writeFile(path.join(staticDir, "index.html"), "<main>safe</main>", "utf8");
+    const secret = path.join(outside, "secret.txt");
+    await writeFile(secret, "must not be served", "utf8");
+    await symlink(secret, path.join(staticDir, "leaked.txt"));
+
+    const { api } = await startApi(async () => ({ message: "unused" }), undefined, rootDir, staticDir);
+    const address = api.server.address();
+    if (!address || typeof address === "string") throw new Error("Expected a TCP test server");
+    try {
+      const safe = await fetch(`http://127.0.0.1:${address.port}/`);
+      expect(safe.status).toBe(200);
+      const escaped = await fetch(`http://127.0.0.1:${address.port}/leaked.txt`);
+      expect(escaped.status).toBe(404);
     } finally {
       api.server.close();
       await once(api.server, "close");
@@ -235,11 +277,11 @@ describe("循医研究服务 API", () => {
       });
       const accepted = await created.json() as { run_id: string };
       const result = await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "failed",
       );
       expect(JSON.stringify(result)).not.toContain("RPC_TEST_SENTINEL");
-      expect(result.error.message).toContain("[redacted]");
+      expect(result.error?.message).toContain("[redacted]");
     } finally {
       api.server.close();
       await once(api.server, "close");
@@ -260,7 +302,7 @@ describe("循医研究服务 API", () => {
       });
       const accepted = await created.json() as { run_id: string };
       const result = await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "succeeded",
       );
       expect(receivedInput?.audienceMode).toBe("public");
@@ -345,7 +387,7 @@ describe("循医研究服务 API", () => {
       });
       const accepted = await created.json() as { run_id: string };
       const result = await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "succeeded",
       );
       expect(receivedInput?.thinkingLevel).toBe(thinkingLevel);
@@ -382,7 +424,7 @@ describe("循医研究服务 API", () => {
       });
       const accepted = await created.json() as { run_id: string };
       await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "succeeded",
       );
       expect(receivedInput).toMatchObject({ provider: "xinqiong", model: "deepseek-v4-flash" });
@@ -409,7 +451,7 @@ describe("循医研究服务 API", () => {
       });
       const accepted = await created.json() as { run_id: string };
       const result = await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "succeeded",
       );
       expect(receivedInput?.sessionId).toBe("pi-session-follow-up");
@@ -435,7 +477,7 @@ describe("循医研究服务 API", () => {
       });
       const accepted = await created.json() as { run_id: string };
       const result = await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "succeeded",
       );
       expect(receivedInput?.retrievalPolicy).toBe("mcp_only");
@@ -479,7 +521,7 @@ describe("循医研究服务 API", () => {
       const cancelled = await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}/cancel`, { method: "POST" });
       expect(cancelled.status).toBe(202);
       const result = await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "cancelled",
       );
       expect(result.message).toContain("中断");

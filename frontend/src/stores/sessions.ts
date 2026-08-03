@@ -50,13 +50,16 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
   const patchMessage = (id: string, patch: Partial<Message>) => {
     const message = active.value.messages.find((item) => item.id === id)
-    if (message) Object.assign(message, patch)
+    if (!message) return
+    Object.assign(message, patch)
+    active.value.updatedAt = nowIso()
   }
   const patchMessageIn = (sessionId: string, id: string, patch: Partial<Message>) => {
     const session = byId(sessionId)
     const message = session?.messages.find((item) => item.id === id)
-    if (message) Object.assign(message, patch)
-    if (session) session.updatedAt = nowIso()
+    if (!message || !session) return
+    Object.assign(message, patch)
+    session.updatedAt = nowIso()
   }
   const beginResearchIn = (sessionId: string, question: string) => {
     const session = byId(sessionId)
