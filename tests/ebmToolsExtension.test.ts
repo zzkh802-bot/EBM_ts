@@ -28,11 +28,11 @@ describe("EBM Pi extension tools", () => {
     expect(finalizeGuidance).toContain("same non-blocking clinical preflight");
   });
 
-  it("requires a source path and exposes read-id or line-range anchor locators", () => {
-    const tools = new Map<string, { parameters?: { properties?: Record<string, { pattern?: string }>; required?: string[] } }>();
+  it("exposes read-id or line-range anchor locators", () => {
+    const tools = new Map<string, { parameters?: { properties?: Record<string, { pattern?: string }>; required?: string[] }; promptGuidelines?: string[] }>();
     vi.stubEnv("GUIDELINE_MCP_URL", "");
     registerEbmTools({
-      registerTool: (tool: { name: string; parameters?: { properties?: Record<string, { pattern?: string }>; required?: string[] } }) => tools.set(tool.name, tool),
+      registerTool: (tool: { name: string; parameters?: { properties?: Record<string, { pattern?: string }>; required?: string[] }; promptGuidelines?: string[] }) => tools.set(tool.name, tool),
       on: () => undefined,
       events: { emit: () => undefined },
     } as never);
@@ -46,9 +46,10 @@ describe("EBM Pi extension tools", () => {
     expect(schema?.properties).toHaveProperty("end_text");
     expect(schema?.properties).not.toHaveProperty("quote");
     expect(schema?.properties).not.toHaveProperty("source_span_id");
-    expect(schema?.required).toContain("source_path");
-    expect(schema?.required).toContain("start_text");
-    expect(schema?.required).toContain("end_text");
+    expect(schema?.required ?? []).not.toContain("source_path");
+    expect(schema?.required ?? []).not.toContain("start_text");
+    expect(schema?.required ?? []).not.toContain("end_text");
+    expect(tools.get("evidence_add")?.promptGuidelines?.join("\n")).toContain("Choose exactly one locator mode");
     expect(schema?.properties).not.toHaveProperty("source_id");
   });
 
@@ -62,7 +63,7 @@ describe("EBM Pi extension tools", () => {
     expect(output).toContain("PMID: unknown");
     expect(output).toContain("Abstract preview: Result line one. Result line two.");
     expect(output).toContain("Readable abstract path: data/sessions/session-1/sources/read/trial/full.md");
-    expect(output).toContain("use its read_id with source_path and exact start_text/end_text");
+    expect(output).toContain("choose read_id with start_text/end_text (source_path optional)");
     expect(output).not.toContain("Navigation/context only");
     expect(output).not.toContain("10.1000/test");
     expect(output).not.toContain("Evidence source_path:");
@@ -115,7 +116,7 @@ describe("EBM Pi extension tools", () => {
     expect(text).toContain("readable chunk path: data/sessions/s1/sources/read/hypertension.md");
     expect(text).toContain("candidate material (identical to archived body):");
     expect(text).toContain("candidate materials, not evidence yet");
-    expect(text).toContain("read_id plus exact start_text/end_text");
+    expect(text).toContain("choose read_id plus start_text/end_text (source_path optional)");
     expect(text).not.toContain("offset:");
     expect(text).not.toContain("limit:");
   });

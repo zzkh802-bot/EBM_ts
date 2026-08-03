@@ -43,11 +43,12 @@ export function registerEbmTools(pi: ExtensionAPI): void {
   pi.registerTool({
     name: "evidence_add",
     label: "Add Evidence",
-    description: "Locate and archive a continuous verbatim passage from an archived session source using a read receipt or source line range plus exact boundary text.",
-    promptSnippet: "Archive claim-linked evidence with source path and exact text boundaries",
+    description: "Archive claim-linked evidence using either a read receipt with text boundaries or a source path with a line range.",
+    promptSnippet: "Archive claim-linked evidence with a read receipt or source line range",
     promptGuidelines: [
-      "Use evidence_add only after reading the archived source. Always pass source_path. Prefer the read_id appended to the most recent read result; provide exact start_text and end_text copied from that read. If the read_id is unavailable, pass source_path plus line_start and line_end as the locator fallback.",
-      "start_text and end_text are boundary snippets, not paraphrases or character offsets. They must be exact source text and must identify one continuous passage. Never repair changed numbers, drug names, wording, OCR characters, or join discontinuous passages with ellipses.",
+      "Use evidence_add only after reading the archived source. Choose exactly one locator mode: (1) read_id plus start_text and end_text copied from that read; source_path is optional because the receipt carries it, but may be supplied for cross-checking; or (2) source_path plus line_start and line_end, with text anchors optional.",
+      "start_text and end_text are short boundary snippets, not paraphrases or character offsets. Copy them from the read view; layout, XML/entity, punctuation, and transport-symbol noise may be normalized for matching, but numbers, units, drug names, wording, and OCR characters are never repaired. The two anchors must identify one continuous passage; never join discontinuous passages with ellipses.",
+      "If the tool returns canonical source candidates after a mismatch, copy the candidate text and retry evidence_add. Do not scan the session with bash merely to reconstruct a quote.",
       "Classify provenance honestly. Search snippets and unverified mirrors are discovery-only and cannot support a final report. Use expert_consensus for consensus/position documents rather than calling them guidelines.",
       "For secondary sources, attribute claims to that source; never rewrite a paraphrase as the target guideline's direct recommendation.",
       "Evidence can be preliminary: use confidence=low or moderate for early candidate evidence instead of delaying all evidence_add calls until the end.",
@@ -70,12 +71,12 @@ export function registerEbmTools(pi: ExtensionAPI): void {
         "other",
       ] as const)),
       confidence: Type.Optional(StringEnum(["low", "moderate", "high"] as const)),
-      source_path: Type.String({ description: "Archive path for the source; always required, including when read_id is provided" }),
+      source_path: Type.Optional(Type.String({ description: "Archive path for the source; required in line-range mode, optional when read_id is provided" })),
       read_id: Type.Optional(Type.String({ pattern: "^r[0-9]+$", description: "Read receipt ID returned by read for the same source" })),
       line_start: Type.Optional(Type.Integer({ minimum: 1, description: "1-based fallback source line range start; use with line_end when read_id is unavailable" })),
       line_end: Type.Optional(Type.Integer({ minimum: 1, description: "1-based fallback source line range end; use with line_start when read_id is unavailable" })),
-      start_text: Type.String({ minLength: 2, description: "Exact source text at the beginning of the passage" }),
-      end_text: Type.String({ minLength: 2, description: "Exact source text at the end of the passage" }),
+      start_text: Type.Optional(Type.String({ minLength: 2, description: "Boundary text at the beginning; required with read_id, optional in line-range mode" })),
+      end_text: Type.Optional(Type.String({ minLength: 2, description: "Boundary text at the end; required with read_id, optional in line-range mode" })),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const sessionId = ctx.sessionManager.getSessionId();
@@ -91,12 +92,12 @@ export function registerEbmTools(pi: ExtensionAPI): void {
       };
       const node = await withFileMutationQueue(indexPath, () => addEvidenceFromAnchors({
         ...base,
-        sourcePath: evidenceSourcePath(params.source_path, sessionId, sessionDir),
+        ...(params.source_path ? { sourcePath: evidenceSourcePath(params.source_path, sessionId, sessionDir) } : {}),
         ...(params.read_id ? { readId: params.read_id } : {}),
         ...(params.line_start === undefined ? {} : { lineStart: params.line_start }),
         ...(params.line_end === undefined ? {} : { lineEnd: params.line_end }),
-        startText: params.start_text,
-        endText: params.end_text,
+        ...(params.start_text === undefined ? {} : { startText: params.start_text }),
+        ...(params.end_text === undefined ? {} : { endText: params.end_text }),
       }));
       const evidencePath = path.posix.join("evidence", `${node.id}.md`);
       pi.events.emit("ebm:evidence_added", { sessionId, evidenceId: node.id, path: evidencePath });

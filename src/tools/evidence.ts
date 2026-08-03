@@ -1,8 +1,8 @@
 import { mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
-import { locateEvidenceAnchors, locateEvidenceQuote, type EvidenceMatchMode } from "./evidenceLocator.js";
-import { resolveReadReceipt } from "./readRegistry.js";
+import { locateEvidenceAnchors, locateEvidenceQuote, locateEvidenceRange, type EvidenceMatchMode } from "./evidenceLocator.js";
+import { resolveReadReceipt, type ReadReceipt } from "./readRegistry.js";
 import { resolveSourceId, sourceIdentityForPath } from "./sourceIdentity.js";
 import { formatBeijingTimestamp } from "./time.js";
 
@@ -55,12 +55,12 @@ export type EvidenceAddInput = {
 };
 
 export type EvidenceAnchorAddInput = Omit<EvidenceAddInput, "sourcePath" | "sourceId" | "quote"> & {
-  sourcePath: string;
+  sourcePath?: string;
   readId?: string;
   lineStart?: number;
   lineEnd?: number;
-  startText: string;
-  endText: string;
+  startText?: string;
+  endText?: string;
 };
 
 function evidenceQuoteQualityErrors(input: {
@@ -214,33 +214,43 @@ export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode
 }
 
 export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Promise<EvidenceNode> {
-  if (!input.sourcePath.trim()) throw new Error("source_path is required");
   if (Boolean(input.lineStart) !== Boolean(input.lineEnd)) throw new Error("line_start and line_end must be provided together");
-  const sourcePath = input.sourcePath.replaceAll("\\", "/");
-  assertRelativeSafe(sourcePath);
-  const normalizedSourcePath = path.posix.normalize(sourcePath);
-  if (normalizedSourcePath.startsWith("data/sessions/")) throw new Error("source_path must be relative to the current session workspace");
-  if (normalizedSourcePath.startsWith("sources/search/")) {
-    throw new Error("search snapshots are discovery artifacts; create evidence from an individually archived sources/read document");
-  }
-  const sourceAbs = await resolveExistingSessionPath(input.sessionDir, normalizedSourcePath);
-  const source = await readFile(sourceAbs, "utf8");
   let lineStart = input.lineStart;
   let lineEnd = input.lineEnd;
+  let readIdMode = false;
+  let normalizedSourcePath: string;
+  let receipt: ReadReceipt | undefined;
   if (input.readId) {
-    const receipt = await resolveReadReceipt(input.sessionDir, input.readId);
+    readIdMode = true;
+    receipt = await resolveReadReceipt(input.sessionDir, input.readId);
+    normalizedSourcePath = normalizeEvidenceSourcePath(input.sourcePath ?? receipt.sourcePath);
     if (receipt.sourcePath !== normalizedSourcePath) throw new Error("read_id does not match source_path");
-    const sourceHash = createHash("sha256").update(source).digest("hex");
-    if (sourceHash !== receipt.sourceHash) throw new Error("read_id no longer matches the archived source revision");
     if (lineStart !== undefined && (lineStart !== receipt.lineStart || lineEnd !== receipt.lineEnd)) {
       throw new Error("line range does not match read_id");
     }
     lineStart = receipt.lineStart;
     lineEnd = receipt.lineEnd;
-  } else if (lineStart === undefined || lineEnd === undefined) {
-    throw new Error("provide read_id or line_start and line_end");
+  } else {
+    if (!input.sourcePath?.trim()) throw new Error("source_path is required when read_id is absent");
+    normalizedSourcePath = normalizeEvidenceSourcePath(input.sourcePath);
+    if (lineStart === undefined || lineEnd === undefined) {
+      throw new Error("provide read_id or source_path with line_start and line_end");
+    }
   }
-  const located = locateEvidenceAnchors(source, input.startText, input.endText, { lineStart, lineEnd });
+  const sourceAbs = await resolveExistingSessionPath(input.sessionDir, normalizedSourcePath);
+  const source = await readFile(sourceAbs, "utf8");
+  if (receipt) {
+    const sourceHash = createHash("sha256").update(source).digest("hex");
+    if (sourceHash !== receipt.sourceHash) throw new Error("read_id no longer matches the archived source revision");
+  }
+  const hasStart = Boolean(input.startText?.trim());
+  const hasEnd = Boolean(input.endText?.trim());
+  if (readIdMode && (!hasStart || !hasEnd)) {
+    throw new Error("read_id requires both start_text and end_text; use line_start and line_end when text anchors are unavailable");
+  }
+  const located = hasStart && hasEnd
+    ? await locateAnchorsOrRange(source, input.startText!, input.endText!, lineStart!, lineEnd!, readIdMode)
+    : locateEvidenceRange(source, lineStart!, lineEnd!, "line_range");
   return persistLocatedEvidence({
     sessionDir: input.sessionDir,
     question: input.question,
@@ -249,6 +259,36 @@ export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Pro
     ...(input.provenance ? { provenance: input.provenance } : {}),
     ...(input.confidence ? { confidence: input.confidence } : {}),
   }, normalizedSourcePath, source, located);
+}
+
+function normalizeEvidenceSourcePath(value: string): string {
+  const sourcePath = value.replaceAll("\\", "/");
+  assertRelativeSafe(sourcePath);
+  const normalized = path.posix.normalize(sourcePath);
+  if (normalized.startsWith("data/sessions/")) throw new Error("source_path must be relative to the current session workspace");
+  if (normalized.startsWith("sources/search/")) {
+    throw new Error("search snapshots are discovery artifacts; create evidence from an individually archived sources/read document");
+  }
+  return normalized;
+}
+
+async function locateAnchorsOrRange(
+  source: string,
+  startText: string,
+  endText: string,
+  lineStart: number,
+  lineEnd: number,
+  readIdMode: boolean,
+): Promise<ReturnType<typeof locateEvidenceAnchors>> {
+  try {
+    return locateEvidenceAnchors(source, startText, endText, { lineStart, lineEnd });
+  } catch (error) {
+    if (!(error instanceof Error)) throw error;
+    // Anchor text is a precision aid, not a reason to lose an otherwise
+    // version-checked read/line record. Keep the bounded quote and expose its
+    // broad locator mode in evidence metadata when matching is unsuccessful.
+    return locateEvidenceRange(source, lineStart, lineEnd, readIdMode ? "read_id_range" : "line_range");
+  }
 }
 
 async function persistLocatedEvidence(
@@ -367,7 +407,7 @@ function parseEvidenceMarkdown(markdown: string): EvidenceNode {
   const confidence = ({ "低": "low", "中": "moderate", "高": "high" } as Record<string, string>)[rawConfidence] ?? rawConfidence;
   if (!(["low", "moderate", "high"] as string[]).includes(confidence)) throw new Error(`invalid evidence confidence: ${confidence}`);
   const matchMode = metadata.get("source_match_mode");
-  if (matchMode !== undefined && matchMode !== "exact" && matchMode !== "layout_normalized") {
+  if (matchMode !== undefined && !["exact", "layout_normalized", "noise_normalized", "read_id_range", "line_range"].includes(String(matchMode))) {
     throw new Error(`invalid evidence source_match_mode: ${String(matchMode)}`);
   }
   const charStart = optionalNumber("source_char_start");

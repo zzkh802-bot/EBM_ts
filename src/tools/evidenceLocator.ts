@@ -1,4 +1,4 @@
-export type EvidenceMatchMode = "exact" | "layout_normalized";
+export type EvidenceMatchMode = "exact" | "layout_normalized" | "noise_normalized" | "read_id_range" | "line_range";
 
 export type LocatedEvidenceQuote = {
   quote: string;
@@ -25,6 +25,7 @@ type ScoredSpan = { start: number; end: number; score: number; matchedBy: Eviden
 const IGNORED_LAYOUT_CHARACTERS = /[\u200B-\u200D\u2060\uFEFF\u00AD]/u;
 const WHITESPACE = /[\s\u00A0\u3000]/u;
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+const PUNCTUATION_OR_SYMBOL = /[\p{P}\p{S}]/u;
 const PARAGRAPH_BREAK = "\uE000";
 const EDGE_PUNCTUATION = /^[\s"'“”‘’`*_#\-–—:：;；,，.。!?！？()（）\[\]【】{}]+|[\s"'“”‘’`*_#\-–—:：;；,，.。!?！？()（）\[\]【】{}]+$/gu;
 
@@ -105,6 +106,65 @@ export function normalizeEvidenceLayout(value: string): NormalizedText {
     index = nextIndex;
   }
   return { value: output.map((item) => item.value).join(""), chars: output, presentationOffsets };
+}
+
+function decodeMatchEntities(value: string): string {
+  const named: Record<string, string> = { amp: "&", apos: "'", gt: ">", lt: "<", nbsp: " ", quot: '"' };
+  return value
+    .replace(/&#x([0-9a-f]+);/gi, (_match, hex: string) => String.fromCodePoint(Number.parseInt(hex, 16)))
+    .replace(/&#([0-9]+);/g, (_match, decimal: string) => String.fromCodePoint(Number.parseInt(decimal, 10)))
+    .replace(/&([a-z]+);/gi, (match, name: string) => named[name.toLowerCase()] ?? match);
+}
+
+/** Remove transport/XML/punctuation noise for matching while retaining a map to source. */
+function normalizeEvidenceNoise(value: string): NormalizedText {
+  const layout = normalizeEvidenceLayout(value);
+  const output: NormalizedChar[] = [];
+  const presentationOffsets = new Set(layout.presentationOffsets);
+  const markSkipped = (item: NormalizedChar): void => {
+    for (let offset = item.sourceStart; offset < item.sourceEnd; offset += 1) presentationOffsets.add(offset);
+  };
+  const chars = layout.chars;
+  let index = 0;
+  while (index < chars.length) {
+    const item = chars[index]!;
+    const tagPrefix = chars.slice(index, index + 4).map((char) => char.value).join("");
+    if (item.value === "<" && /^<[/!?]?[A-Za-z]/u.test(tagPrefix)) {
+      let end = index;
+      while (end < chars.length && chars[end]!.value !== ">") end += 1;
+      if (end < chars.length) {
+        for (let cursor = index; cursor <= end; cursor += 1) markSkipped(chars[cursor]!);
+        index = end + 1;
+        continue;
+      }
+    }
+    if (item.value === "&") {
+      let end = index;
+      while (end < chars.length && chars[end]!.value !== ";" && end - index <= 16) end += 1;
+      if (end < chars.length && chars[end]!.value === ";") {
+        for (let cursor = index; cursor <= end; cursor += 1) markSkipped(chars[cursor]!);
+        index = end + 1;
+        continue;
+      }
+    }
+    if (isWhitespace(item.value) || PUNCTUATION_OR_SYMBOL.test(item.value)) {
+      markSkipped(item);
+      index += 1;
+      continue;
+    }
+    output.push(item);
+    index += 1;
+  }
+  return { value: output.map((item) => item.value).join(""), chars: output, presentationOffsets };
+}
+
+function numericSignature(value: string): string[] {
+  return (decodeMatchEntities(value).match(/\d+(?:\s*[.,·]\s*\d+)?\s*[%‰]?/gu) ?? [])
+    .map((token) => token.replace(/[\s·]/gu, "").replace(/,/g, "."));
+}
+
+function numericSignaturesAgree(source: string, attempted: string): boolean {
+  return JSON.stringify(numericSignature(source)) === JSON.stringify(numericSignature(attempted));
 }
 
 function occurrences(haystack: string, needle: string): number[] {
@@ -360,8 +420,8 @@ function lineScope(source: string, lineStart?: number, lineEnd?: number): { star
 
 /**
  * Locate a quote using exact beginning/end text anchors inside a bounded read
- * result or source line range. Unlike quote recovery, this never edits or
- * fuzzily repairs model-provided text.
+ * result or source line range. It tolerates layout-only differences such as
+ * read-view line wrapping, while refusing to repair clinical wording.
  */
 export function locateEvidenceAnchors(
   source: string,
@@ -373,25 +433,132 @@ export function locateEvidenceAnchors(
   const endNeedle = endText.trim();
   if (!startNeedle || !endNeedle) throw new Error("start_text and end_text are required");
   const scope = lineScope(source, options.lineStart, options.lineEnd);
-  const starts = occurrences(source, startNeedle).filter((index) => index >= scope.start && index + startNeedle.length <= scope.end);
-  const ends = occurrences(source, endNeedle).filter((index) => index >= scope.start && index + endNeedle.length <= scope.end);
-  const pairs: Array<{ start: number; end: number }> = [];
-  for (const start of starts) {
-    for (const end of ends) {
-      if (end >= start + startNeedle.length) pairs.push({ start, end: end + endNeedle.length });
-    }
-  }
-  if (pairs.length === 1) return locationFromOriginal(source, pairs[0]!.start, pairs[0]!.end, "exact");
-  const candidates = pairs.slice(0, 3).map((pair) => ({
+  const exactPairs = anchorPairs(source, startNeedle, endNeedle, scope);
+  if (exactPairs.length === 1) return locationFromOriginal(source, exactPairs[0]!.start, exactPairs[0]!.end, "exact");
+
+  // A read view may reflow a source line break into a space, or include
+  // harmless zero-width/Markdown presentation characters. Normalize only
+  // those layout artifacts and map the match back to the canonical source.
+  const normalizedSource = normalizeEvidenceLayout(source);
+  const normalizedStart = normalizeEvidenceLayout(startNeedle).value;
+  const normalizedEnd = normalizeEvidenceLayout(endNeedle).value;
+  const normalizedPairs = anchorPairsFromNormalized(normalizedSource, source, normalizedStart, normalizedEnd, scope);
+  if (normalizedPairs.length === 1) return locationFromOriginal(source, normalizedPairs[0]!.start, normalizedPairs[0]!.end, "layout_normalized");
+
+  // Last matching pass: ignore punctuation, XML tags/entities, and transport
+  // whitespace, but require the numeric tokens in each boundary to remain
+  // identical (3.0 ≠ 30; 1·7 == 1.7). This is a locator aid, not a rewrite.
+  const noiseSource = normalizeEvidenceNoise(source);
+  const noiseStart = normalizeEvidenceNoise(decodeMatchEntities(startNeedle)).value;
+  const noiseEnd = normalizeEvidenceNoise(decodeMatchEntities(endNeedle)).value;
+  const noisePairs = anchorPairsFromNormalized(noiseSource, source, noiseStart, noiseEnd, scope, {
+    start: startNeedle,
+    end: endNeedle,
+  });
+  if (noisePairs.length === 1) return locationFromOriginal(source, noisePairs[0]!.start, noisePairs[0]!.end, "noise_normalized");
+
+  const pairs = exactPairs.length ? exactPairs : normalizedPairs.length ? normalizedPairs : noisePairs;
+  const candidates = pairs.length
+    ? pairs.slice(0, 3).map((pair) => ({
     quote: source.slice(pair.start, pair.end),
     lineStart: lineAt(source, pair.start),
     lineEnd: lineAt(source, Math.max(pair.start, pair.end - 1)),
     charStart: pair.start,
     charEnd: pair.end,
     matchedBy: "boundary_anchors" as const,
-  }));
+    }))
+    : deduplicateCandidates(source, [
+      ...boundaryCandidateSpans(normalizedSource, normalizedStart),
+      ...boundaryCandidateSpans(normalizedSource, normalizedEnd),
+      ...boundaryCandidateSpans(noiseSource, noiseStart),
+      ...boundaryCandidateSpans(noiseSource, noiseEnd),
+    ]);
   if (pairs.length > 1) {
     throw new EvidenceQuoteLocationError(`start_text/end_text 在限定范围内匹配到 ${pairs.length} 处，无法唯一定位。请提供更具体的边界文本。`, candidates);
   }
-  throw new EvidenceQuoteLocationError("未能在限定的 read 片段或行号范围内找到 start_text/end_text。请重新读取来源并使用原文边界。", candidates);
+  const detail = candidates.length
+    ? [
+      "未能在限定的 read 片段或行号范围内唯一定位 start_text/end_text。以下是仍然匹配到的原文候选；候选尚未登记为证据。",
+      formatCandidates(candidates),
+      "请从候选中复制最小、充分、连续的原文边界后重试 evidence_add；不要改写数字、药名或措辞。",
+    ].join("\n\n")
+    : "未能在限定的 read 片段或行号范围内找到 start_text/end_text。请重新读取来源并使用原文边界。";
+  throw new EvidenceQuoteLocationError(detail, candidates);
+}
+
+/** Archive the bounded line range when no reliable text anchors are available. */
+export function locateEvidenceRange(
+  source: string,
+  lineStart: number,
+  lineEnd: number,
+  matchMode: "read_id_range" | "line_range",
+): LocatedEvidenceQuote {
+  const scope = lineScope(source, lineStart, lineEnd);
+  let end = scope.end;
+  while (end > scope.start && /\s/u.test(source[end - 1]!)) end -= 1;
+  if (end <= scope.start) throw new Error("the selected source line range is empty");
+  return locationFromOriginal(source, scope.start, end, matchMode);
+}
+
+type AnchorPair = { start: number; end: number };
+
+function pairAnchorOffsets(starts: Array<{ start: number; end: number }>, ends: Array<{ start: number; end: number }>): AnchorPair[] {
+  const pairs: AnchorPair[] = [];
+  const seen = new Set<string>();
+  for (const start of starts) {
+    for (const end of ends) {
+      if (end.start < start.end) continue;
+      const key = `${start.start}:${end.end}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      pairs.push({ start: start.start, end: end.end });
+    }
+  }
+  return pairs;
+}
+
+function anchorPairs(source: string, startNeedle: string, endNeedle: string, scope: { start: number; end: number }): AnchorPair[] {
+  const starts = occurrences(source, startNeedle)
+    .map((start) => ({ start, end: start + startNeedle.length }))
+    .filter((match) => match.start >= scope.start && match.end <= scope.end);
+  const ends = occurrences(source, endNeedle)
+    .map((start) => ({ start, end: start + endNeedle.length }))
+    .filter((match) => match.start >= scope.start && match.end <= scope.end);
+  return pairAnchorOffsets(starts, ends);
+}
+
+function anchorPairsFromNormalized(
+  source: NormalizedText,
+  originalSource: string,
+  startNeedle: string,
+  endNeedle: string,
+  scope: { start: number; end: number },
+  numericGuard?: { start: string; end: string },
+): AnchorPair[] {
+  const starts = occurrences(source.value, startNeedle).flatMap((start) => {
+    const mapped = originalSpan(source, start, start + startNeedle.length);
+    return mapped && mapped.start >= scope.start && mapped.end <= scope.end
+      && (!numericGuard || numericSignaturesAgree(originalSource.slice(mapped.start, mapped.end), numericGuard.start))
+      ? [{ ...mapped, normalizedStart: start, normalizedEnd: start + startNeedle.length }]
+      : [];
+  });
+  const ends = occurrences(source.value, endNeedle).flatMap((start) => {
+    const mapped = originalSpan(source, start, start + endNeedle.length);
+    return mapped && mapped.start >= scope.start && mapped.end <= scope.end
+      && (!numericGuard || numericSignaturesAgree(originalSource.slice(mapped.start, mapped.end), numericGuard.end))
+      ? [{ ...mapped, normalizedStart: start, normalizedEnd: start + endNeedle.length }]
+      : [];
+  });
+  const pairs: AnchorPair[] = [];
+  const seen = new Set<string>();
+  for (const start of starts) {
+    for (const end of ends) {
+      if (end.normalizedStart < start.normalizedEnd) continue;
+      const key = `${start.start}:${end.end}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      pairs.push({ start: start.start, end: end.end });
+    }
+  }
+  return pairs;
 }

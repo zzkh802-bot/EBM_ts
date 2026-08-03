@@ -58,7 +58,7 @@ export function archiveToolText(
       `Read any archive window with read(path=${JSON.stringify(readablePath)}, offset=N, limit=M).`,
       ...(options.citationEligible === false
         ? ["This search snapshot is discovery history and cannot be passed to evidence_add; use an individually archived sources/read document."]
-        : ["After read, use the returned read_id with source_path, start_text, and end_text in evidence_add. If read_id is unavailable, use source_path with line_start and line_end; always use exact source boundary text."]),
+        : ["After read, use the returned read_id with start_text/end_text (source_path is optional), or use source_path with line_start/line_end (text anchors are optional). Layout/XML/entity/punctuation noise is normalized for matching, but clinical numbers and wording are not repaired."]),
       ...(excerpt.truncated ? [`Continue without gaps (the last preview line is intentionally repeated): read(path=${JSON.stringify(readablePath)}, offset=${Math.max(record.bodyLineStart, visibleEnd)}, limit=200).`] : []),
       ...(readableTocPath ? [`Read the complete section index with read(path=${JSON.stringify(readableTocPath)}).`] : []),
       ...(map.items.length ? ["", `Source map${map.total > map.items.length ? ` (first ${map.items.length} of ${map.total}; complete index is in toc.md)` : ""}:`, ...map.items] : []),

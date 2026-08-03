@@ -85,7 +85,7 @@ export function renderGuidelineReadText(
     `Readable guideline path: ${readablePath}`,
     ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
     `Archive lines: 1-${totalLines} (${totalLines} total lines; 1-based).`,
-    "After read, use the returned read_id with source_path, start_text, and end_text in evidence_add. If read_id is unavailable, use source_path with line_start and line_end; always use exact source boundary text.",
+    "After read, choose one evidence_add locator: the returned read_id with start_text/end_text (source_path optional), or source_path with line_start/line_end (text anchors optional). Layout/XML/entity/punctuation noise is normalized; clinical numbers and wording are not repaired.",
     ...(headings.length ? ["", "Best-effort navigation index (generated from cleaned Markdown; verify against full text):", ...headings] : []),
     "",
     `Informative preview lines ${previewStart}-${previewEnd}:`,
@@ -112,7 +112,7 @@ export function renderRetrieveCards(title: string, items: GuidelineRetrieveItem[
     }
     lines.push("");
   });
-  lines.push("These are candidate materials, not evidence yet. Read the relevant source path, then use read_id plus exact start_text/end_text with evidence_add. If the read_id is unavailable, use the displayed source line range as the fallback.");
+  lines.push("These are candidate materials, not evidence yet. Read the relevant source path, then choose read_id plus start_text/end_text (source_path optional), or source_path plus line_start/line_end. Layout/XML/entity/punctuation noise is normalized; if candidates are returned after a mismatch, copy them and retry instead of scanning with bash.");
   return lines.join("\n");
 }
 

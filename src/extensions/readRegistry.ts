@@ -42,7 +42,7 @@ export function registerReadRegistry(pi: Pick<ExtensionAPI, "registerTool" | "on
     const receipt = await registerReadReceipt({ sessionDir, sourcePath, source, lineStart: startLine, lineEnd: endLine });
     const text = textContent(event);
     return {
-      content: [...event.content, { type: "text", text: `\n\n[read_id: ${receipt.id}; source lines ${receipt.lineStart}-${receipt.lineEnd}. Use this ID with evidence_add, or fall back to source_path + line_start/line_end.]` }],
+      content: [...event.content, { type: "text", text: `\n\n[read_id: ${receipt.id}; source lines ${receipt.lineStart}-${receipt.lineEnd}. With this ID, provide start_text/end_text; source_path is optional. Without this ID, use source_path + line_start/line_end.]` }],
       details: { ...(event.details && typeof event.details === "object" ? event.details : {}), readId: receipt.id, sourcePath, sourceLines: [receipt.lineStart, receipt.lineEnd], sourcePreview: receipt.preview, originalTextChars: text.length },
     };
   });
@@ -50,7 +50,7 @@ export function registerReadRegistry(pi: Pick<ExtensionAPI, "registerTool" | "on
   pi.registerTool({
     name: "read_list",
     label: "List Read Receipts",
-    description: "List archived read receipts from the current session with source paths, line ranges, and two-line previews so read_id values can be recovered before evidence_add.",
+    description: "List archived read receipts from the current session with source paths, line ranges, and two-line previews so read_id values and their required text anchors can be recovered before evidence_add.",
     promptSnippet: "Recover read IDs and their source previews",
     parameters: Type.Object({}),
     async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
