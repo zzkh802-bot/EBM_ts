@@ -64,7 +64,7 @@ describe('Agent run DTO', () => {
     }, 'openai', 'gpt-5-mini')
     expect(dto).toMatchObject({
       question: '完整问题', session_id: 'remote-1',
-      audience_mode: 'public', thinking_level: 'max', search_enabled: false,
+      audience_mode: 'public', thinking_level: 'max', search_enabled: true,
       provider: 'openai', model: 'gpt-5-mini',
     })
     expect(dto).not.toHaveProperty('retrieval_policy')

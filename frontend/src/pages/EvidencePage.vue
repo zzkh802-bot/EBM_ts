@@ -237,7 +237,6 @@ const handlePrimaryAction = () => {
   }
   void submit()
 }
-const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !preferences.searchEnabled }
 </script>
 
 <template>
@@ -298,7 +297,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
               <option value="max">max · 最大</option>
             </select>
           </label>
-          <button class="composer-option" type="button" :aria-pressed="preferences.searchEnabled" :class="{ active: preferences.searchEnabled }" :disabled="run.busy" @click="toggleSearch">证据检索</button>
+          <span class="composer-option active" aria-label="证据检索已开启">证据检索已开启</span>
           <span v-if="runtimeConfigError" class="runtime-error">{{ runtimeConfigError }}</span>
         </div>
         <button class="send-button" :class="{ 'queue-mode': run.busy && question.trim() }" type="button" :aria-label="primaryActionLabel" @click="handlePrimaryAction">
@@ -477,7 +476,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
         <div class="evidence-source-list">
           <div><span>服务</span><small>{{ providers.find((item) => item.provider === preferences.provider)?.provider_label || '未选择' }}</small></div>
           <div><span>模型</span><small>{{ modelsForProvider.find((item) => item.model === preferences.model)?.model_label || '使用服务器默认值' }}</small></div>
-          <div><span>检索</span><small>{{ preferences.searchEnabled ? '按需调用证据工具' : '仅使用当前会话材料' }}</small></div>
+          <div><span>检索</span><small>按需调用证据工具</small></div>
         </div>
       </section>
       <section v-if="subscriptionProviders.length" class="workspace-info-card account-connect-card">
@@ -519,7 +518,7 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
         <div class="workspace-info-title"><span>当前工作模式</span></div>
         <div class="workspace-mode-list">
           <div><span>推理强度</span><strong>{{ thinkingLevelLabel(preferences.thinkingLevel) }}</strong></div>
-          <div><span>证据检索</span><strong :class="{ 'mode-on': preferences.searchEnabled }">{{ preferences.searchEnabled ? '开启' : '关闭' }}</strong></div>
+          <div><span>证据检索</span><strong class="mode-on">开启</strong></div>
           <div><span>工作台</span><strong>医生专业版</strong></div>
         </div>
       </section>

@@ -72,6 +72,13 @@ describe("循医研究服务 API", () => {
     expect(publicPrompt).toContain("本轮外部临床知识检索仅使用指南库")
   });
 
+  it("keeps the evidence toolchain available when a legacy client sends search_enabled=false", () => {
+    const prompt = buildAgentPrompt(promptInput({ searchEnabled: false }));
+    expect(prompt).toContain("source_library_search")
+    expect(prompt).toContain("可按需使用已配置的检索工具")
+    expect(prompt).not.toContain("只使用当前会话中的既有材料")
+  });
+
   it("returns verified source excerpts for a numbered report citation without exposing evidence IDs", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-citation-api-"));
     const sessionId = "citation-session";

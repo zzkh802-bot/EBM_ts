@@ -45,7 +45,7 @@ export function buildResearchRunRequest(
     ...(sessionId ? { session_id: sessionId } : {}),
     audience_mode: mode.audienceMode,
     thinking_level: mode.thinkingLevel,
-    search_enabled: mode.searchEnabled,
+    search_enabled: true,
     ...(provider ? { provider } : {}),
     ...(model ? { model } : {}),
   }
