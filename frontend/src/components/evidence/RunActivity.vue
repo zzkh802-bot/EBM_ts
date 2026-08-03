@@ -42,6 +42,23 @@ const toolLabels: Record<string, string> = {
   read: '读取研究材料',
 }
 
+const shellActionLabel = (value: unknown) => {
+  const command = typeof value === 'object' && value !== null && 'command' in value && typeof value.command === 'string'
+    ? value.command
+    : ''
+  const normalized = command.toLowerCase()
+  if (/\b(rg|grep|egrep|fgrep)\b/.test(normalized)) return '查找文件内容'
+  if (/\b(sed|head|tail|awk|cut)\b/.test(normalized)) return '读取文件片段'
+  if (/\b(ls|find|tree|du|pwd)\b/.test(normalized)) return '查看文件目录'
+  if (/\b(env|printenv|set)\b/.test(normalized)) return '检查运行环境'
+  return '执行本地辅助命令'
+}
+
+const shellCommandDetail = (value: unknown) => {
+  if (typeof value !== 'object' || value === null || !('command' in value) || typeof value.command !== 'string') return ''
+  return value.command.replace(/\s+/g, ' ').trim().slice(0, 240)
+}
+
 const parseTime = (value?: string) => {
   const timestamp = value ? Date.parse(value) : Number.NaN
   return Number.isFinite(timestamp) ? timestamp : undefined
@@ -77,7 +94,8 @@ const toolActivity = computed(() => (props.tools || [])
     const endedAt = completed ?? (status === 'running' ? currentTime.value : undefined)
     return {
       id: typeof tool.id === 'string' ? tool.id : `${name}-${index}`,
-      label: toolLabels[name] || name.replaceAll('_', ' '),
+      label: name === 'bash' ? shellActionLabel(tool.arguments) : toolLabels[name] || name.replaceAll('_', ' '),
+      detail: name === 'bash' ? shellCommandDetail(tool.arguments) : '',
       status,
       duration: formatDuration(started === undefined || endedAt === undefined ? undefined : endedAt - started),
     }
@@ -119,7 +137,7 @@ const hasActivity = computed(() => Boolean(props.pending || errors.value.length 
       <ol>
         <li v-for="tool in toolActivity" :key="tool.id" :class="tool.status">
           <i aria-hidden="true" />
-          <span>{{ tool.label }}</span>
+          <span :title="tool.detail || tool.label">{{ tool.label }}</span>
           <small>{{ tool.duration }}</small>
         </li>
       </ol>
