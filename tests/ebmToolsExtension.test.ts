@@ -10,6 +10,23 @@ import { initializePiSessionDirectory, piReadableSessionPath } from "../src/exte
 
 describe("EBM Pi extension tools", () => {
   afterEach(() => vi.unstubAllEnvs());
+  it("provides a non-blocking clinical preflight immediately before report tools", () => {
+    const tools = new Map<string, { promptGuidelines?: string[] }>();
+    vi.stubEnv("GUIDELINE_MCP_URL", "");
+    registerEbmTools({
+      registerTool: (tool: { name: string; promptGuidelines?: string[] }) => tools.set(tool.name, tool),
+      on: () => undefined,
+      events: { emit: () => undefined },
+    } as never);
+
+    const writeGuidance = tools.get("report_write")?.promptGuidelines?.join("\n") ?? "";
+    const finalizeGuidance = tools.get("report_finalize")?.promptGuidelines?.join("\n") ?? "";
+    expect(writeGuidance).toContain("non-blocking clinical preflight");
+    expect(writeGuidance).toContain("keep unspecified facts unknown");
+    expect(writeGuidance).toContain("recalculate any stated clinical score");
+    expect(finalizeGuidance).toContain("same non-blocking clinical preflight");
+  });
+
   it("exposes quote-based evidence parameters without model-authored line coordinates", () => {
     const tools = new Map<string, { parameters?: { properties?: Record<string, unknown>; required?: string[] } }>();
     vi.stubEnv("GUIDELINE_MCP_URL", "");

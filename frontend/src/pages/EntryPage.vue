@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { PATIENT_INTAKE_ENABLED } from '../config/features'
 
 const router = useRouter()
 </script>
@@ -22,12 +23,17 @@ const router = useRouter()
           <p>持续追踪临床问题，检索、核验并形成可复核的正式报告。</p>
           <em>进入工作台</em>
         </button>
-        <button class="entry-choice patient" type="button" @click="router.push('/patient/intake')">
+        <button
+          class="entry-choice patient"
+          type="button"
+          :disabled="!PATIENT_INTAKE_ENABLED"
+          @click="router.push('/patient/intake')"
+        >
           <span class="entry-choice-icon" aria-hidden="true">↗</span>
           <span class="entry-choice-overline">就医前准备</span>
           <strong>我是患者</strong>
           <p>耐心说清楚这次的困扰，整理一份可以带给医生的就诊说明。</p>
-          <em>开始准备</em>
+          <em>{{ PATIENT_INTAKE_ENABLED ? '开始准备' : '正在开发' }}</em>
         </button>
       </div>
     </section>

@@ -23,6 +23,7 @@ export function registerReportTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
       "Pass the hidden evidence mapping through the references parameter: citation numbers represent bibliographic sources. The same number may appear multiple times only when the citation text is the same, to map one source to multiple supporting evidence_id records. Do not use the same number for different citations.",
       "When references is provided, you may omit the Markdown reference list; the tool will append a renderable numbered reference section. Every reference number must be used by at least one decision-relevant body citation, and every body citation [n] must exist in references.",
       "Before calling report_write, run a citation preflight mentally: collect all body citation numbers before the reference section and all references[].number values as sets; the two sets must be identical. Duplicate reference numbers are allowed only for identical citation text mapping to additional evidence_id records.",
+      "Before calling report_write, run a non-blocking clinical preflight: re-check case facts against the user's original information; keep unspecified facts unknown; recalculate any stated clinical score from its listed components; make patient-level eligibility and safety conclusions conditional on all required facts; and omit or explicitly qualify time-sensitive claims that lack a current authoritative source.",
       "Write an argued but concise EBM report: decompose the user's decision into sub-questions and claims, integrate evidence into reasoning, cite each key claim with numbered references, and avoid source-by-source lists or unnecessary method-log detail.",
       "Set allow_no_evidence only when the report explicitly documents an evidence gap rather than making supported claims.",
     ],
@@ -91,6 +92,7 @@ export function registerReportTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
       "Use this after report_write saved an unverified draft and the draft has been fixed with read/edit.",
       "Provide the draft_path returned by report_write and the references mapping. The tool reads the draft Markdown from disk, verifies citations/evidence, and writes the final report under reports/ on success.",
       "The draft reference section is only a preview. report_finalize regenerates the final reference section from the references parameter, so citation/reference changes must be reflected in references; editing only the draft reference text is not enough.",
+      "Before finalizing, run the same non-blocking clinical preflight as for report_write: re-check case facts, recompute stated scores, preserve unknowns, condition patient-level eligibility or safety conclusions, and qualify unsupported time-sensitive claims.",
       "If finalization fails, edit only the reported local problem in the same draft and call report_finalize again; do not regenerate the whole report unless the clinical content itself is wrong.",
     ],
     parameters: Type.Object({

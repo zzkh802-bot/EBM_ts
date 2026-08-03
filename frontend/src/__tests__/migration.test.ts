@@ -67,6 +67,7 @@ describe('Agent run DTO', () => {
       audience_mode: 'public', thinking_level: 'max', search_enabled: false,
       provider: 'openai', model: 'gpt-5-mini',
     })
+    expect(dto).not.toHaveProperty('retrieval_policy')
     expect(responseText({ report_markdown: 'report', agent_answer: 'answer', message: 'message' })).toBe('answer')
     expect(responseText({ agent_answer: 'answer', message: 'message' })).toBe('answer')
   })
