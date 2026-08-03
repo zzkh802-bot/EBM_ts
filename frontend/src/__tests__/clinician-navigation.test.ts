@@ -77,6 +77,8 @@ describe('医生工作台入口与新建问题', () => {
 
     expect(wrapper.find('.hero-dp').exists()).toBe(true)
     expect(wrapper.find('.conversation-context').exists()).toBe(false)
+    expect(wrapper.find('.chat-message').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('既往问题')
     expect(sessions.sessions).toHaveLength(1)
 
     await wrapper.get('textarea[aria-label="医学问题"]').setValue('新的临床问题')
@@ -86,5 +88,7 @@ describe('医生工作台入口与新建问题', () => {
     expect(router.currentRoute.value.path).toBe('/clinician/evidence')
     expect(sessions.sessions).toHaveLength(2)
     expect(sessions.active.clinicalQuestion).toBe('新的临床问题')
+    expect(wrapper.find('.chat-message').exists()).toBe(true)
+    expect(wrapper.text()).toContain('新的临床问题')
   })
 })

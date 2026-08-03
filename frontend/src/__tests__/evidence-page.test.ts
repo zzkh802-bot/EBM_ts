@@ -13,6 +13,16 @@ describe('医生工作台回答展示', () => {
     setActivePinia(createPinia())
     const sessions = useSessionsStore()
     sessions.active.messages = [{
+      id: 'question-1',
+      role: 'user',
+      title: '临床问题',
+      content: '该方案是否应优先使用？',
+      createdAt: '2026-08-02T00:00:00.000Z',
+      trace: [],
+      audienceMode: 'clinician',
+      thinkingLevel: 'medium',
+      searchEnabled: true,
+    }, {
       id: 'answer-1',
       role: 'assistant',
       title: '循证回答',

@@ -344,8 +344,8 @@ const toggleSearch = () => { if (!run.busy) preferences.searchEnabled = !prefere
           </div>
         </section>
 
-        <section ref="feed" class="chat-feed" aria-label="循医对话">
-          <header v-if="hasConversation" class="conversation-context">
+        <section v-if="hasConversation" ref="feed" class="chat-feed" aria-label="循医对话">
+          <header class="conversation-context">
             <div class="conversation-context-copy">
               <span>长期追踪问题</span>
               <strong>{{ sessions.active.clinicalQuestion || sessions.active.title }}</strong>
