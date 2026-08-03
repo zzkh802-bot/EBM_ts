@@ -3,6 +3,12 @@ import path from "node:path";
 import { analyzeTrajectory, type TrajectoryRecord } from "../src/observability/analyzeTrajectory.js";
 
 async function latestTrace(root: string): Promise<string> {
+  const candidates = await traceFiles(root);
+  if (!candidates[0]) throw new Error(`No trajectory.jsonl found under ${root}`);
+  return candidates[0].path;
+}
+
+async function traceFiles(root: string): Promise<Array<{ path: string; mtimeMs: number }>> {
   const candidates: Array<{ path: string; mtimeMs: number }> = [];
   try {
     for (const entry of await readdir(root, { withFileTypes: true })) {
@@ -18,11 +24,10 @@ async function latestTrace(root: string): Promise<string> {
     // Report the useful error below.
   }
   candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
-  if (!candidates[0]) throw new Error(`No trajectory.jsonl found under ${root}`);
-  return candidates[0].path;
+  return candidates;
 }
 
-function markdown(analysis: ReturnType<typeof analyzeTrajectory>, tracePath: string): string {
+function markdown(analysis: ReturnType<typeof analyzeTrajectory>, tracePath: string, sessionLabel = analysis.session_id): string {
   const toolRows = Object.entries(analysis.tools)
     .sort(([, a], [, b]) => b.calls - a.calls)
     .map(([name, value]) => `| ${name} | ${value.calls} | ${value.errors} | ${value.average_duration_seconds} |`)
@@ -30,11 +35,23 @@ function markdown(analysis: ReturnType<typeof analyzeTrajectory>, tracePath: str
   const phaseRows = Object.entries(analysis.phases)
     .map(([name, value]) => `| ${name} | ${value.turns} | ${value.elapsed_seconds} | ${value.model_seconds} | ${value.tool_wall_seconds} | ${value.tool_calls} | ${value.tool_errors} | ${value.tool_result_chars} | ${value.max_context_tokens} |`)
     .join("\n");
+  const evidenceRows = Object.entries(analysis.evidence_add_attempts.by_source)
+    .sort(([, a], [, b]) => b.first_attempts - a.first_attempts)
+    .map(([source, value]) => `| ${source} | ${value.calls} | ${value.errors} | ${value.first_attempts} | ${value.first_attempt_failures} | ${value.first_attempts ? `${Math.round(value.first_attempt_failures / value.first_attempts * 1_000) / 10}%` : "0%"} |`)
+    .join("\n");
+  const failureRows = Object.entries(analysis.evidence_add_attempts.failure_reasons)
+    .sort(([, a], [, b]) => b - a)
+    .map(([reason, count]) => `| ${reason} | ${count} |`)
+    .join("\n");
+  const inputModeRows = Object.entries(analysis.evidence_add_attempts.by_input_mode)
+    .sort(([, a], [, b]) => b.calls - a.calls)
+    .map(([mode, value]) => `| ${mode} | ${value.calls} | ${value.errors} | ${value.first_attempts} | ${value.first_attempt_failures} | ${value.first_attempts ? `${Math.round(value.first_attempt_failures / value.first_attempts * 1_000) / 10}%` : "0%"} |`)
+    .join("\n");
   return [
     "# Trajectory Analysis",
     "",
     `- Trace: ${tracePath}`,
-    `- Session: ${analysis.session_id}`,
+    `- Session: ${sessionLabel}`,
     `- Runs: ${analysis.runs}`,
     `- Turns: ${analysis.turns}`,
     `- Total elapsed: ${analysis.total_elapsed_seconds} s`,
@@ -68,16 +85,37 @@ function markdown(analysis: ReturnType<typeof analyzeTrajectory>, tracePath: str
     "|---|---:|---:|---:|",
     toolRows || "| — | 0 | 0 | 0 |",
     "",
+    "## Evidence add attempts",
+    "",
+    `- Calls/errors: ${analysis.evidence_add_attempts.calls}/${analysis.evidence_add_attempts.errors} (${Math.round(analysis.evidence_add_attempts.call_failure_rate * 1_000) / 10}%)`,
+    `- First attempts/failures: ${analysis.evidence_add_attempts.first_attempts}/${analysis.evidence_add_attempts.first_attempt_failures} (${Math.round(analysis.evidence_add_attempts.first_attempt_failure_rate * 1_000) / 10}%)`,
+    `- Retry attempts/successes: ${analysis.evidence_add_attempts.retry_attempts}/${analysis.evidence_add_attempts.retry_successes} (${Math.round(analysis.evidence_add_attempts.retry_success_rate * 1_000) / 10}%)`,
+    "",
+    "| Source | Calls | Errors | First attempts | First failures | First failure rate |",
+    "|---|---:|---:|---:|---:|---:|",
+    evidenceRows || "| — | 0 | 0 | 0 | 0 | 0% |",
+    "",
+    "| Input mode | Calls | Errors | First attempts | First failures | First failure rate |",
+    "|---|---:|---:|---:|---:|---:|",
+    inputModeRows || "| — | 0 | 0 | 0 | 0 | 0% |",
+    "",
+    "| Failure reason | Count |",
+    "|---|---:|",
+    failureRows || "| — | 0 |",
+    "",
   ].join("\n");
 }
 
 const args = process.argv.slice(2);
 const asMarkdown = args.includes("--markdown");
+const analyzeAll = args.includes("--all");
 const explicit = args.find((arg) => !arg.startsWith("--"));
-const tracePath = explicit
-  ? path.resolve(explicit)
-  : await latestTrace(path.resolve("data", "sessions"));
-const records = (await readFile(tracePath, "utf8"))
+const traceRoot = path.resolve("data", "sessions");
+const tracePaths = analyzeAll
+  ? (await traceFiles(traceRoot)).map((item) => item.path)
+  : [explicit ? path.resolve(explicit) : await latestTrace(traceRoot)];
+if (!tracePaths.length) throw new Error(`No trajectory.jsonl found under ${traceRoot}`);
+const records = (await Promise.all(tracePaths.map(async (tracePath) => (await readFile(tracePath, "utf8"))
   .split("\n")
   .filter(Boolean)
   .map((line, index) => {
@@ -86,6 +124,8 @@ const records = (await readFile(tracePath, "utf8"))
     } catch (error) {
       throw new Error(`Invalid JSONL at ${tracePath}:${index + 1}: ${error instanceof Error ? error.message : String(error)}`);
     }
-  });
+  })))).flat().sort((left, right) => Date.parse(left.timestamp) - Date.parse(right.timestamp) || left.sequence - right.sequence);
 const analysis = analyzeTrajectory(records);
-process.stdout.write(asMarkdown ? markdown(analysis, tracePath) : `${JSON.stringify(analysis, null, 2)}\n`);
+const traceLabel = analyzeAll ? `${tracePaths.length} traces under ${traceRoot}` : tracePaths[0]!;
+const sessionLabel = analyzeAll ? `${new Set(records.map((record) => record.session_id)).size} sessions` : analysis.session_id;
+process.stdout.write(asMarkdown ? markdown(analysis, traceLabel, sessionLabel) : `${JSON.stringify(analysis, null, 2)}\n`);

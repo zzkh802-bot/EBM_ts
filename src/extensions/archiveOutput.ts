@@ -45,6 +45,8 @@ export function archiveToolText(
   return {
     text: [
       `Readable archive path: ${readablePath}`,
+      `Source ID: ${record.sourceId}`,
+      `Document ID: ${record.documentId}`,
       ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
       ...(readableResources.length ? [`Archived referenced resources: ${readableResources.join(", ")}`] : []),
       `Archive lines: 1-${totalLines} (${totalLines} total lines; 1-based).`,
@@ -52,7 +54,7 @@ export function archiveToolText(
       `Read any archive window with read(path=${JSON.stringify(readablePath)}, offset=N, limit=M).`,
       ...(options.citationEligible === false
         ? ["This search snapshot is discovery history and cannot be passed to evidence_add; use an individually archived sources/read document."]
-        : ["For evidence_add, use this readable archive path and copy a minimal, sufficient, continuous verbatim quote from the source."]),
+        : ["For evidence_add, pass the Source ID above with a minimal, sufficient, continuous verbatim quote from the source; use the readable path only for navigation."]),
       ...(excerpt.truncated ? [`Continue without gaps (the last preview line is intentionally repeated): read(path=${JSON.stringify(readablePath)}, offset=${Math.max(record.bodyLineStart, visibleEnd)}, limit=200).`] : []),
       ...(readableTocPath ? [`Read the complete section index with read(path=${JSON.stringify(readableTocPath)}).`] : []),
       ...(map.items.length ? ["", `Source map${map.total > map.items.length ? ` (first ${map.items.length} of ${map.total}; complete index is in toc.md)` : ""}:`, ...map.items] : []),

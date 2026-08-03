@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { preprocessExternalContent, type ExternalContentFormat } from "./markdown.js";
+import { registerArchivedSource, sourceIdentity } from "./sourceIdentity.js";
 
 export type SourceArchiveResource = {
   path: string;
@@ -16,6 +17,7 @@ export type SourceArchiveInput = {
   sourceUrl?: string;
   sourceInstitution?: string;
   title?: string;
+  archiveName?: string;
   content: string;
   contentFormat?: ExternalContentFormat;
   resources?: SourceArchiveResource[];
@@ -31,6 +33,8 @@ export type SourceArchiveRecord = {
   lines: number;
   bodyLineStart: number;
   content: string;
+  documentId: string;
+  sourceId: string;
   sourceUrl?: string;
   sourceInstitution?: string;
   title?: string;
@@ -60,9 +64,9 @@ function urlSemanticName(sourceUrl?: string): string {
   }
 }
 
-export function stableArchiveName(input: Pick<SourceArchiveInput, "kind" | "sourceUrl" | "title" | "content">): string {
+export function stableArchiveName(input: Pick<SourceArchiveInput, "kind" | "sourceUrl" | "title" | "archiveName" | "content">): string {
   const firstReadableLine = input.content.split("\n").map((line) => line.replace(/^#+\s*/, "").trim()).find(Boolean) ?? "";
-  const stem = semanticSlug(input.title || urlSemanticName(input.sourceUrl) || firstReadableLine || `${input.kind}-source`);
+  const stem = semanticSlug(input.archiveName || input.title || urlSemanticName(input.sourceUrl) || firstReadableLine || `${input.kind}-source`);
   return `${stem || `${input.kind}-source`}.md`;
 }
 
@@ -232,8 +236,16 @@ export async function archiveSource(input: SourceArchiveInput): Promise<SourceAr
     : input.layout === "file"
       ? await archiveReadFile(normalizedInput, archived, baseName)
       : await archiveReadDirectory(normalizedInput, archived, baseName, bodyLineStart);
+  const identity = sourceIdentity({
+    sha256,
+    ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
+    ...(input.sourceInstitution ? { sourceInstitution: input.sourceInstitution } : {}),
+    ...(input.title ? { title: input.title } : {}),
+  });
+  registerArchivedSource(input.sessionDir, location.path, identity);
   return {
     ...location,
+    ...identity,
     sha256,
     chars: content.length,
     lines: content.split("\n").length,

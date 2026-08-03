@@ -68,6 +68,8 @@ describe("archived web tools", () => {
       discoveryQuery: "成人急性髓系白血病 大剂量阿糖胞苷 标准剂量多药联合 巩固治疗 DFS OS",
       archive: {
         path: "sources/read/jalsg/full.md",
+        documentId: "doc_jalsg",
+        sourceId: "src_jalsg",
         sha256: "sha-jalsg",
         chars: 1000,
         lines: 10,
@@ -82,6 +84,8 @@ describe("archived web tools", () => {
       provider: "pubmed",
       archive: {
         path: "sources/read/other/full.md",
+        documentId: "doc_other",
+        sourceId: "src_other",
         sha256: "sha-other",
         chars: 1000,
         lines: 10,
@@ -104,6 +108,8 @@ describe("archived web tools", () => {
       provider: "jina",
       archive: {
         path: "sources/read/1482027/full.md",
+        documentId: "doc_guideline",
+        sourceId: "src_guideline",
         sha256: "sha-guideline",
         chars: 1000,
         lines: 10,
@@ -118,6 +124,8 @@ describe("archived web tools", () => {
       provider: "pubmed",
       archive: {
         path: "sources/read/article/full.md",
+        documentId: "doc_article",
+        sourceId: "src_article",
         sha256: "sha-article",
         chars: 1000,
         lines: 10,
@@ -143,6 +151,8 @@ describe("archived web tools", () => {
         provider: "pubmed",
         archive: {
           path: `sources/read/${index}/full.md`,
+          documentId: `doc_${index}`,
+          sourceId: `src_${index}`,
           sha256: `sha-${index}`,
           chars: 1000,
           lines: 10,

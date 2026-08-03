@@ -2,6 +2,7 @@ import { mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises"
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { locateEvidenceQuote, type EvidenceMatchMode } from "./evidenceLocator.js";
+import { resolveSourceId, resolveSourceSpan, sourceIdentityForPath } from "./sourceIdentity.js";
 import { formatBeijingTimestamp } from "./time.js";
 
 export type EvidenceRelation = "supports" | "partially_supports" | "refutes";
@@ -27,6 +28,8 @@ export type EvidenceNode = {
   provenance: EvidenceProvenance;
   confidence: EvidenceConfidence;
   sourcePath: string;
+  sourceId?: string;
+  documentId?: string;
   quote: string;
   lineStart: number;
   lineEnd: number;
@@ -45,8 +48,13 @@ export type EvidenceAddInput = {
   relation: EvidenceRelation;
   provenance?: EvidenceProvenance;
   confidence?: EvidenceConfidence;
-  sourcePath: string;
+  sourcePath?: string;
+  sourceId?: string;
   quote: string;
+};
+
+export type EvidenceSpanAddInput = Omit<EvidenceAddInput, "sourcePath" | "sourceId" | "quote"> & {
+  sourceSpanId: string;
 };
 
 function evidenceQuoteQualityErrors(input: {
@@ -135,6 +143,8 @@ export function renderEvidenceMarkdown(node: EvidenceNode): string {
     `provenance: ${node.provenance}`,
     `confidence: ${node.confidence}`,
     `source_path: ${yamlString(node.sourcePath)}`,
+    ...(node.sourceId ? [`source_id: ${node.sourceId}`] : []),
+    ...(node.documentId ? [`document_id: ${node.documentId}`] : []),
     `source_line_start: ${node.lineStart}`,
     `source_line_end: ${node.lineEnd}`,
     ...(node.charStart === undefined ? [] : [`source_char_start: ${node.charStart}`]),
@@ -175,8 +185,10 @@ async function updateEvidenceIndex(outDir: string, node: EvidenceNode): Promise<
 }
 
 export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode> {
-  assertRelativeSafe(input.sourcePath);
-  const normalizedSourcePath = path.posix.normalize(input.sourcePath.replaceAll("\\", "/"));
+  if (Boolean(input.sourcePath) === Boolean(input.sourceId)) throw new Error("provide exactly one of sourcePath or sourceId");
+  const sourcePath = input.sourceId ? (await resolveSourceId(input.sessionDir, input.sourceId)).path : input.sourcePath!;
+  assertRelativeSafe(sourcePath);
+  const normalizedSourcePath = path.posix.normalize(sourcePath.replaceAll("\\", "/"));
   if (normalizedSourcePath.startsWith("sources/search/")) {
     throw new Error("search snapshots are discovery artifacts; create evidence from an individually archived sources/read document");
   }
@@ -184,10 +196,20 @@ export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode
   if (!input.claim.trim()) throw new Error("claim is required");
   if (!input.quote.trim()) throw new Error("quote is required");
 
-  const sourceAbs = await resolveExistingSessionPath(input.sessionDir, input.sourcePath);
+  const sourceAbs = await resolveExistingSessionPath(input.sessionDir, sourcePath);
   const text = await readFile(sourceAbs, "utf8");
   const located = locateEvidenceQuote(text, input.quote);
+  return persistLocatedEvidence(input, sourcePath, text, located);
+}
+
+async function persistLocatedEvidence(
+  input: Omit<EvidenceAddInput, "sourcePath" | "sourceId" | "quote">,
+  sourcePath: string,
+  text: string,
+  located: ReturnType<typeof locateEvidenceQuote>,
+): Promise<EvidenceNode> {
   const quote = located.quote;
+  const identity = await sourceIdentityForPath(input.sessionDir, sourcePath);
   const provenance = input.provenance ?? "other";
   const qualityErrors = evidenceQuoteQualityErrors({
     source: text,
@@ -204,7 +226,9 @@ export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode
     relation: input.relation,
     provenance,
     confidence: input.confidence ?? "moderate",
-    sourcePath: input.sourcePath,
+    sourcePath,
+    sourceId: identity.sourceId,
+    documentId: identity.documentId,
     quote,
     lineStart: located.lineStart,
     lineEnd: located.lineEnd,
@@ -224,6 +248,21 @@ export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode
   await writeFile(path.join(outDir, `${node.id}.md`), renderEvidenceMarkdown(node), "utf8");
   await updateEvidenceIndex(outDir, node);
   return node;
+}
+
+export async function addEvidenceFromSourceSpan(input: EvidenceSpanAddInput): Promise<EvidenceNode> {
+  if (!input.question.trim()) throw new Error("question is required");
+  if (!input.claim.trim()) throw new Error("claim is required");
+  const resolved = await resolveSourceSpan(input.sessionDir, input.sourceSpanId);
+  const located = {
+    quote: resolved.span.quote,
+    charStart: resolved.span.charStart,
+    charEnd: resolved.span.charEnd,
+    lineStart: resolved.span.lineStart,
+    lineEnd: resolved.span.lineEnd,
+    matchMode: "exact" as const,
+  };
+  return persistLocatedEvidence(input, resolved.sourcePath, resolved.source, located);
 }
 
 function parseScalar(value: string): string | number | boolean {
@@ -267,6 +306,12 @@ function parseEvidenceMarkdown(markdown: string): EvidenceNode {
     if (typeof value !== "number") throw new Error(`evidence metadata ${key} must be a number`);
     return value;
   };
+  const optionalString = (key: string): string | undefined => {
+    const value = metadata.get(key);
+    if (value === undefined) return undefined;
+    if (typeof value !== "string" || !value) throw new Error(`evidence metadata ${key} must be a string`);
+    return value;
+  };
   const optionalNumber = (key: string): number | undefined => {
     const value = metadata.get(key);
     if (value === undefined) return undefined;
@@ -293,6 +338,8 @@ function parseEvidenceMarkdown(markdown: string): EvidenceNode {
   }
   const charStart = optionalNumber("source_char_start");
   const charEnd = optionalNumber("source_char_end");
+  const sourceId = optionalString("source_id");
+  const documentId = optionalString("document_id");
   if ((charStart === undefined) !== (charEnd === undefined)) throw new Error("evidence character coordinates must be stored together");
   return {
     id: requiredString("evidence_id"),
@@ -302,6 +349,8 @@ function parseEvidenceMarkdown(markdown: string): EvidenceNode {
     provenance: provenance as EvidenceProvenance,
     confidence: confidence as EvidenceConfidence,
     sourcePath: requiredString("source_path"),
+    ...(sourceId ? { sourceId } : {}),
+    ...(documentId ? { documentId } : {}),
     quote: fenced.slice(firstBreak + 1, quoteEnd),
     lineStart: requiredNumber("source_line_start"),
     lineEnd: requiredNumber("source_line_end"),
@@ -364,6 +413,11 @@ export async function verifyEvidence(sessionDir: string, node: EvidenceNode): Pr
   try {
     const sourcePath = await resolveExistingSessionPath(sessionDir, node.sourcePath);
     const source = await readFile(sourcePath, "utf8");
+    if (node.sourceId || node.documentId) {
+      const identity = await sourceIdentityForPath(sessionDir, node.sourcePath);
+      if (node.sourceId && identity.sourceId !== node.sourceId) errors.push("sourceId mismatch");
+      if (node.documentId && identity.documentId !== node.documentId) errors.push("documentId mismatch");
+    }
     const quote = node.charStart !== undefined && node.charEnd !== undefined
       ? source.slice(node.charStart, node.charEnd)
       : source.split("\n").slice(node.lineStart - 1, node.lineEnd).join("\n");

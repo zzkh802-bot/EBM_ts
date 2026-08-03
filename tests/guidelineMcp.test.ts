@@ -223,6 +223,14 @@ describe("guideline MCP", () => {
     expect(result.items[0]!.sourcePath).not.toMatch(/\/full\.md$/);
     expect(result.items[0]!.lineStart).toBeTypeOf("number");
     expect(result.items[0]!.lineEnd).toBeTypeOf("number");
+    expect(result.items[0]!.sourceId).toMatch(/^src_[a-f0-9]{16}$/);
+    expect(result.items[0]!.documentId).toMatch(/^doc_[a-f0-9]{16}$/);
+    expect(result.items[0]!.quoteReadySpans).toEqual([
+      expect.objectContaining({ id: expect.stringMatching(/^span_[a-z0-9_]+$/), quote: "BP recommendation text" }),
+    ]);
+    const chunkMarkdown = await readFile(path.join(sessionDir, result.items[0]!.sourcePath!), "utf8");
+    expect(chunkMarkdown).toContain('title: "Stroke guideline"');
+    expect(result.items[0]!.sourcePath).toContain("stroke-guideline-stroke-bp");
     expect(result.archive.content).toContain("# Guideline retrieve: stroke blood pressure");
     expect(result.archive.content).not.toContain('"chunk_id"');
   });

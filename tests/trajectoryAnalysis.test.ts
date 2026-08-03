@@ -85,4 +85,79 @@ describe("trajectory analysis", () => {
       max_context_tokens: 500,
     });
   });
+
+  it("attributes evidence first-attempt failures to retrieval source and failure reason", () => {
+    const records: TrajectoryRecord[] = [
+      record(1, "2026-01-01T00:00:00.000Z", "run_start", {}),
+      record(2, "2026-01-01T00:00:01.000Z", "tool_end", {
+        tool_call_id: "mcp", tool_name: "guideline_mcp_retrieve", is_error: false,
+        result: { details: { chunkArchives: [{ path: "sources/read/mcp.md", sourceId: "src_1234567890abcdef" }] } },
+      }, "run-1", 0),
+      record(3, "2026-01-01T00:00:02.000Z", "tool_end", {
+        tool_call_id: "pubmed", tool_name: "pubmed_search", is_error: false,
+        result: { details: { abstractArchives: [{ path: "sources/read/pubmed/full.md" }] } },
+      }, "run-1", 0),
+      record(4, "2026-01-01T00:00:03.000Z", "tool_start", {
+        tool_call_id: "ev-mcp-1", tool_name: "evidence_add",
+        args: { source_path: "data/sessions/s1/sources/read/mcp.md", question: "q1", claim: "c1" },
+      }, "run-1", 1),
+      record(5, "2026-01-01T00:00:04.000Z", "tool_end", {
+        tool_call_id: "ev-mcp-1", tool_name: "evidence_add", is_error: false,
+        result: { content: [{ type: "text", text: "Evidence was not archived" }], details: { archived: false, errorCode: "quote_not_located", sourceId: "src_1234567890abcdef" } },
+      }, "run-1", 1),
+      record(6, "2026-01-01T00:00:05.000Z", "tool_start", {
+        tool_call_id: "ev-mcp-2", tool_name: "evidence_add",
+        args: { source_span_id: "span_1234567890abcdef_6o_dk_fc7e76144dc0", question: "q1", claim: "c1" },
+      }, "run-1", 2),
+      record(7, "2026-01-01T00:00:06.000Z", "tool_end", {
+        tool_call_id: "ev-mcp-2", tool_name: "evidence_add", is_error: false, result: {},
+      }, "run-1", 2),
+      record(8, "2026-01-01T00:00:07.000Z", "tool_start", {
+        tool_call_id: "ev-pubmed", tool_name: "evidence_add",
+        args: { source_path: "sources/read/pubmed/full.md", question: "q2", claim: "c2" },
+      }, "run-1", 3),
+      record(9, "2026-01-01T00:00:08.000Z", "tool_end", {
+        tool_call_id: "ev-pubmed", tool_name: "evidence_add", is_error: false, result: {},
+      }, "run-1", 3),
+      record(10, "2026-01-01T00:00:09.000Z", "tool_start", {
+        tool_call_id: "ev-path", tool_name: "evidence_add",
+        args: { source_path: "sources/read/missing.md", question: "q3", claim: "c3" },
+      }, "run-1", 4),
+      record(11, "2026-01-01T00:00:10.000Z", "tool_end", {
+        tool_call_id: "ev-path", tool_name: "evidence_add", is_error: true,
+        result: { content: [{ type: "text", text: "ENOENT: no such file or directory" }] },
+      }, "run-1", 4),
+      record(12, "2026-01-01T00:00:11.000Z", "tool_start", {
+        tool_call_id: "ev-input", tool_name: "evidence_add",
+        args: { source_id: "src_ffffffffffffffff", source_span_id: "span_1234567890abcdef_6o_dk_fc7e76144dc0", question: "q4", claim: "c4" },
+      }, "run-1", 5),
+      record(13, "2026-01-01T00:00:12.000Z", "tool_end", {
+        tool_call_id: "ev-input", tool_name: "evidence_add", is_error: true,
+        result: { content: [{ type: "text", text: "source_id does not match source_span_id" }] },
+      }, "run-1", 5),
+      record(14, "2026-01-01T00:00:13.000Z", "run_settled", {}),
+    ];
+
+    const analysis = analyzeTrajectory(records);
+    expect(analysis.evidence_add_attempts).toMatchObject({
+      calls: 5,
+      errors: 3,
+      first_attempts: 4,
+      first_attempt_failures: 3,
+      retry_attempts: 1,
+      retry_successes: 1,
+      by_source: {
+        guideline_mcp_retrieve: { calls: 2, errors: 1, first_attempts: 1, first_attempt_failures: 1 },
+        pubmed: { calls: 1, errors: 0, first_attempts: 1, first_attempt_failures: 0 },
+        unknown: { calls: 2, errors: 2, first_attempts: 2, first_attempt_failures: 2 },
+      },
+      by_input_mode: {
+        source_path_quote: { calls: 3, errors: 2, first_attempts: 3, first_attempt_failures: 2 },
+        source_span: { calls: 2, errors: 1, first_attempts: 1, first_attempt_failures: 1 },
+      },
+      failure_reasons: { quote_not_located: 1, source_path: 1, input_contract: 1 },
+    });
+    expect(analysis.evidence_add_attempts.call_failure_rate).toBe(0.6);
+    expect(analysis.evidence_add_attempts.first_attempt_failure_rate).toBe(0.75);
+  });
 });

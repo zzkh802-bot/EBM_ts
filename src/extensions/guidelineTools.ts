@@ -47,7 +47,7 @@ function informativeHeading(text: string): boolean {
 
 export function renderGuidelineReadText(
   readablePath: string,
-  record: { content: string; bodyLineStart: number; lines: number; tocPath?: string },
+  record: { content: string; bodyLineStart: number; lines: number; tocPath?: string; sourceId?: string; documentId?: string },
   document?: GuidelineSearchItem,
 ): string {
   const lines = record.content.split("\n");
@@ -83,9 +83,13 @@ export function renderGuidelineReadText(
       "",
     ] : []),
     `Readable guideline path: ${readablePath}`,
+    ...(record.sourceId ? [`Source ID: ${record.sourceId}`] : []),
+    ...(record.documentId ? [`Document ID: ${record.documentId}`] : []),
     ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
     `Archive lines: 1-${totalLines} (${totalLines} total lines; 1-based).`,
-    `For evidence_add, use this readable guideline path and copy a minimal, sufficient, continuous verbatim quote.`,
+    record.sourceId
+      ? "For evidence_add, pass the Source ID above with a minimal, sufficient, continuous verbatim quote; use the readable path only for navigation."
+      : "For evidence_add, use this readable guideline path and copy a minimal, sufficient, continuous verbatim quote.",
     ...(headings.length ? ["", "Best-effort navigation index (generated from cleaned Markdown; verify against full text):", ...headings] : []),
     "",
     `Informative preview lines ${previewStart}-${previewEnd}:`,
@@ -105,12 +109,19 @@ export function renderRetrieveCards(title: string, items: GuidelineRetrieveItem[
     if (item.publicationDate) lines.push(`   date: ${item.publicationDate}`);
     if (item.section) lines.push(`   section: ${item.section}`);
     if (item.chunkType) lines.push(`   chunk_type: ${item.chunkType}`);
+    if (item.sourceId) lines.push(`   source_id: ${item.sourceId}`);
+    if (item.documentId) lines.push(`   document_id: ${item.documentId}`);
     const sourcePath = item.sourcePath ? readablePath(item.sourcePath) : undefined;
     if (sourcePath) lines.push(`   readable chunk path: ${sourcePath}`);
-    if (item.candidateMaterial) lines.push("   candidate material (identical to archived body):", "", item.candidateMaterial);
+    if (item.quoteReadySpans?.length) {
+      lines.push("   quote-ready continuous spans (pass source_span_id to evidence_add; do not copy or join text):", "");
+      item.quoteReadySpans.forEach((span) => lines.push(`   source_span_id: ${span.id}`, indentedText(span.quote, 5), ""));
+    } else if (item.candidateMaterial) {
+      lines.push("   candidate material (identical to archived body):", "", item.candidateMaterial);
+    }
     lines.push("");
   });
-  lines.push("These are candidate materials, not evidence yet. If a passage directly supports a claim, call evidence_add with the readable chunk path and a minimal, sufficient, continuous verbatim quote copied from the candidate material.");
+  lines.push("These are candidate materials, not evidence yet. Prefer evidence_add with one returned source_span_id. Use source_id plus a minimal, sufficient, continuous verbatim quote only when no single span is sufficient; never join separate spans or insert ellipses.");
   return lines.join("\n");
 }
 
@@ -161,7 +172,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
     label: "Retrieve Guideline Chunks",
     description: "Run internal guideline RAG retrieval and archive each returned chunk as a citation-capable quote source.",
     promptSnippet: "Retrieve traceable guideline chunks that can directly support evidence when relevant",
-    promptGuidelines: ["RAG chunks may directly support evidence when a continuous verbatim passage supports the claim; copy that passage with the readable chunk path. Use guideline_mcp_read only when broader context is needed."],
+    promptGuidelines: ["RAG chunks may directly support evidence. Prefer passing one returned source_span_id to evidence_add so exact archived text is selected without copying; never join separate spans or insert ellipses. Use guideline_mcp_read only when broader context is needed."],
     parameters: Type.Object({
       query: Type.String({ minLength: 2, description: "Focused clinical retrieval query" }),
       topk: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
@@ -187,7 +198,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
       });
       return {
         content: [{ type: "text", text: renderRetrieveCards(`Guideline RAG retrieval candidates (${result.items.length} returned):`, result.items, (sourcePath) => piReadableSessionPath(ctx.cwd, sessionId, sourcePath)) }],
-        details: { archive: archiveDetails(result.archive), itemCount: result.items.length, chunkArchives: result.items.flatMap((item) => item.sourcePath ? [{ path: item.sourcePath, lineStart: item.lineStart, lineEnd: item.lineEnd }] : []), truncated: false },
+        details: { archive: archiveDetails(result.archive), itemCount: result.items.length, chunkArchives: result.items.flatMap((item) => item.sourcePath ? [{ path: item.sourcePath, sourceId: item.sourceId, documentId: item.documentId, lineStart: item.lineStart, lineEnd: item.lineEnd, sourceSpanIds: item.quoteReadySpans?.map((span) => span.id) ?? [] }] : []), truncated: false },
       };
     },
   });

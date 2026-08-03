@@ -21,6 +21,33 @@ export type PhaseAnalysis = {
   max_context_tokens: number;
 };
 
+export type EvidenceSourceKind =
+  | "guideline_mcp_retrieve"
+  | "guideline_mcp_read"
+  | "pubmed"
+  | "web"
+  | "source_library"
+  | "unknown";
+
+export type EvidenceAttemptBreakdown = {
+  calls: number;
+  errors: number;
+  first_attempts: number;
+  first_attempt_failures: number;
+};
+
+export type EvidenceAttemptAnalysis = EvidenceAttemptBreakdown & {
+  retries: number;
+  retry_attempts: number;
+  retry_successes: number;
+  call_failure_rate: number;
+  first_attempt_failure_rate: number;
+  retry_success_rate: number;
+  by_source: Partial<Record<EvidenceSourceKind, EvidenceAttemptBreakdown>>;
+  by_input_mode: Partial<Record<"source_span" | "source_id_quote" | "source_path_quote", EvidenceAttemptBreakdown>>;
+  failure_reasons: Partial<Record<"input_contract" | "source_path" | "quote_not_located" | "quote_ambiguous" | "quote_quality" | "other", number>>;
+};
+
 export type TrajectoryAnalysis = {
   session_id: string;
   runs: number;
@@ -53,6 +80,7 @@ export type TrajectoryAnalysis = {
   };
   tools: Record<string, ToolAnalysis>;
   phases: Record<string, PhaseAnalysis>;
+  evidence_add_attempts: EvidenceAttemptAnalysis;
   run_summaries: Array<{
     run_id: string;
     duration_ms?: number;
@@ -93,6 +121,79 @@ function milliseconds(start?: string, end?: string): number | undefined {
   return Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
+function recordValue(value: unknown): Record<string, any> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, any> : undefined;
+}
+
+function canonicalSourcePath(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.replace(/^@/, "").replaceAll("\\", "/").replace(/^\.\//, "").replace(/^data\/sessions\/[^/]+\//, "");
+}
+
+function producedSourcePaths(toolName: string, result: unknown): Array<{ path: string; sourceId?: string; kind: EvidenceSourceKind }> {
+  const resultRecord = recordValue(result);
+  const details = recordValue(resultRecord?.details);
+  if (!details) return [];
+  if (toolName === "guideline_mcp_retrieve") {
+    return Array.isArray(details.chunkArchives) ? details.chunkArchives.flatMap((item: unknown) => {
+      const archive = recordValue(item);
+      return typeof archive?.path === "string" ? [{ path: canonicalSourcePath(archive.path), ...(typeof archive.sourceId === "string" ? { sourceId: archive.sourceId } : {}), kind: "guideline_mcp_retrieve" as const }] : [];
+    }) : [];
+  }
+  if (toolName === "guideline_mcp_read") {
+    const archive = recordValue(details.archive);
+    return typeof archive?.path === "string" ? [{ path: canonicalSourcePath(archive.path), ...(typeof archive.sourceId === "string" ? { sourceId: archive.sourceId } : {}), kind: "guideline_mcp_read" }] : [];
+  }
+  if (toolName === "pubmed_search" || toolName === "pubmed_similar") {
+    return Array.isArray(details.abstractArchives) ? details.abstractArchives.flatMap((item: unknown) => {
+      const archive = recordValue(item);
+      return typeof archive?.path === "string" ? [{ path: canonicalSourcePath(archive.path), ...(typeof archive.sourceId === "string" ? { sourceId: archive.sourceId } : {}), kind: "pubmed" as const }] : [];
+    }) : [];
+  }
+  if (toolName === "pubmed_read") {
+    const archive = recordValue(details.archive);
+    return typeof archive?.path === "string" ? [{ path: canonicalSourcePath(archive.path), ...(typeof archive.sourceId === "string" ? { sourceId: archive.sourceId } : {}), kind: "pubmed" }] : [];
+  }
+  if (toolName === "web_read") {
+    const archive = recordValue(details.archive);
+    if (typeof archive?.path !== "string") return [];
+    return [{
+      path: canonicalSourcePath(archive.path),
+      ...(typeof archive.sourceId === "string" ? { sourceId: archive.sourceId } : {}),
+      kind: details.provider === "library" ? "source_library" : "web",
+    }];
+  }
+  return [];
+}
+
+function toolResultText(result: unknown): string {
+  const resultRecord = recordValue(result);
+  if (!Array.isArray(resultRecord?.content)) return "";
+  return resultRecord.content.map((item: unknown) => {
+    const content = recordValue(item);
+    if (typeof content?.text === "string") return content.text;
+    const truncated = recordValue(content?.text);
+    return typeof truncated?.preview === "string" ? truncated.preview : "";
+  }).join("\n");
+}
+
+function evidenceFailureReason(result: unknown): keyof EvidenceAttemptAnalysis["failure_reasons"] {
+  const details = recordValue(recordValue(result)?.details);
+  if (details?.errorCode === "quote_ambiguous") return "quote_ambiguous";
+  if (details?.errorCode === "quote_not_located") return "quote_not_located";
+  const text = toolResultText(result);
+  if (/provide .*source_span_id|exactly one of source_id|source_id does not match source_span_id/i.test(text)) return "input_contract";
+  if (/source_path|ENOENT|no such file|unsafe relative path|outside session|different session workspace/i.test(text)) return "source_path";
+  if (/匹配到\s*\d+\s*处|排版归一化后的 quote .*匹配到/i.test(text)) return "quote_ambiguous";
+  if (/quality check failed|quote appears to be|citation evidence/i.test(text)) return "quote_quality";
+  if (/未能在归档来源中唯一定位|没有找到可靠的原文候选|quote.*(?:locat|match)/i.test(text)) return "quote_not_located";
+  return "other";
+}
+
+function emptyEvidenceBreakdown(): EvidenceAttemptBreakdown {
+  return { calls: 0, errors: 0, first_attempts: 0, first_attempt_failures: 0 };
+}
+
 export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalysis {
   const sessionId = records[0]?.session_id ?? "unknown";
   const runStarts = new Map<string, string>();
@@ -120,6 +221,28 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
   let fullTextReads = 0;
   let abstractOnlyReads = 0;
   const tokens = { input: 0, output: 0, cache_read: 0, cache_write: 0, total: 0, cost: 0 };
+  const evidenceAddAttempts: EvidenceAttemptAnalysis = {
+    ...emptyEvidenceBreakdown(),
+    retries: 0,
+    retry_attempts: 0,
+    retry_successes: 0,
+    call_failure_rate: 0,
+    first_attempt_failure_rate: 0,
+    retry_success_rate: 0,
+    by_source: {},
+    by_input_mode: {},
+    failure_reasons: {},
+  };
+  const sourceKinds = new Map<string, { kind: EvidenceSourceKind; sourceId?: string }>();
+  const sourceIdKinds = new Map<string, EvidenceSourceKind>();
+  const seenEvidenceTargets = new Set<string>();
+  const activeEvidenceAttempts = new Map<string, {
+    first: boolean;
+    source: EvidenceSourceKind;
+    mode: "source_span" | "source_id_quote" | "source_path_quote";
+    question: string;
+    claim: string;
+  }>();
   type TurnState = {
     runId: string;
     index: number;
@@ -186,6 +309,35 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
         total_duration_seconds: 0, average_duration_seconds: 0,
       };
       tools[name].calls += 1;
+      if (name === "evidence_add") {
+        const args = recordValue(data?.args) ?? {};
+        const sourcePath = canonicalSourcePath(args.source_path);
+        const spanSourceId = typeof args.source_span_id === "string" ? args.source_span_id.match(/^span_([a-f0-9]{16})_/)?.[1] : undefined;
+        const pathSource = sourceKinds.get(`${record.session_id}:${sourcePath}`);
+        const sourceId = typeof args.source_id === "string" ? args.source_id : spanSourceId ? `src_${spanSourceId}` : pathSource?.sourceId;
+        const source = (sourceId ? sourceIdKinds.get(`${record.session_id}:${sourceId}`) : undefined) ?? pathSource?.kind ?? "unknown";
+        const mode = args.source_span_id ? "source_span" : args.source_id ? "source_id_quote" : "source_path_quote";
+        const question = String(args.question ?? "").trim();
+        const claim = String(args.claim ?? "").trim();
+        const target = [record.session_id, sourceId ?? sourcePath, question, claim].join("\u0000");
+        const first = !seenEvidenceTargets.has(target);
+        seenEvidenceTargets.add(target);
+        const qualifiedCallId = `${record.session_id}:${callId}`;
+        activeEvidenceAttempts.set(qualifiedCallId, { first, source, mode, question, claim });
+        evidenceAddAttempts.calls += 1;
+        const breakdown = evidenceAddAttempts.by_source[source] ??= emptyEvidenceBreakdown();
+        const modeBreakdown = evidenceAddAttempts.by_input_mode[mode] ??= emptyEvidenceBreakdown();
+        breakdown.calls += 1;
+        modeBreakdown.calls += 1;
+        if (first) {
+          evidenceAddAttempts.first_attempts += 1;
+          breakdown.first_attempts += 1;
+          modeBreakdown.first_attempts += 1;
+        } else {
+          evidenceAddAttempts.retries += 1;
+          evidenceAddAttempts.retry_attempts += 1;
+        }
+      }
     }
     if (record.event === "tool_end") {
       const name = String(data?.tool_name ?? toolStarts.get(String(data?.tool_call_id))?.name ?? "unknown");
@@ -209,6 +361,38 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
         tools[name].errors += 1;
         runToolErrors.set(run ?? "unknown", (runToolErrors.get(run ?? "unknown") ?? 0) + 1);
       }
+      for (const produced of producedSourcePaths(name, data?.result)) {
+        sourceKinds.set(`${record.session_id}:${produced.path}`, { kind: produced.kind, ...(produced.sourceId ? { sourceId: produced.sourceId } : {}) });
+        if (produced.sourceId) sourceIdKinds.set(`${record.session_id}:${produced.sourceId}`, produced.kind);
+      }
+      if (name === "evidence_add") {
+        const qualifiedCallId = `${record.session_id}:${String(data?.tool_call_id ?? "")}`;
+        const attempt = activeEvidenceAttempts.get(qualifiedCallId);
+        activeEvidenceAttempts.delete(qualifiedCallId);
+        if (attempt) {
+          const breakdown = evidenceAddAttempts.by_source[attempt.source] ??= emptyEvidenceBreakdown();
+          const modeBreakdown = evidenceAddAttempts.by_input_mode[attempt.mode] ??= emptyEvidenceBreakdown();
+          const evidenceFailed = data?.is_error === true || recordValue(data?.result)?.details?.archived === false;
+          if (evidenceFailed) {
+            evidenceAddAttempts.errors += 1;
+            breakdown.errors += 1;
+            modeBreakdown.errors += 1;
+            if (attempt.first) {
+              evidenceAddAttempts.first_attempt_failures += 1;
+              breakdown.first_attempt_failures += 1;
+              modeBreakdown.first_attempt_failures += 1;
+            }
+            const reason = evidenceFailureReason(data?.result);
+            evidenceAddAttempts.failure_reasons[reason] = (evidenceAddAttempts.failure_reasons[reason] ?? 0) + 1;
+            const failedSourceId = recordValue(recordValue(data?.result)?.details)?.sourceId;
+            if (typeof failedSourceId === "string") {
+              seenEvidenceTargets.add([record.session_id, failedSourceId, attempt.question, attempt.claim].join("\u0000"));
+            }
+          } else if (!attempt.first) {
+            evidenceAddAttempts.retry_successes += 1;
+          }
+        }
+      }
       if (name === "pubmed_read") {
         const fullText = data?.result?.details?.fullText;
         if (fullText === true) fullTextReads += 1;
@@ -230,6 +414,9 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
     value.total_duration_seconds = Math.round(value.total_duration_ms) / 1000;
     value.average_duration_seconds = value.calls ? Math.round((value.total_duration_seconds / value.calls) * 1000) / 1000 : 0;
   }
+  evidenceAddAttempts.call_failure_rate = evidenceAddAttempts.calls ? evidenceAddAttempts.errors / evidenceAddAttempts.calls : 0;
+  evidenceAddAttempts.first_attempt_failure_rate = evidenceAddAttempts.first_attempts ? evidenceAddAttempts.first_attempt_failures / evidenceAddAttempts.first_attempts : 0;
+  evidenceAddAttempts.retry_success_rate = evidenceAddAttempts.retry_attempts ? evidenceAddAttempts.retry_successes / evidenceAddAttempts.retry_attempts : 0;
   const firstRunStart = [...runStarts.values()].sort()[0];
   const firstEvidenceDelay = milliseconds(firstRunStart, firstEvidenceTimestamp);
   const runIds = [...new Set([...runStarts.keys(), ...runEnds.keys(), ...runTurns.keys()])];
@@ -318,6 +505,7 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
     tokens,
     tools,
     phases,
+    evidence_add_attempts: evidenceAddAttempts,
     run_summaries: runIds.map((runId) => {
       const duration = milliseconds(runStarts.get(runId), runEnds.get(runId));
       return {

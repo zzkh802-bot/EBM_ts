@@ -31,7 +31,7 @@ function pmidFromAbstract(content: string): string {
 
 export function renderAbstractNavigation(
   sessionDirectoryName: string,
-  archives: Array<{ path: string; title?: string; content: string; bodyLineStart: number }>,
+  archives: Array<{ path: string; title?: string; content: string; bodyLineStart: number; sourceId?: string; documentId?: string }>,
   options: { searchArchivePath?: string; pmids?: string[] } = {},
 ): string {
   if (!archives.length) {
@@ -60,7 +60,9 @@ export function renderAbstractNavigation(
       `   PMID: ${pmidFromAbstract(archive.content)}`,
       `   Abstract preview: ${preview}`,
       `   Readable abstract path: ${readablePath}`,
-      "   Evidence use: copy a minimal, sufficient, continuous verbatim quote from the archived Abstract section.",
+      ...(archive.sourceId ? [`   Source ID: ${archive.sourceId}`] : []),
+      ...(archive.documentId ? [`   Document ID: ${archive.documentId}`] : []),
+      "   Evidence use: pass source_id and copy a minimal, sufficient, continuous verbatim quote from the archived Abstract section.",
       "",
     );
   });

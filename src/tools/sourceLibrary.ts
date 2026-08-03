@@ -418,6 +418,8 @@ export async function upsertSourceLibraryFromArchive(input: {
         const improvedTitle = poorArchiveTitle(existingTitle) ? bestSourceTitle({ ...(input.archive.title ? { title: input.archive.title } : {}), content: input.archive.content, ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}), fallback: path.basename(input.archive.path, ".md") }) : existingTitle!;
         const updatedMetadata = {
           ...metadata,
+          document_id: input.archive.documentId,
+          source_id: input.archive.sourceId,
           title: improvedTitle,
           ...(discoveryQueries.length ? { discovery_queries: discoveryQueries } : {}),
           keywords: uniqueStrings([...existingKeywords, ...incomingKeywords]),
@@ -447,6 +449,8 @@ export async function upsertSourceLibraryFromArchive(input: {
   await writeFile(path.join(dir, "full.md"), `${input.archive.content.trim()}\n`, "utf8");
   await writeFile(path.join(dir, "metadata.json"), `${JSON.stringify({
     title,
+    document_id: input.archive.documentId,
+    source_id: input.archive.sourceId,
     ...(input.archive.sourceUrl ? { source_url: input.archive.sourceUrl } : {}),
     aliases: aliasesFor({ title, ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}), archivePath: input.archive.path }),
     ...sourceLibraryMetadataFields({ title, ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}), content: input.archive.content, provider: input.provider, ...(input.sourceStatus ? { sourceStatus: input.sourceStatus } : {}), ...(input.discoveryQuery ? { discoveryQuery: input.discoveryQuery } : {}) }),

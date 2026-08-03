@@ -2,6 +2,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { archiveSource, type SourceArchiveRecord } from "./archive.js";
 import { preprocessExternalContent } from "./markdown.js";
+import { quoteReadySourceSpans, type QuoteReadySourceSpan } from "./sourceIdentity.js";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 
@@ -41,6 +42,9 @@ export type GuidelineRetrieveItem = GuidelineSearchItem & {
   sourcePath?: string;
   lineStart?: number;
   lineEnd?: number;
+  documentId?: string;
+  sourceId?: string;
+  quoteReadySpans?: QuoteReadySourceSpan[];
 };
 
 export type GuidelineResult =
@@ -419,15 +423,10 @@ async function rewriteGuidelineToc(sessionDir: string, archive: SourceArchiveRec
   await writeFile(path.join(sessionDir, archive.tocPath), `${output.join("\n")}\n`, "utf8");
 }
 
-function finalSectionSegments(section?: string): string[] {
-  return section?.split(">").map((part) => part.trim()).filter(Boolean).slice(-2) ?? [];
-}
-
-function ragChunkArchiveTitle(card: GuidelineRetrieveItem): string {
-  const sectionParts = finalSectionSegments(card.section);
+function ragChunkArchiveName(card: GuidelineRetrieveItem): string {
+  const sectionParts = card.section?.split(">").map((part) => part.trim()).filter(Boolean).slice(-2) ?? [];
   const sectionText = sectionParts.join(" ");
-  const sectionLooksGeneric = !sectionText || /^(?:recommendations?|evidence to recommendations?|further research|key recommendations?)$/i.test(sectionText);
-  return [sectionLooksGeneric ? card.title : undefined, sectionText || card.title, card.chunkType === "recommendation" ? "recommendation" : undefined]
+  return [card.title, sectionText, card.chunkType === "recommendation" ? "recommendation" : undefined]
     .filter((part): part is string => Boolean(part && part.trim()))
     .join(" ");
 }
@@ -510,7 +509,8 @@ export async function retrieveGuidelines(input: {
         kind: "read",
         layout: "file",
         ...(item.docId ? { sourceUrl: `mcp://guideline/${item.docId}${item.chunkId ? `#${encodeURIComponent(item.chunkId)}` : ""}` } : {}),
-        title: ragChunkArchiveTitle(item),
+        title: item.title,
+        archiveName: ragChunkArchiveName(item),
         ...(item.institution ? { sourceInstitution: item.institution } : {}),
         // Keep the citation source itself to the returned material. Provenance is
         // already carried by archive frontmatter (title + mcp:// doc/chunk URL),
@@ -519,12 +519,20 @@ export async function retrieveGuidelines(input: {
       });
       const window = retrievedChunkWindow(chunkArchive);
       item.sourcePath = chunkArchive.path;
+      item.documentId = chunkArchive.documentId;
+      item.sourceId = chunkArchive.sourceId;
       item.lineStart = window.lineStart;
       item.lineEnd = window.lineEnd;
       // The model must see the same normalized body that evidence_add will search.
       // archiveSource may decode entities and wrap long lines, so retaining the
       // pre-archive MCP string would make its visible text diverge from the archive.
       item.candidateMaterial = chunkArchive.content;
+      item.quoteReadySpans = await quoteReadySourceSpans({
+        sessionDir: input.sessionDir,
+        sourcePath: chunkArchive.path,
+        sourceId: chunkArchive.sourceId,
+        content: chunkArchive.content,
+      });
     }
     const content = renderGuidelineRetrieve(input.query, result.text);
     return {

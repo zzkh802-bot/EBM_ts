@@ -17,6 +17,25 @@ describe("source archive", () => {
     expect(record.sha256).toHaveLength(64);
   });
 
+  it("assigns one document identity and distinct source identities to MCP chunks", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
+    const first = await archiveSource({
+      sessionDir, kind: "read", layout: "file", title: "Stroke guideline",
+      sourceUrl: "mcp://guideline/g1#chunk-1", content: "First recommendation.",
+    });
+    const second = await archiveSource({
+      sessionDir, kind: "read", layout: "file", title: "Stroke guideline",
+      sourceUrl: "mcp://guideline/g1#chunk-2", content: "Second recommendation.",
+    });
+
+    expect(first.documentId).toMatch(/^doc_[a-f0-9]{16}$/);
+    expect(first.sourceId).toMatch(/^src_[a-f0-9]{16}$/);
+    expect(second.documentId).toBe(first.documentId);
+    expect(second.sourceId).not.toBe(first.sourceId);
+    expect(archiveToolText(first).text).toContain(`Source ID: ${first.sourceId}`);
+    expect(archiveToolText(first).text).toContain(`Document ID: ${first.documentId}`);
+  });
+
   it("preserves non-Latin semantics and never overwrites a different source revision", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
     const first = await archiveSource({ sessionDir, kind: "read", title: "中国高血压防治指南 2024", content: "first revision" });
@@ -102,7 +121,7 @@ describe("source archive", () => {
     expect(output.text).toContain("Preview truncated at 5000 bytes");
     expect(output.text).toContain("Continue without gaps");
     expect(output.text).toMatch(/Continue without gaps.*offset=\d+, limit=200/);
-    expect(output.text).toContain("For evidence_add, use this readable archive path and copy a minimal, sufficient, continuous verbatim quote");
+    expect(output.text).toContain("For evidence_add, pass the Source ID above with a minimal, sufficient, continuous verbatim quote");
   });
 
   it("normalizes content before hashing, archiving, and returning model-visible text", async () => {
