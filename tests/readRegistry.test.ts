@@ -79,6 +79,39 @@ describe("read receipts", () => {
     expect(evidence.matchMode).toBe("layout_normalized");
   });
 
+  it("allows optional line numbers to narrow a read_id range", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-read-registry-"));
+    const archive = await archiveSource({
+      sessionDir,
+      kind: "read",
+      title: "Narrowed receipt",
+      content: "Context line.\nTarget starts here.\nTarget ends here.\nMore context.",
+    });
+    const source = await readFile(path.join(sessionDir, archive.path), "utf8");
+    const receipt = await registerReadReceipt({
+      sessionDir,
+      sourcePath: archive.path,
+      source,
+      lineStart: archive.bodyLineStart,
+      lineEnd: archive.bodyLineStart + archive.lines - 1,
+    });
+
+    const evidence = await addEvidenceFromAnchors({
+      sessionDir,
+      question: "What is the target?",
+      claim: "The target passage is present.",
+      relation: "supports",
+      readId: receipt.id,
+      lineStart: archive.bodyLineStart + 1,
+      lineEnd: archive.bodyLineStart + 2,
+      startText: "Target starts here",
+      endText: "Target ends here",
+    });
+
+    expect(evidence.lineStart).toBe(archive.bodyLineStart + 1);
+    expect(evidence.lineEnd).toBe(archive.bodyLineStart + 2);
+  });
+
   it("allows line-range mode without text anchors", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-read-registry-"));
     const archive = await archiveSource({ sessionDir, kind: "read", title: "Line source", content: "Header\nThe evidence line.\nFooter" });

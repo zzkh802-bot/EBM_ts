@@ -42,7 +42,7 @@ export function registerReadRegistry(pi: Pick<ExtensionAPI, "registerTool" | "on
     const receipt = await registerReadReceipt({ sessionDir, sourcePath, source, lineStart: startLine, lineEnd: endLine });
     const text = textContent(event);
     return {
-      content: [...event.content, { type: "text", text: `\n\n[read_id: ${receipt.id}; source lines ${receipt.lineStart}-${receipt.lineEnd}. With this ID, provide start_text/end_text; source_path is optional. Without this ID, use source_path + line_start/line_end.]` }],
+      content: [...event.content, { type: "text", text: `\n\n[read_id: ${receipt.id}; source lines ${receipt.lineStart}-${receipt.lineEnd}. With this ID, provide start_text/end_text; source_path is optional. You may also provide line_start/line_end inside this range to narrow matching. Without this ID, use source_path + line_start/line_end.]` }],
       details: { ...(event.details && typeof event.details === "object" ? event.details : {}), readId: receipt.id, sourcePath, sourceLines: [receipt.lineStart, receipt.lineEnd], sourcePreview: receipt.preview, originalTextChars: text.length },
     };
   });

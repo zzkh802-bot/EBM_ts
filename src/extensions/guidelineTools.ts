@@ -92,7 +92,7 @@ export function renderGuidelineReadText(
     `Readable guideline path: ${readablePath}`,
     ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
     `Archive lines: 1-${totalLines} (${totalLines} total lines; 1-based).`,
-    "After read, choose one evidence_add locator: the returned read_id with start_text/end_text (source_path optional), or source_path with line_start/line_end (text anchors optional). Layout/XML/entity/punctuation noise is normalized; clinical numbers and wording are not repaired.",
+    "After read, choose one evidence_add locator: the returned read_id with start_text/end_text (source_path optional; line_start/line_end may optionally narrow inside that read), or source_path with line_start/line_end (text anchors optional). Layout/XML/entity/punctuation noise is normalized; clinical numbers and wording are not repaired.",
     ...(headings.length ? ["", "Best-effort navigation index (generated from cleaned Markdown; verify against full text):", ...headings] : []),
     "",
     `Informative preview lines ${previewStart}-${previewEnd}:`,

@@ -66,7 +66,7 @@ export function renderAbstractNavigation(
       `   Abstract lines: ${preview.startLine}-${preview.endLine}`,
       `   Abstract preview: ${preview.text}`,
       `   Readable abstract path: ${readablePath}`,
-      "   Evidence use: call pubmed_read first, then choose read_id with start_text/end_text (source_path optional), or use the displayed source path with line_start/line_end. Layout/XML/entity/punctuation noise is normalized, but wording and numbers must remain unchanged.",
+      "   Evidence use: call pubmed_read first, then choose read_id with start_text/end_text (source_path optional), optionally narrow with line_start/line_end inside that read, or use the displayed source path with line_start/line_end. Layout/XML/entity/punctuation noise is normalized, but wording and numbers must remain unchanged.",
       "",
     );
   });

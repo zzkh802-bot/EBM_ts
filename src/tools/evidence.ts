@@ -225,11 +225,11 @@ export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Pro
     receipt = await resolveReadReceipt(input.sessionDir, input.readId);
     normalizedSourcePath = normalizeEvidenceSourcePath(input.sourcePath ?? receipt.sourcePath);
     if (receipt.sourcePath !== normalizedSourcePath) throw new Error("read_id does not match source_path");
-    if (lineStart !== undefined && (lineStart !== receipt.lineStart || lineEnd !== receipt.lineEnd)) {
-      throw new Error("line range does not match read_id");
+    if (lineStart !== undefined && (lineStart < receipt.lineStart || lineEnd! > receipt.lineEnd)) {
+      throw new Error("line range must be inside the read_id range");
     }
-    lineStart = receipt.lineStart;
-    lineEnd = receipt.lineEnd;
+    lineStart ??= receipt.lineStart;
+    lineEnd ??= receipt.lineEnd;
   } else {
     if (!input.sourcePath?.trim()) throw new Error("source_path is required when read_id is absent");
     normalizedSourcePath = normalizeEvidenceSourcePath(input.sourcePath);

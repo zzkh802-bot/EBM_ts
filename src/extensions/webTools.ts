@@ -67,7 +67,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
     label: "Read Web Source",
     description: "Read documents through MinerU Premium or web pages through Jina with Firecrawl fallback, then normalize and archive before exposure.",
     promptSnippet: "Read and archive a public web source for quote-verified citation",
-    promptGuidelines: ["After reading, choose read_id with start_text/end_text (source_path optional), or source_path with line_start/line_end. Layout/XML/entity/punctuation noise is normalized, but never paraphrase, repair clinical text, or join discontinuous passages."],
+    promptGuidelines: ["After reading, choose read_id with start_text/end_text (source_path optional; line_start/line_end may optionally narrow inside that read), or source_path with line_start/line_end. Layout/XML/entity/punctuation noise is normalized, but never paraphrase, repair clinical text, or join discontinuous passages."],
     parameters: Type.Object({
       url: Type.String({ description: "Public HTTP(S) URL" }),
       pdf_pages: Type.Optional(Type.String({ description: "Optional focused PDF page range such as 1-5. Use only when the relevant pages are known; max 25 pages." })),
