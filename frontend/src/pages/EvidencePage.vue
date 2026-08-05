@@ -90,7 +90,7 @@ const documentKindLabel = (kind: ClinicianDocument['kind']) => ({
   report: '最终报告', report_draft: '报告草稿', research_frame: '研究框架', artifact: '用户文件', attachment: '上传附件',
 }[kind])
 const documentTitle = (file: ClinicianDocument) => file.path.split('/').at(-1) || documentKindLabel(file.kind)
-const intermediateConversationFiles = computed(() => conversationFiles.value.filter((file) => file.kind !== 'report'))
+const conversationDocuments = computed(() => conversationFiles.value)
 const hydrateHistoricalReports = async () => {
   const localSessionId = sessions.activeSessionId
   const sessionId = sessions.active.researchSessionId
@@ -276,8 +276,9 @@ const openCitation = (reference: Reference, reportPath?: string) => {
 }
 const openWorkspace = async (preferredPath = '') => {
   if (!conversationFiles.value.length) await loadConversationFiles()
-  const target = conversationFiles.value.find((file) => file.path === preferredPath && file.kind !== 'report')
-    || intermediateConversationFiles.value[0]
+  const target = conversationFiles.value.find((file) => file.path === preferredPath)
+    || conversationFiles.value.find((file) => file.kind !== 'report')
+    || conversationDocuments.value[0]
   if (target) await openConversationFile(target)
 }
 const markFeedbackSeen = () => {
@@ -528,10 +529,10 @@ const handlePrimaryAction = () => {
         <span>本题文档</span>
       </div>
       <p v-if="conversationFilesLoading">正在同步研究文件…</p>
-      <p v-else-if="!intermediateConversationFiles.length">研究过程文件会出现在这里；最终报告请在回答下方展开。</p>
+      <p v-else-if="!conversationDocuments.length">模型生成的研究文件会出现在这里。</p>
       <nav v-else class="conversation-document-list" aria-label="本题可读文档">
         <button
-          v-for="file in intermediateConversationFiles"
+          v-for="file in conversationDocuments"
           :key="file.path"
           type="button"
           :class="{ active: selectedConversationFile?.path === file.path }"
