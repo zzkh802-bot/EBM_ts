@@ -13,6 +13,7 @@ type AttachmentProgress = (text: string) => void;
 export async function archiveUploadedAttachments(
   rootDir: string,
   sessionDir: string,
+  sessionId: string,
   attachments: StoredAttachment[],
   signal?: AbortSignal,
   onProgress?: AttachmentProgress,
@@ -27,7 +28,9 @@ export async function archiveUploadedAttachments(
     const parsed = await parseAttachment(env.MINERU_API_TOKEN, attachment, bytes, signal);
     const content = normalizeAttachmentContent(attachment, parsed);
     const processedPath = await writeProcessedAttachment(sessionDir, attachment, content);
-    await new AttachmentStore(rootDir).markProcessed(attachment, path.basename(sessionDir), processedPath);
+    // `sessionDir` is a semantic workspace path (it may include a user prefix),
+    // while attachment listings are keyed by the public API session id.
+    await new AttachmentStore(rootDir).markProcessed(attachment, sessionId, processedPath);
     onProgress?.(`附件 ${index + 1}/${attachments.length} 已完成文字解析：${attachment.fileName}`);
     const inline = Array.from(content).length <= ATTACHMENT_INLINE_LIMIT_CHARS;
     const preview = inline

@@ -1153,6 +1153,7 @@ async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks:
     attachmentContext = await archiveUploadedAttachments(
       rootDir,
       piSessionDirectory(rootDir, sessionId),
+      sessionId,
       request.attachments,
       hooks.signal,
       (text) => hooks.onProgress({ text, timestamp: new Date().toISOString() }),

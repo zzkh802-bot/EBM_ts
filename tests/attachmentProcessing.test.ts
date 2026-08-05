@@ -16,7 +16,7 @@ describe("uploaded attachment processing", () => {
       store.create("user-a", "病历二.md", "text/markdown", new TextEncoder().encode("第二份附件内容")),
     ]);
     const progress: string[] = [];
-    const context = await archiveUploadedAttachments(rootDir, sessionDir, [first, second], undefined, (text) => progress.push(text));
+    const context = await archiveUploadedAttachments(rootDir, sessionDir, "session-a", [first, second], undefined, (text) => progress.push(text));
     expect(context).toContain('<file name="病历一.txt">');
     expect(context).toContain("第一份附件内容");
     expect(context).toContain("<file name=\"病历二.md\">");
@@ -34,7 +34,7 @@ describe("uploaded attachment processing", () => {
     const sessionDir = path.join(rootDir, "data", "pi-sessions", "session-image");
     const store = new AttachmentStore(rootDir);
     const attachment = await store.create("user-image", "scan.png", "image/png", new Uint8Array([137, 80, 78, 71]));
-    const context = await archiveUploadedAttachments(rootDir, sessionDir, [attachment]);
+    const context = await archiveUploadedAttachments(rootDir, sessionDir, "session-image", [attachment]);
 
     expect(context).toContain(`<medical_image name="scan.png" attachment_id="${attachment.id}">`);
     expect(context).toContain("</medical_image>");
@@ -48,13 +48,25 @@ describe("uploaded attachment processing", () => {
     const sessionDir = path.join(rootDir, "data", "pi-sessions", "session-b");
     const store = new AttachmentStore(rootDir);
     const attachment = await store.create("user-b", "long.txt", "text/plain", new TextEncoder().encode("长文本。".repeat(4_000)));
-    const context = await archiveUploadedAttachments(rootDir, sessionDir, [attachment]);
+    const context = await archiveUploadedAttachments(rootDir, sessionDir, "session-b", [attachment]);
     expect(context).toContain("请使用 read 读取");
     expect(context).toContain("长文本");
     expect(context).toContain("预览已截断");
     const files = await readFile(path.join(sessionDir, "artifacts", "uploads", `${attachment.id}-long.txt`, "full.md"), "utf8");
     expect(files).toContain("长文本");
     await expect(stat(path.join(sessionDir, "artifacts", "uploads", `${attachment.id}-long.txt`, "toc.md"))).resolves.toBeTruthy();
+  });
+
+  it("lists an attachment under the API session id when the workspace directory has a user prefix", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-upload-session-id-"));
+    const sessionDir = path.join(rootDir, "data", "pi-sessions", "u-user-a__session-a");
+    const store = new AttachmentStore(rootDir);
+    const attachment = await store.create("user-a", "note.txt", "text/plain", new TextEncoder().encode("附件内容"));
+
+    await archiveUploadedAttachments(rootDir, sessionDir, "session-a", [attachment]);
+
+    const listed = await store.listForSession("user-a", "session-a");
+    expect(listed.map((item) => item.id)).toEqual([attachment.id]);
   });
 
   it("places inline file material after the user's question", () => {
