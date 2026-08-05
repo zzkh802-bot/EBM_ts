@@ -622,9 +622,9 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
   if (request.method === "POST" && pathname === "/api/v1/auth/login") {
     const body = await readJsonBody(request);
     const clientKey = request.socket.remoteAddress ?? "unknown";
-    const login = isRecord(body) ? auth.login(body.username, body.password, clientKey) : undefined;
+    const login = isRecord(body) ? auth.login(body.user_id, body.password, clientKey) : undefined;
     if (auth.enabled && !login) {
-      sendJson(response, 401, { ok: false, contract_version: CONTRACT_VERSION, error: { code: "invalid_credentials", message: "用户名或密码不正确。" } });
+      sendJson(response, 401, { ok: false, contract_version: CONTRACT_VERSION, error: { code: "invalid_credentials", message: "用户 ID 或密码不正确。" } });
       return;
     }
     if (!auth.enabled) {
@@ -639,18 +639,16 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     const body = await readJsonBody(request);
     const clientKey = request.socket.remoteAddress ?? "unknown";
     const result = isRecord(body)
-      ? await auth.register(body.username, body.display_name, body.password, body.invite_key, clientKey)
-      : { ok: false as const, code: "invalid_username" as const };
+      ? await auth.register(body.display_name, body.password, body.invite_key, clientKey)
+      : { ok: false as const, code: "invalid_password" as const };
     if (!auth.enabled) {
       sendJson(response, 503, { ok: false, contract_version: CONTRACT_VERSION, error: { code: "registration_disabled", message: "当前服务未启用内部注册。" } });
       return;
     }
     if (!result.ok) {
-      const status = result.code === "duplicate_username" ? 409 : result.code === "storage_error" ? 500 : 400;
+      const status = result.code === "storage_error" ? 500 : 400;
       const messages: Record<typeof result.code, string> = {
         invalid_invite: "注册邀请码不正确。",
-        invalid_username: "用户名需为 1–64 个字母、数字、下划线、点或短横线。",
-        duplicate_username: "该用户名已被注册，请换一个。",
         invalid_password: "密码长度需为 6–256 个字符。",
         storage_error: "用户信息保存失败，请联系项目管理员。",
       };
@@ -710,7 +708,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     const workspaceMatch = /^\/api\/v1\/research-sessions\/([^/]+)\/files$/.exec(pathname);
     if (workspaceMatch && request.method === "GET") {
       const sessionId = decodePathSegment(workspaceMatch[1] ?? "");
-      if (authUser) await ownership.assertOwner(sessionId, authUser.id, [authUser.username]);
+      if (authUser) await ownership.assertOwner(sessionId, authUser.id);
       const requestedPath = url.searchParams.get("path");
       if (requestedPath) {
         const file = url.searchParams.get("download") === "1"
@@ -737,7 +735,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     const citationMatch = /^\/api\/v1\/research-sessions\/([^/]+)\/citations$/.exec(pathname);
     if (citationMatch && request.method === "GET") {
       const sessionId = decodePathSegment(citationMatch[1] ?? "");
-      if (authUser) await ownership.assertOwner(sessionId, authUser.id, [authUser.username]);
+      if (authUser) await ownership.assertOwner(sessionId, authUser.id);
       const reportPath = url.searchParams.get("report_path") ?? "";
       const number = Number(url.searchParams.get("number"));
       if (!Number.isInteger(number) || number < 1) throw new ApiError(422, "invalid_citation_number", "引用编号必须是正整数。 ");
@@ -748,7 +746,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     if (feedbackMatch && request.method === "POST") {
       if ((await runtimeConfig()).feedback_enabled === false) throw new ApiError(404, "feedback_disabled", "反馈功能当前未启用。 ");
       const sessionId = decodePathSegment(feedbackMatch[1] ?? "");
-      if (authUser) await ownership.assertOwner(sessionId, authUser.id, [authUser.username]);
+      if (authUser) await ownership.assertOwner(sessionId, authUser.id);
       const body = await readJsonBody(request);
       if (!isRecord(body)) throw new ApiError(422, "invalid_feedback", "反馈内容必须是 JSON 对象。 ");
       const workspace = await sessionWorkspace(rootDir, sessionId);
@@ -780,7 +778,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     const attachmentMatch = /^\/api\/v1\/research-sessions\/([^/]+)\/attachments(?:\/([^/]+))?$/.exec(pathname);
     if (attachmentMatch && request.method === "GET") {
       const sessionId = decodePathSegment(attachmentMatch[1] ?? "");
-      if (authUser) await ownership.assertOwner(sessionId, authUser.id, [authUser.username]);
+      if (authUser) await ownership.assertOwner(sessionId, authUser.id);
       const userId = authUser?.id ?? "anonymous";
       const attachmentId = attachmentMatch[2] ? decodePathSegment(attachmentMatch[2]) : undefined;
       if (!attachmentId) {
@@ -832,7 +830,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     }
     if (request.method === "POST" && pathname === "/api/v1/agent-runs") {
       const input = await validateAgentRunInput(await readJsonBody(request), await runtimeConfig(), authUser?.id ?? (auth.enabled ? undefined : "anonymous"), attachments);
-      if (authUser && input.sessionId) await ownership.assertOwner(input.sessionId, authUser.id, [authUser.username]);
+      if (authUser && input.sessionId) await ownership.assertOwner(input.sessionId, authUser.id);
       const run = store.submit(input, authUser?.id);
       sendJson(response, 202, {
         ...run,

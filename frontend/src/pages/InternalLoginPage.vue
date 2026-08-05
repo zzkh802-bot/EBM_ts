@@ -3,11 +3,11 @@ import { ref } from 'vue'
 import { HttpError } from '../services/http'
 import { authService } from '../services/auth'
 import type { InternalUser } from '../types/domain'
-import { AUTH_USER_STORAGE_KEY, AUTH_USERNAME_STORAGE_KEY } from '../utils/core'
+import { AUTH_USER_STORAGE_KEY } from '../utils/core'
 
 const emit = defineEmits<{ authenticated: [user: InternalUser] }>()
 const mode = ref<'login' | 'register'>('login')
-const username = ref(localStorage.getItem(AUTH_USERNAME_STORAGE_KEY) || '')
+const userId = ref(localStorage.getItem(AUTH_USER_STORAGE_KEY) || '')
 const displayName = ref('')
 const password = ref('')
 const confirmPassword = ref('')
@@ -20,16 +20,16 @@ const continueAfterRegistration = () => window.location.reload()
 
 const submit = async () => {
   error.value = ''
-  if (!username.value.trim() || !password.value) { error.value = '请输入用户名和密码。'; return }
+  if (mode.value === 'login' && !userId.value.trim()) { error.value = '请输入用户 ID。'; return }
+  if (!password.value) { error.value = '请输入密码。'; return }
   if (mode.value === 'register' && password.value !== confirmPassword.value) { error.value = '两次输入的密码不一致。'; return }
   if (mode.value === 'register' && !inviteKey.value) { error.value = '请输入项目负责人提供的注册邀请码。'; return }
   pending.value = true
   try {
     const result = mode.value === 'login'
-      ? await authService.login(username.value, password.value)
-      : await authService.register(username.value, displayName.value, password.value, inviteKey.value)
+      ? await authService.login(userId.value, password.value)
+      : await authService.register(displayName.value, password.value, inviteKey.value)
     localStorage.setItem(AUTH_USER_STORAGE_KEY, result.user.id)
-    localStorage.setItem(AUTH_USERNAME_STORAGE_KEY, result.user.username)
     if (mode.value === 'register') {
       registeredId.value = result.user.id
       return
@@ -51,10 +51,10 @@ const submit = async () => {
       <p class="internal-login-kicker">INTERNAL REVIEW</p>
       <h1 id="internal-login-title">{{ mode === 'login' ? '进入内部测试' : '注册标注账号' }}</h1>
       <p class="internal-login-lede">
-        {{ mode === 'login' ? '使用注册时的用户名和密码登录。每个账号的研究记录彼此隔离。' : '用户名必须唯一；显示名称可以与他人相同。注册后会生成一个便于记录归属的唯一 ID。' }}
+        {{ mode === 'login' ? '使用注册成功后生成的用户 ID 和密码登录。用户 ID 是身份标识，每个账号的研究记录彼此隔离。' : '无需填写用户名。注册成功后会生成唯一用户 ID；请务必记住它，后续登录和反馈归属都使用这个 ID。' }}
       </p>
       <form @submit.prevent="submit">
-        <label><span>登录用户名</span><input v-model="username" autocomplete="username" maxlength="64" placeholder="例如 annotator_01" /></label>
+        <label v-if="mode === 'login'"><span>用户 ID</span><input v-model="userId" autocomplete="username" maxlength="32" placeholder="例如 u-7k3m9p2c" /></label>
         <label v-if="mode === 'register'"><span>显示名称（可选）</span><input v-model="displayName" autocomplete="name" maxlength="80" placeholder="例如 张医生" /></label>
         <label><span>密码</span><input v-model="password" type="password" :autocomplete="mode === 'login' ? 'current-password' : 'new-password'" maxlength="256" placeholder="至少 6 个字符" /></label>
         <label v-if="mode === 'register'"><span>确认密码</span><input v-model="confirmPassword" type="password" autocomplete="new-password" maxlength="256" /></label>
@@ -72,7 +72,7 @@ const submit = async () => {
       <button class="mode-switch" type="button" @click="mode = mode === 'login' ? 'register' : 'login'; error = ''">
         {{ mode === 'login' ? '首次使用？注册账号' : '已有账号？返回登录' }}
       </button>
-      <small>忘记用户名或密码时，请联系项目管理员处理。请不要分享密码或注册邀请码。</small>
+      <small>忘记用户 ID 或密码时，请联系项目管理员处理。请不要分享密码或注册邀请码。</small>
     </section>
   </main>
 </template>

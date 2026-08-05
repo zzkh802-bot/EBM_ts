@@ -82,7 +82,6 @@ export interface RuntimeConfig {
 
 export interface InternalUser {
   id: string
-  username: string
   display_name?: string
 }
 
