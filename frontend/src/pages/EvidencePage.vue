@@ -467,7 +467,7 @@ const handlePrimaryAction = () => {
                 :audience="message.audienceMode"
                 @citation="openCitation($event, message.reportPath)"
               />
-              <p v-else>{{ message.content }}</p>
+              <p v-else-if="message.role !== 'assistant' || !message.pending">{{ message.content }}</p>
               <section v-if="message.role === 'assistant' && !message.pending && (message.reportMarkdown || message.reportPath)" class="report-attachment" aria-label="正式报告附件">
                 <button class="report-attachment-card" type="button" :aria-expanded="expandedReportMessageId === message.id" @click="toggleReport(message)">
                   <span class="report-attachment-icon" aria-hidden="true">＋</span>

@@ -1275,6 +1275,8 @@ export function buildAgentPrompt(input: AgentRunInput, attachmentContext = ""): 
     reportInstructions,
     reportPreflight,
     ...(input.responseMode === "report" ? ["本轮必须生成正式循证报告：在最终回复前调用 report_write；若 report_write 只保存了 draft，则修复后调用 report_finalize。最终聊天消息使用自然、简洁的中文答复，概括结论、重要边界和下一步，不复制完整报告；该摘要会与正式报告同时展示。"] : []),
+    "证据登记节奏：每读完一个能改变临床判断的来源片段，就在当前轮次尽快调用 evidence_add，不要把多个 read_id 留到检索结束后再并行登记。每次登记前核对当前 read_id 对应的 source_path 和行号范围；read_id 只绑定它实际读取的片段，后续重新读取同一来源会产生新的 read_id。若边界不在当前片段内，使用正确的 read_id 或重新读取目标行后重试，不要用整篇 full.md 作为证据。",
+    "长来源处理：guideline_mcp_read 主要用于获得上下文；默认只读取与当前主张相关的窗口，优先使用检索结果给出的候选片段和行号，单次读取尽量控制在 3500 个 Unicode 字符左右。不要为了寻找一条主张而 read(path, offset=1, limit=全文行数)。",
     "研究过程中，可在工具调用前用一句简短中文说明对医生有意义的进展。只有研究目标、临床判断或面向医生的阶段发生实质变化时才说明进展，例如完成问题框定、找到会改变决策的关键证据、发现重要冲突或缺口、停止检索并进入写作。原文定位、登记证据和可自动恢复的工具重试属于内部操作，无需播报；同一阶段不要反复说明‘证据已足够’或下一项内部动作。不要暴露工具参数、内部路径，也不要把未经核验的中间发现写成结论；无需为了展示而凑数量。",
     retrievalInstruction,
     ...(attachmentContext ? [

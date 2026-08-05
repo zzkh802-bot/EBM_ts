@@ -28,7 +28,7 @@ const complete = computed(() => rubricDefinitions.every((item) => values.value[i
 const choose = (key: FeedbackRubric, value: number) => { values.value[key] = value }
 const submit = async () => {
   const selectedTool = preferredTool.value
-  if (!complete.value || !selectedTool || pending.value || submitted.value) return
+  if (!complete.value || (props.showPreferredTool && !selectedTool) || pending.value || submitted.value) return
   pending.value = true
   error.value = ''
   try {

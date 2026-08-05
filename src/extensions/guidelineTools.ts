@@ -171,7 +171,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
     label: "Retrieve Guideline Chunks",
     description: "Run internal guideline RAG retrieval and archive each returned chunk as a citation-capable quote source.",
     promptSnippet: "Retrieve traceable guideline chunks that can directly support evidence when relevant",
-    promptGuidelines: ["RAG chunks may directly support evidence. Read the returned source path, then use read_id plus exact start_text/end_text with evidence_add; if read_id is unavailable, use the returned line range. Never join separate spans or insert ellipses. Use guideline_mcp_read when broader context is needed."],
+    promptGuidelines: ["RAG chunks may directly support evidence. Read the returned source path or its returned line range, then register the decision-relevant claim promptly with evidence_add; do not defer all evidence until the end. Use read_id plus exact start_text/end_text with evidence_add; if read_id is unavailable, use the returned line range. Never join separate spans or insert ellipses. Use guideline_mcp_read when broader context is needed, but do not read the entire full.md when a focused chunk/window is sufficient."],
     parameters: Type.Object({
       query: Type.String({ minLength: 2, description: "Focused clinical retrieval query" }),
       topk: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
@@ -205,8 +205,8 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
   pi.registerTool({
     name: "guideline_mcp_read",
     label: "Read Guideline",
-    description: "Read one full guideline from the internal MCP by doc_id or exact title and archive it before exposure.",
-    promptSnippet: "Read and archive a guideline selected from internal search",
+    description: "Read a guideline selected from internal search for context and archive it before exposure. Prefer focused follow-up windows for evidence rather than loading the entire full.md into one read.",
+    promptSnippet: "Read selected guideline context, then register focused evidence promptly",
     parameters: Type.Object({
       doc_id: Type.Optional(Type.String()),
       title: Type.Optional(Type.String()),
