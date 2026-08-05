@@ -245,6 +245,9 @@ export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Pro
   }
   const hasStart = Boolean(input.startText?.trim());
   const hasEnd = Boolean(input.endText?.trim());
+  if (hasStart !== hasEnd) {
+    throw new Error("start_text and end_text must be provided together");
+  }
   if (readIdMode && (!hasStart || !hasEnd)) {
     throw new Error("read_id requires both start_text and end_text; use line_start and line_end when text anchors are unavailable");
   }

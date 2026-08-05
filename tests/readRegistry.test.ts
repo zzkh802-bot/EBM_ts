@@ -129,6 +129,21 @@ describe("read receipts", () => {
     expect(evidence.matchMode).toBe("line_range");
   });
 
+  it("requires both text boundaries when line-range mode uses anchors", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-read-registry-"));
+    const archive = await archiveSource({ sessionDir, kind: "read", title: "Partial anchors", content: "The evidence line." });
+    await expect(addEvidenceFromAnchors({
+      sessionDir,
+      question: "What does the source say?",
+      claim: "The source contains the evidence line.",
+      relation: "supports",
+      sourcePath: archive.path,
+      lineStart: archive.bodyLineStart,
+      lineEnd: archive.bodyLineStart,
+      startText: "The evidence",
+    })).rejects.toThrow(/start_text and end_text must be provided together/);
+  });
+
   it("uses the read receipt path when source_path is omitted", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-read-registry-"));
     const archive = await archiveSource({ sessionDir, kind: "read", title: "Receipt path", content: "Use treatment when eligible." });
