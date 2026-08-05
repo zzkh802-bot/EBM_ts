@@ -211,6 +211,8 @@ export interface WorkspaceFile {
   modified_at: string
   media_type?: string
   previewable?: boolean
+  /** Processed Markdown path used to preview an uploaded attachment. */
+  preview_path?: string
 }
 
 export interface WorkspaceFilesResponse {

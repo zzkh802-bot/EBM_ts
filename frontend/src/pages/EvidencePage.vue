@@ -8,6 +8,7 @@ import { buildResearchRunRequest, hydrateRunReport, newId, nowIso, responseText 
 import { parseReport, reportPlainText, type Reference } from '../utils/report'
 import { copyText } from '../utils/browser'
 import ReportRenderer from '../components/report/ReportRenderer.vue'
+import PdfDocumentViewer from '../components/evidence/PdfDocumentViewer.vue'
 import RunActivity from '../components/evidence/RunActivity.vue'
 import FeedbackPanel from '../components/evidence/FeedbackPanel.vue'
 import { goodCases } from '../data/goodCases'
@@ -178,29 +179,33 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
       attachmentIds,
     )
     const data = await agentService.run(dto, signal, {
-          onStatus: (status) => {
-            latestRunStatus = status
-            if (status.session_id && status.session_id !== loadedServerSessionId) {
-              loadedServerSessionId = status.session_id
-              sessions.setResearchSessionId(localSessionId, status.session_id)
-              void loadConversationFiles(status.session_id)
-            }
-            if (status.stage) run.setStage(status.stage)
-            else if (status.status === 'queued') run.setStage('planning')
-            else if (status.status === 'running') run.setStage('retrieving')
-            else if (status.status === 'cancelling') run.setStage('network_wait')
-            sessions.patchMessageIn(localSessionId, pendingId, {
-              runId: status.run_id,
-              queryId: status.query_id || status.run_id,
-              trace: status.agent_trace || [],
-              progressUpdates: status.progress_updates || [],
-              tools: status.tools || [],
-              runStartedAt: status.started_at,
-              runCompletedAt: status.completed_at,
-            })
-          },
-          onNetworkRetry: () => { run.setStage('network_wait') },
+      onStatus: (status) => {
+        latestRunStatus = status
+        const attachmentProcessed = status.progress_updates?.some((update) => /附件.*(?:已完成文字解析|已加入本轮研究输入)/.test(update.text))
+        if (status.session_id && status.session_id !== loadedServerSessionId) {
+          loadedServerSessionId = status.session_id
+          sessions.setResearchSessionId(localSessionId, status.session_id)
+          void loadConversationFiles(status.session_id)
+        }
+        // The first session listing can race with OCR. Refresh once the
+        // backend reports that the processed attachment has been archived.
+        if (status.session_id && attachmentProcessed) void loadConversationFiles(status.session_id)
+        if (status.stage) run.setStage(status.stage)
+        else if (status.status === 'queued') run.setStage('planning')
+        else if (status.status === 'running') run.setStage('retrieving')
+        else if (status.status === 'cancelling') run.setStage('network_wait')
+        sessions.patchMessageIn(localSessionId, pendingId, {
+          runId: status.run_id,
+          queryId: status.query_id || status.run_id,
+          trace: status.agent_trace || [],
+          progressUpdates: status.progress_updates || [],
+          tools: status.tools || [],
+          runStartedAt: status.started_at,
+          runCompletedAt: status.completed_at,
         })
+      },
+      onNetworkRetry: () => { run.setStage('network_wait') },
+    })
     if (data.session_id) sessions.setResearchSessionId(localSessionId, data.session_id)
     const reportMarkdown = await hydrateRunReport(data, readFormalReport)
     if (data.session_id) await loadConversationFiles(data.session_id)
@@ -234,6 +239,8 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
       runStartedAt: statusSnapshot?.started_at,
       runCompletedAt: statusSnapshot?.completed_at,
     })
+    const sessionToRefresh = statusSnapshot?.session_id || loadedServerSessionId || sessions.active.researchSessionId
+    if (sessionToRefresh) await loadConversationFiles(sessionToRefresh)
     sessions.completeResearchIn(localSessionId)
   } finally {
     uploadingAttachments.value = false
@@ -555,6 +562,29 @@ const handlePrimaryAction = () => {
       <div class="session-document-body">
         <p v-if="conversationFileLoading" class="document-state">正在打开文档…</p>
         <p v-else-if="conversationFileError" class="document-state error">{{ conversationFileError }}</p>
+        <template v-else-if="selectedConversationFile?.kind === 'attachment'">
+          <div class="attachment-original-viewer">
+            <img
+              v-if="selectedConversationFile.media_type?.startsWith('image/')"
+              :src="workspaceService.attachmentPreviewUrl(sessions.active.researchSessionId || '', selectedConversationFile.path)"
+              :alt="documentTitle(selectedConversationFile)"
+            />
+            <PdfDocumentViewer
+              v-else-if="selectedConversationFile.media_type === 'application/pdf'"
+              :src="workspaceService.attachmentPreviewUrl(sessions.active.researchSessionId || '', selectedConversationFile.path)"
+              :title="documentTitle(selectedConversationFile)"
+            />
+            <p v-else class="document-state">原始文件格式不支持直接预览，请下载原件查看。</p>
+          </div>
+          <ReportRenderer
+            v-if="conversationFileContent && !selectedConversationFile.media_type?.startsWith('image/') && selectedConversationFile.media_type !== 'application/pdf'"
+            :markdown="conversationFileContent"
+            audience="clinician"
+          />
+          <div class="attachment-original-actions">
+            <a :href="workspaceService.downloadUrl(sessions.active.researchSessionId || '', selectedConversationFile.path)" download>下载原件</a>
+          </div>
+        </template>
         <ReportRenderer
           v-else-if="conversationFileContent && selectedConversationFile?.previewable !== false"
           :markdown="conversationFileContent"
@@ -639,4 +669,10 @@ const handlePrimaryAction = () => {
 .attachment-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 260px; padding: 4px 6px; border-radius: 5px; background: rgba(49, 123, 107, .1); color: var(--ink-soft, #56636f); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment-chip button { border: 0; background: transparent; color: inherit; cursor: pointer; }
 .attachment-error { color: #a43d36; }
+.attachment-original-viewer { display: grid; gap: 12px; margin-bottom: 16px; }
+.attachment-original-viewer img { display: block; max-width: 100%; max-height: 720px; margin: 0 auto; border: 1px solid var(--line, #d9e2de); border-radius: 8px; object-fit: contain; background: #f6f8f7; }
+.attachment-original-viewer iframe { width: 100%; min-height: 720px; border: 1px solid var(--line, #d9e2de); border-radius: 8px; background: #fff; }
+.attachment-original-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+.attachment-original-actions a { color: var(--jade, #08766d); font-size: 12px; text-decoration: none; }
+.attachment-original-actions a:hover { text-decoration: underline; }
 </style>

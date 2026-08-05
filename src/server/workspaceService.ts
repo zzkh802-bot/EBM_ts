@@ -97,7 +97,7 @@ export async function listWorkspaceFiles(workspace: string): Promise<WorkspaceFi
     for (const entry of entries) {
       const child = path.posix.join(relative, entry.name);
       if (entry.isDirectory()) await walk(child);
-      else if (entry.isFile() && visibleWorkspacePath(child)) {
+      else if (entry.isFile() && visibleWorkspacePath(child) && !child.startsWith("artifacts/uploads/") && !child.endsWith("/toc.md")) {
         const details = await stat(path.join(workspace, child));
         files.push(workspaceFileDetails(child, details.size, details.mtime.toISOString()));
       }

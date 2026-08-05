@@ -62,7 +62,9 @@ export function useResearchDocuments(getSessionId: () => string | null) {
     conversationFileError.value = ''
     conversationFileLoading.value = true
     try {
-      const content = (await workspaceService.read(sessionId, file.path)).content
+      // Keep the original attachment path for download/visual preview, but
+      // read the server-side OCR Markdown when opening the document entry.
+      const content = (await workspaceService.read(sessionId, file.preview_path || file.path)).content
       if (request === conversationReadSequence) conversationFileContent.value = content
     } catch (error) {
       if (request === conversationReadSequence) conversationFileError.value = error instanceof Error ? error.message : '无法读取该文档。'

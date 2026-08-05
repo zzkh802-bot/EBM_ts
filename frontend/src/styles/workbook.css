@@ -340,7 +340,7 @@ body.chat-mode { background: #f7f8f5; }
 body.chat-mode::before { opacity: .09; }
 body.chat-mode .mobile-app { background: linear-gradient(180deg, rgba(224, 241, 236, .56), rgba(247, 248, 245, .12) 18rem); }
 body.chat-mode .workspace-layout { display: grid; max-width: 1760px; grid-template-columns: 248px minmax(0, 1fr); gap: 36px; padding: 7px clamp(28px, 3vw, 64px) 72px; transition: grid-template-columns .24s ease; }
-body.chat-mode .workspace-layout.document-open { max-width: 1880px; grid-template-columns: 250px minmax(640px, .94fr) minmax(560px, .86fr); gap: 24px; }
+body.chat-mode .workspace-layout.document-open { max-width: 1880px; grid-template-columns: 220px minmax(520px, .78fr) minmax(700px, 1.22fr); gap: 18px; }
 body.chat-mode .workspace-info-panel { display: none; }
 body.chat-mode .workspace-center { display: flex; grid-column: 2; grid-row: 1; min-width: 0; min-height: calc(100vh - 108px); max-width: none; flex-direction: column; margin: 0; }
 body.chat-mode .workspace-layout.document-open .workspace-center { max-width: none; }

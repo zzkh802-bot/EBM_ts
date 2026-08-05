@@ -798,10 +798,11 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       }
       const file = await attachments.resolve(userId, attachmentId);
       const bytes = await readFile(file.path);
+      const disposition = url.searchParams.get("inline") === "1" ? "inline" : "attachment";
       response.writeHead(200, {
         "Content-Type": file.mediaType,
         "Content-Length": String(bytes.byteLength),
-        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
+        "Content-Disposition": `${disposition}; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
         "Cache-Control": "no-store",
       });
       response.end(bytes);
