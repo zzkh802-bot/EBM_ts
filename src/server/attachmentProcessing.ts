@@ -1,13 +1,12 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { truncateHead } from "@earendil-works/pi-coding-agent";
 import { parseDocumentBytes, type MineruParseResult } from "../tools/mineru.js";
 import { preprocessExternalContent } from "../tools/markdown.js";
 import { loadProjectEnv } from "./projectEnv.js";
 import { AttachmentStore, type StoredAttachment } from "./attachmentStore.js";
 
-/** Keep upload context consistent with web_read's compact 5 KB preview. */
-export const ATTACHMENT_INLINE_LIMIT_BYTES = 5_000;
+/** Shared compact preview budget: 3,500 Unicode characters. */
+export const ATTACHMENT_INLINE_LIMIT_CHARS = 3_500;
 
 type AttachmentProgress = (text: string) => void;
 
@@ -30,11 +29,12 @@ export async function archiveUploadedAttachments(
     const processedPath = await writeProcessedAttachment(sessionDir, attachment, content);
     await new AttachmentStore(rootDir).markProcessed(attachment, path.basename(sessionDir), processedPath);
     onProgress?.(`附件 ${index + 1}/${attachments.length} 已完成文字解析：${attachment.fileName}`);
-    const inline = Buffer.byteLength(content, "utf8") <= ATTACHMENT_INLINE_LIMIT_BYTES;
+    const inline = Array.from(content).length <= ATTACHMENT_INLINE_LIMIT_CHARS;
     const preview = inline
       ? content
       : `${previewContent(content)}\n[预览已截断；完整处理后文件请使用 read 读取：${processedPath}]`;
-    const fileBlock = `<file name="${escapeAttribute(attachment.fileName)}">\n${preview}\n</file>`;
+    const fileType = isImageAttachment(attachment.fileName) ? ' type="medical_image"' : '';
+    const fileBlock = `<file name="${escapeAttribute(attachment.fileName)}"${fileType}>\n${preview}\n</file>`;
     return [
       fileBlock,
       ...(isImageAttachment(attachment.fileName) ? [`医学图像附件 ID（如需视觉辅助理解时调用 medical_image_read）：${attachment.id}`] : []),
@@ -65,7 +65,7 @@ async function writeProcessedAttachment(sessionDir: string, attachment: StoredAt
   const root = path.join(sessionDir, "artifacts", "uploads");
   await mkdir(root, { recursive: true });
   const stem = `${attachment.id}-${attachment.fileName.replace(/[^\p{L}\p{N}._-]+/gu, "-")}`;
-  if (Buffer.byteLength(content, "utf8") <= ATTACHMENT_INLINE_LIMIT_BYTES) {
+  if (Array.from(content).length <= ATTACHMENT_INLINE_LIMIT_CHARS) {
     const relative = path.posix.join("artifacts", "uploads", `${stem}.md`);
     await writeFile(path.join(sessionDir, ...relative.split("/")), `${content}\n`, { encoding: "utf8", flag: "w", mode: 0o600 });
     return relative;
@@ -92,9 +92,5 @@ function escapeAttribute(value: string): string { return value.replace(/[&<>"']/
 function isImageAttachment(fileName: string): boolean { return /\.(?:png|jpe?g|webp|gif)$/i.test(fileName); }
 
 function previewContent(content: string): string {
-  const excerpt = truncateHead(content, { maxBytes: ATTACHMENT_INLINE_LIMIT_BYTES, maxLines: 2_000 }).content;
-  if (excerpt) return excerpt;
-  let end = Math.min(content.length, ATTACHMENT_INLINE_LIMIT_BYTES);
-  while (end > 0 && Buffer.byteLength(content.slice(0, end), "utf8") > ATTACHMENT_INLINE_LIMIT_BYTES) end -= 1;
-  return content.slice(0, end);
+  return Array.from(content).slice(0, ATTACHMENT_INLINE_LIMIT_CHARS).join("");
 }

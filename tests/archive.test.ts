@@ -146,7 +146,7 @@ describe("source archive", () => {
     expect(await readFile(path.join(sessionDir, record.tocPath!), "utf8")).toContain("H2 Results — lines");
     expect(output.text).toContain(`# Introduction — line ${record.bodyLineStart}`);
     expect(output.text).toContain("## Results — line");
-    expect(output.text).toContain("Preview truncated at 5000 bytes");
+    expect(output.text).toContain("Preview truncated at 3500 characters");
     expect(output.text).toContain("Continue without gaps");
     expect(output.text).toMatch(/Continue without gaps.*offset=\d+, limit=200/);
     expect(output.text).toContain("After read, use the returned read_id");

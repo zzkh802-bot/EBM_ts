@@ -33,7 +33,7 @@ describe("uploaded attachment processing", () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-upload-long-"));
     const sessionDir = path.join(rootDir, "data", "pi-sessions", "session-b");
     const store = new AttachmentStore(rootDir);
-    const attachment = await store.create("user-b", "long.txt", "text/plain", new TextEncoder().encode("长文本。".repeat(2_000)));
+    const attachment = await store.create("user-b", "long.txt", "text/plain", new TextEncoder().encode("长文本。".repeat(4_000)));
     const context = await archiveUploadedAttachments(rootDir, sessionDir, [attachment]);
     expect(context).toContain("请使用 read 读取");
     expect(context).toContain("长文本");

@@ -1,7 +1,7 @@
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, truncateHead } from "@earendil-works/pi-coding-agent";
 import type { SourceArchiveRecord } from "../tools/archive.js";
 
-const READ_PREVIEW_BYTES = 5_000;
+const READ_PREVIEW_CHARS = 3_500;
 const MAP_MAX_ITEMS = 20;
 
 function numberLines(content: string, startLine: number): string {
@@ -27,16 +27,22 @@ function sourceMap(content: string, bodyLineStart: number): { items: string[]; t
   return { items: headings.slice(0, MAP_MAX_ITEMS).map((item) => item.line), total: headings.length };
 }
 
+function truncateCharacters(content: string, maxChars: number, maxLines: number): { content: string; truncated: boolean } {
+  const characters = Array.from(content);
+  const lineLimited = characters.slice(0, maxChars).join("").split("\n").slice(0, maxLines).join("\n");
+  return { content: lineLimited, truncated: lineLimited.length < content.length };
+}
+
 export function archiveToolText(
   record: SourceArchiveRecord,
   readablePath = record.path,
   options: { compactRead?: boolean; citationEligible?: boolean } = {},
 ): { text: string; truncated: boolean } {
-  const previewBytes = options.compactRead ? READ_PREVIEW_BYTES : DEFAULT_MAX_BYTES;
-  const excerpt = truncateHead(record.content, {
-    maxBytes: previewBytes,
-    maxLines: DEFAULT_MAX_LINES,
-  });
+  const compactRead = options.compactRead === true;
+  const previewLimit = compactRead ? READ_PREVIEW_CHARS : DEFAULT_MAX_BYTES;
+  const excerpt = compactRead
+    ? truncateCharacters(record.content, READ_PREVIEW_CHARS, DEFAULT_MAX_LINES)
+    : truncateHead(record.content, { maxBytes: DEFAULT_MAX_BYTES, maxLines: DEFAULT_MAX_LINES });
   const visibleStart = record.bodyLineStart;
   const visibleEnd = visibleStart + excerpt.content.split("\n").length - 1;
   const totalLines = record.bodyLineStart + record.lines - 1;
@@ -68,7 +74,7 @@ export function archiveToolText(
       numberLines(excerpt.content, visibleStart),
       ...(excerpt.truncated ? [
         "",
-        `[Preview truncated at ${previewBytes} bytes; full normalized source remains at ${readablePath}.]`,
+        `[Preview truncated at ${previewLimit} ${compactRead ? "characters" : "bytes"}; full normalized source remains at ${readablePath}.]`,
       ] : []),
     ].join("\n"),
     truncated: excerpt.truncated,
