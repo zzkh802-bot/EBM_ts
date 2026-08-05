@@ -60,20 +60,20 @@ npm run ebm
 
 ## Web application and Agent API
 
-Start the TypeScript Agent API from the repository root:
+For development with TypeScript watch mode and Vue HMR, run one command from the repository root:
 
 ```bash
 npm install
-npm run api
-```
-
-Start the Vue frontend in a second terminal:
-
-```bash
-cd frontend
-npm install
+npm --prefix frontend install
 npm run dev
 ```
+
+The development URLs are:
+
+- Frontend: `http://127.0.0.1:5173` (Vite HMR)
+- Agent API: `http://127.0.0.1:8787` (`tsx watch`)
+
+For a production-like single-origin launch, use `npm start`. It builds the frontend once and serves the static files and API from `http://127.0.0.1:8787`.
 
 The production deployment keeps the public frontend behind Nginx while the Agent API runs on an internal loopback port. Deployment credentials and API keys are intentionally not stored in this repository.
 
