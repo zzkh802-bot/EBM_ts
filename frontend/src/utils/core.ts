@@ -1,4 +1,4 @@
-import type { AgentRunRequest, ModeSnapshot, ResponseMode } from '../types/domain'
+import type { AgentRunRequest, AgentRunResponse, ModeSnapshot, ResponseMode } from '../types/domain'
 
 export const STORAGE_KEYS = {
   sessions: 'dp_xunyi_sessions',
@@ -69,3 +69,12 @@ export function buildResearchRunRequest(
 
 export const responseText = (data: { report_markdown?: string; agent_answer?: string; message?: string }) =>
   data.agent_answer || data.message || data.report_markdown || '本轮没有生成回答。'
+
+export async function hydrateRunReport(
+  data: Pick<AgentRunResponse, 'session_id' | 'report_markdown' | 'report_path'>,
+  readFormalReport: (sessionId?: string, preferredPath?: string) => Promise<string>,
+): Promise<string> {
+  if (data.report_markdown) return data.report_markdown
+  if (!data.report_path || !data.session_id) return ''
+  return readFormalReport(data.session_id, data.report_path)
+}

@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { agentService, uploadAttachment, workspaceService } from '../services'
 import { useAgentRunStore, usePreferencesStore, useSessionsStore, useUiStore } from '../stores'
 import type { AgentRunResponse, ClinicianDocument, Message, ModeSnapshot, RuntimeConfig } from '../types/domain'
-import { buildResearchRunRequest, newId, nowIso, responseText } from '../utils/core'
+import { buildResearchRunRequest, hydrateRunReport, newId, nowIso, responseText } from '../utils/core'
 import { parseReport, reportPlainText, type Reference } from '../utils/report'
 import { copyText } from '../utils/browser'
 import ReportRenderer from '../components/report/ReportRenderer.vue'
@@ -202,7 +202,7 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
           onNetworkRetry: () => { run.setStage('network_wait') },
         })
     if (data.session_id) sessions.setResearchSessionId(localSessionId, data.session_id)
-    const reportMarkdown = data.report_markdown || await readFormalReport(data.session_id, data.report_path)
+    const reportMarkdown = await hydrateRunReport(data, readFormalReport)
     if (data.session_id) await loadConversationFiles(data.session_id)
     sessions.patchMessageIn(localSessionId, pendingId, {
       runId: data.run_id,
