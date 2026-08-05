@@ -42,6 +42,10 @@ Before choosing tools, classify the clinical role of the user's question. This i
 
 Use this clinical role to decide whether MCP, PubMed, web, or source reading comes first. The goal is not to collect more documents; it is to reduce the uncertainty that changes the clinical answer.
 
+## Five-step EBM mapping (internal checklist)
+
+Use the classic five-step cycle as a lightweight internal check: (1) frame the clinical decision and its smallest decision-changing questions; (2) retrieve the highest-authority, most direct evidence; (3) critically appraise validity, importance, consistency, harms, and applicability; (4) translate the synthesis into a conditional case-level recommendation; and (5) define what should be monitored and when the decision should be revisited. This is a reasoning aid, not a requirement to create five report sections or to expose a search log. Carry a step into the user-facing report only when it changes the conclusion, its boundary, or the follow-up plan.
+
 ## Query language and construction
 
 Choose query language by source and task rather than mirroring the user mechanically:
