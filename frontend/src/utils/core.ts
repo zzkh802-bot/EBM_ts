@@ -12,6 +12,7 @@ export const STORAGE_KEYS = {
 } as const
 
 export const AUTH_USER_STORAGE_KEY = 'dp_xunyi_internal_user'
+export const AUTH_USERNAME_STORAGE_KEY = 'dp_xunyi_internal_username'
 
 export const userScopedStorageKey = (key: string) => {
   let user = 'anonymous'

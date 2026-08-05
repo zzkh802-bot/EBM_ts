@@ -66,11 +66,13 @@ describe("循医研究服务 API", () => {
       expect(await config.json()).toEqual({ auth_required: true });
       const denied = await fetch(`${baseUrl}/api/v1/agent-runs`);
       expect(denied.status).toBe(401);
-      const login = await fetch(`${baseUrl}/api/v1/auth/login`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "Annotator_01", access_key: "shared-test-key" }),
+      const registration = await fetch(`${baseUrl}/api/v1/auth/register`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "Annotator_01", display_name: "同名标注员", password: "test-pass-1", invite_key: "shared-test-key" }),
       });
-      expect(login.status).toBe(200);
-      const cookie = login.headers.get("set-cookie");
+      expect(registration.status).toBe(201);
+      const registered = await registration.json() as { user: { id: string; username: string } };
+      expect(registered.user.id).toMatch(/^u-[23456789abcdefghjkmnpqrstuvwxyz]{8}$/);
+      const cookie = registration.headers.get("set-cookie");
       expect(cookie).toContain("ebm_internal_session=");
       const sessionCookie = cookie!.split(";")[0]!;
       const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
@@ -80,10 +82,15 @@ describe("循医研究服务 API", () => {
       const accepted = await created.json() as { run_id: string };
       const own = await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`, { headers: { cookie: sessionCookie } });
       expect(own.status).toBe(200);
-      const otherLogin = await fetch(`${baseUrl}/api/v1/auth/login`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "annotator_02", access_key: "shared-test-key" }),
+      const duplicate = await fetch(`${baseUrl}/api/v1/auth/register`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "annotator_01", display_name: "另一位", password: "test-pass-2", invite_key: "shared-test-key" }),
       });
-      const otherCookie = otherLogin.headers.get("set-cookie")!.split(";")[0]!;
+      expect(duplicate.status).toBe(409);
+      const otherRegistration = await fetch(`${baseUrl}/api/v1/auth/register`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "annotator_02", display_name: "同名标注员", password: "test-pass-2", invite_key: "shared-test-key" }),
+      });
+      expect(otherRegistration.status).toBe(201);
+      const otherCookie = otherRegistration.headers.get("set-cookie")!.split(";")[0]!;
       const crossUser = await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`, { headers: { cookie: otherCookie } });
       expect(crossUser.status).toBe(404);
     } finally {

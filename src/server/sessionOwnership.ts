@@ -27,9 +27,15 @@ export class SessionOwnershipStore {
     await this.persist();
   }
 
-  async assertOwner(sessionId: string, userId: string): Promise<void> {
+  async assertOwner(sessionId: string, userId: string, legacyUserIds: string[] = []): Promise<void> {
     await this.load();
-    if (this.owners.get(sessionId) !== userId) throw new SessionOwnershipError("session_not_owned");
+    const owner = this.owners.get(sessionId);
+    if (owner === userId) return;
+    // Accounts created before password registration used the normalized username
+    // as their owner id. Allow a one-time alias match and migrate the index.
+    if (!owner || !legacyUserIds.includes(owner)) throw new SessionOwnershipError("session_not_owned");
+    this.owners.set(sessionId, userId);
+    await this.persist();
   }
 
   private async load(): Promise<void> {
