@@ -2,7 +2,7 @@ import { mkdir, readFile, readdir, realpath, writeFile } from "node:fs/promises"
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { locateEvidenceAnchors, locateEvidenceQuote, locateEvidenceRange, type EvidenceMatchMode } from "./evidenceLocator.js";
-import { resolveReadReceipt, type ReadReceipt } from "./readRegistry.js";
+import { listReadReceipts, resolveReadReceipt, type ReadReceipt } from "./readRegistry.js";
 import { resolveSourceId, sourceIdentityForPath } from "./sourceIdentity.js";
 import { formatBeijingTimestamp } from "./time.js";
 
@@ -249,7 +249,15 @@ export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Pro
     throw new Error("read_id requires both start_text and end_text; use line_start and line_end when text anchors are unavailable");
   }
   const located = hasStart && hasEnd
-    ? await locateAnchorsOrRange(source, input.startText!, input.endText!, lineStart!, lineEnd!, readIdMode)
+    ? await locateAnchorsOrRange(
+      source,
+      input.startText!,
+      input.endText!,
+      lineStart!,
+      lineEnd!,
+      readIdMode,
+      readIdMode ? { sessionDir: input.sessionDir, sourcePath: normalizedSourcePath, readId: input.readId! } : undefined,
+    )
     : locateEvidenceRange(source, lineStart!, lineEnd!, "line_range");
   return persistLocatedEvidence({
     sessionDir: input.sessionDir,
@@ -279,16 +287,52 @@ async function locateAnchorsOrRange(
   lineStart: number,
   lineEnd: number,
   readIdMode: boolean,
+  readContext?: { sessionDir: string; sourcePath: string; readId: string },
 ): Promise<ReturnType<typeof locateEvidenceAnchors>> {
   try {
     return locateEvidenceAnchors(source, startText, endText, { lineStart, lineEnd });
   } catch (error) {
     if (!(error instanceof Error)) throw error;
+    if (readIdMode) {
+      const hint = readContext
+        ? await staleReadReceiptHint(readContext, source, startText, endText)
+        : "";
+      throw new Error(`${error.message}${hint}`);
+    }
     // Anchor text is a precision aid, not a reason to lose an otherwise
     // version-checked read/line record. Keep the bounded quote and expose its
     // broad locator mode in evidence metadata when matching is unsuccessful.
     return locateEvidenceRange(source, lineStart, lineEnd, readIdMode ? "read_id_range" : "line_range");
   }
+}
+
+/**
+ * A model can keep an older receipt in context after reading a newer range of
+ * the same source. Do not silently archive that older range: point to the
+ * receipt whose bounded lines actually contain the submitted anchors.
+ */
+async function staleReadReceiptHint(
+  context: { sessionDir: string; sourcePath: string; readId: string },
+  source: string,
+  startText: string,
+  endText: string,
+): Promise<string> {
+  const receipts = await listReadReceipts(context.sessionDir);
+  const matches = receipts
+    .filter((receipt) => receipt.id !== context.readId && receipt.sourcePath === context.sourcePath)
+    .flatMap((receipt) => {
+      try {
+        locateEvidenceAnchors(source, startText, endText, {
+          lineStart: receipt.lineStart,
+          lineEnd: receipt.lineEnd,
+        });
+        return [`${receipt.id}（L${receipt.lineStart}-${receipt.lineEnd}）`];
+      } catch {
+        return [];
+      }
+    });
+  if (!matches.length) return "";
+  return ` 当前 ${context.readId} 的范围为 L${receipts.find((receipt) => receipt.id === context.readId)?.lineStart ?? "?"}-${receipts.find((receipt) => receipt.id === context.readId)?.lineEnd ?? "?"}，与边界文本不一致；同一来源中可匹配的 read_id：${matches.join("、")}。请改用该 read_id，或重新读取对应片段后重试。`;
 }
 
 async function persistLocatedEvidence(

@@ -140,6 +140,41 @@ describe("read receipts", () => {
     expect(evidence.matchMode).toBe("line_range");
   });
 
+  it("explains when a read_id is stale for the submitted anchors", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-read-registry-"));
+    const archive = await archiveSource({
+      sessionDir,
+      kind: "read",
+      title: "Multiple receipt ranges",
+      content: "Abstract evidence starts here.\nAbstract evidence ends here.\n\nPubMed context starts here.",
+    });
+    const source = await readFile(path.join(sessionDir, archive.path), "utf8");
+    const oldReceipt = await registerReadReceipt({
+      sessionDir,
+      sourcePath: archive.path,
+      source,
+      lineStart: archive.bodyLineStart + 3,
+      lineEnd: archive.bodyLineStart + 3,
+    });
+    const abstractReceipt = await registerReadReceipt({
+      sessionDir,
+      sourcePath: archive.path,
+      source,
+      lineStart: archive.bodyLineStart,
+      lineEnd: archive.bodyLineStart + 1,
+    });
+
+    await expect(addEvidenceFromAnchors({
+      sessionDir,
+      question: "What does the abstract say?",
+      claim: "The abstract contains the evidence.",
+      relation: "supports",
+      readId: oldReceipt.id,
+      startText: "Abstract evidence starts",
+      endText: "Abstract evidence ends",
+    })).rejects.toThrow(new RegExp(`当前 ${oldReceipt.id}[\\s\\S]*${abstractReceipt.id}`));
+  });
+
   it("requires anchors when read_id mode is selected", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-read-registry-"));
     const archive = await archiveSource({ sessionDir, kind: "read", title: "Receipt anchors", content: "Use treatment when eligible." });

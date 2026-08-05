@@ -46,7 +46,7 @@ export type EvidenceAttemptAnalysis = EvidenceAttemptBreakdown & {
   by_source: Partial<Record<EvidenceSourceKind, EvidenceAttemptBreakdown>>;
   /** source_span/source_id_quote/source_path_quote are retained only to read historical traces. */
   by_input_mode: Partial<Record<"read_id_anchors" | "line_anchors" | "source_span" | "source_id_quote" | "source_path_quote", EvidenceAttemptBreakdown>>;
-  failure_reasons: Partial<Record<"input_contract" | "source_path" | "quote_not_located" | "quote_ambiguous" | "quote_quality" | "other", number>>;
+  failure_reasons: Partial<Record<"input_contract" | "source_path" | "quote_not_located" | "quote_ambiguous" | "quote_quality" | "provenance_bounds" | "other", number>>;
 };
 
 export type TrajectoryAnalysis = {
@@ -192,6 +192,7 @@ function evidenceFailureReason(result: unknown): keyof EvidenceAttemptAnalysis["
   const text = toolResultText(result);
   if (/provide .*source_span_id|provide read_id or line_start|exactly one of source_id|source_id does not match source_span_id/i.test(text)) return "input_contract";
   if (/source_path|ENOENT|no such file|unsafe relative path|outside session|different session workspace/i.test(text)) return "source_path";
+  if (/primary_abstract evidence must stay inside|read_id.*(?:范围|range).*与边界文本不一致|PubMed Abstract lines/i.test(text)) return "provenance_bounds";
   if (/匹配到\s*\d+\s*处|排版归一化后的 quote .*匹配到/i.test(text)) return "quote_ambiguous";
   if (/quality check failed|quote appears to be|citation evidence/i.test(text)) return "quote_quality";
   if (/未能在归档来源中唯一定位|没有找到可靠的原文候选|quote.*(?:locat|match)/i.test(text)) return "quote_not_located";
