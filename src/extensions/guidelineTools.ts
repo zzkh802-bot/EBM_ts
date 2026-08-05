@@ -128,9 +128,9 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
   pi.registerTool({
     name: "guideline_mcp_search",
     label: "Search Guideline Library",
-    description: "Search the internal guideline MCP sequentially and archive the returned document-level results.",
+    description: "Search the internal guideline MCP and archive document-level candidates. This does not return citation-ready evidence passages.",
     promptSnippet: "Search the internal guideline index for document IDs",
-    promptGuidelines: ["Search first, then use guideline_mcp_read on the best doc_id before creating evidence."],
+    promptGuidelines: ["This returns document candidates only, not evidence. If source_library_search already found a direct local source, use that first. Otherwise select a document, then use guideline_mcp_read for context or guideline_mcp_retrieve for focused evidence passages before creating evidence."],
     parameters: Type.Object({
       query: Type.String({ minLength: 2, description: "Prefer a short high-information English query" }),
       topk: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),

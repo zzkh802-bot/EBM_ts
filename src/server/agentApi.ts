@@ -1035,9 +1035,9 @@ export function buildAgentPrompt(input: AgentRunInput): string {
   const audienceInstruction = "使用面向临床人员的中文；按临床决策需要呈现证据等级、效应量和适用边界。";
   const retrievalInstruction = input.retrievalPolicy === "mcp_only"
     ? "本轮外部临床知识检索仅使用指南库：使用 guideline_mcp_search、guideline_mcp_retrieve、guideline_mcp_read，不使用 PubMed、公共网页或本地来源库检索。Pi 的 read、bash 等本地工具仍可用于读取和定位本会话已归档内容，但不得借此增加其他外部检索来源。若指南证据不足，明确报告证据缺口。最终面向用户的报告不得出现 MCP、RAG、工具调用、内部文件路径或内部 evidence ID。"
-    : "可按需使用已配置的检索工具；优先使用 source_library_search、guideline_mcp_*、pubmed_* 和 web_read，不要通过目录扫描寻找证据。";
+    : "可按需使用已配置的检索工具。检索顺序：每个新的临床子问题先调用 source_library_search；若返回直接相关的历史来源，优先用其 source_url 调用 web_read 复用本地归档，再用 guideline_mcp_search/retrieve/read 补充或核验。只有本地库无直接相关来源、需要最新版本，或需要解决指南冲突时，才转向 MCP/PubMed/web。不要把 guideline_mcp_search 的文档候选当作证据片段；只有读取文档或 retrieve 返回的片段后才能登记证据。不要通过目录扫描寻找证据。";
   return [
-    "你是循医的循证研究服务。请输出中文、可追溯且不过度断言的循证回答。",
+    "你是循医的循证研究服务。请输出中文、可追溯且不过度断言的循证回答。所有可见的工具调用前说明、阶段进展和中间计划都必须使用简短中文；thinking_level=off 时不要输出英文计划，直接调用工具。",
     audienceInstruction,
     "医生版正式报告必须遵循 clinical-report-writing skill：以临床总决策拆出最少的、能改变选择的循证子问题；每个分析小节先给出裁决，再解释证据如何支持或限制它，并回到当前病例的适用条件。报告标题与结构由该 skill 和实际临床决策决定，不得按文献逐篇罗列，不得把内部工具、文件路径或检索日志写给医生。",
     "调用 report_write 前自检：每个关键子问题都说明了待裁决主张、直接或间接证据、证据能与不能推出什么、对病例意味着什么；关键医学判断、阈值、疗效或安全性数字紧跟编号引用；正文引用与参考文献编号完全对应。",

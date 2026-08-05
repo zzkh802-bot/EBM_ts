@@ -104,6 +104,22 @@ describe("EBM Pi extension tools", () => {
     expect(text).not.toContain("Joanna M Wardlaw");
   });
 
+  it("labels guideline search as document discovery rather than evidence", () => {
+    const tools = new Map<string, { description?: string; promptGuidelines?: string[] }>();
+    vi.stubEnv("GUIDELINE_MCP_URL", "https://guideline.example.test");
+    registerEbmTools({
+      registerTool: (tool: { name: string; description?: string; promptGuidelines?: string[] }) => tools.set(tool.name, tool),
+      on: () => undefined,
+      events: { emit: () => undefined },
+    } as never);
+    const search = tools.get("guideline_mcp_search");
+    const retrieve = tools.get("guideline_mcp_retrieve");
+    expect(search?.description).toContain("document-level candidates");
+    expect(search?.description).toContain("does not return citation-ready evidence");
+    expect(search?.promptGuidelines?.join(" ")).toContain("document candidates only");
+    expect(retrieve?.description).toContain("citation-capable quote source");
+  });
+
   it("renders copy-ready verbatim material without asking the model to calculate line ranges", () => {
     const text = renderRetrieveCards("Candidates", [{
       title: "Hypertension guideline",

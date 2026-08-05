@@ -70,6 +70,9 @@ describe("循医研究服务 API", () => {
     expect(maximum).not.toContain("指南推荐等级")
     expect(publicPrompt).toContain("面向临床人员")
     expect(publicPrompt).toContain("本轮外部临床知识检索仅使用指南库")
+    expect(low).toContain("每个新的临床子问题先调用 source_library_search")
+    expect(low).toContain("所有可见的工具调用前说明")
+    expect(low).toContain("thinking_level=off")
   });
 
   it("keeps the evidence toolchain available when a legacy client sends search_enabled=false", () => {
