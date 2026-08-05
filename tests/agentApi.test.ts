@@ -41,6 +41,7 @@ describe("循医研究服务 API", () => {
     thinkingLevel: "high",
     searchEnabled: true,
     retrievalPolicy: "all",
+    responseMode: "report",
     maxIterations: 32,
     requestTimeoutSeconds: 600,
     provider: "deepseek",
@@ -123,6 +124,14 @@ describe("循医研究服务 API", () => {
     expect(prompt).toContain("source_library_search")
     expect(prompt).toContain("可按需使用已配置的检索工具")
     expect(prompt).not.toContain("只使用当前会话中的既有材料")
+  });
+
+  it("keeps follow-up QA on the direct-answer path instead of forcing report tools", () => {
+    const prompt = buildAgentPrompt(promptInput({ responseMode: "answer" }));
+    expect(prompt).toContain("只需完成对话式回答")
+    expect(prompt).toContain("不要为了回答追问而重复执行正式报告流程")
+    expect(prompt).not.toContain("在最终回复前调用 report_write")
+    expect(prompt).not.toContain("必须生成正式循证报告")
   });
 
   it("returns verified source excerpts for a numbered report citation without exposing evidence IDs", async () => {

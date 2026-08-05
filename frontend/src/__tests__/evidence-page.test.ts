@@ -9,7 +9,7 @@ import { useSessionsStore, useUiStore } from '../stores'
 afterEach(() => vi.unstubAllGlobals())
 
 describe('医生工作台回答展示', () => {
-  it('将正式报告前的模型回答按 Markdown 渲染', async () => {
+  it('保留模型回答，并将正式报告作为可展开附件渲染', async () => {
     setActivePinia(createPinia())
     const sessions = useSessionsStore()
     sessions.active.messages = [{
@@ -42,12 +42,15 @@ describe('医生工作台回答展示', () => {
     await router.isReady()
 
     const wrapper = mount(EvidencePage, { global: { plugins: [router] } })
-    const summary = wrapper.get('.model-answer')
+    const summary = wrapper.get('.evidence-report')
 
     expect(summary.get('code').text()).toBe('reports/final.md')
     expect(summary.get('strong').text()).toBe('核心结论摘要：')
     expect(summary.text()).not.toContain('**')
-    expect(wrapper.find('.report-file-link').exists()).toBe(false)
+    expect(wrapper.find('.final-report').exists()).toBe(false)
+
+    await wrapper.get('.report-attachment-card').trigger('click')
+    expect(wrapper.get('.final-report').text()).toContain('完整报告正文')
 
     await wrapper.get('.final-report .citation-pill').trigger('click')
     expect(useUiStore().detailPayload).toMatchObject({

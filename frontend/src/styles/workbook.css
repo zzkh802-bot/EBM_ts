@@ -372,6 +372,16 @@ body.chat-mode .conversation-context button { display: none; }
 .message-more-actions > div { position: absolute; z-index: 8; top: calc(100% + 6px); right: 0; display: grid; min-width: 118px; padding: 5px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper-bright); box-shadow: var(--shadow); }
 .message-more-actions > div button { padding: 7px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--ink-soft); font-size: 11px; text-align: left; }
 .message-more-actions > div button:hover { background: var(--evidence-soft); color: var(--evidence); }
+.report-attachment { padding-top: 14px; margin-top: 14px; border-top: 1px solid var(--line); }
+.report-attachment-card { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 11px; width: 100%; padding: 10px 12px; border: 1px solid rgba(36, 56, 69, .13); border-radius: 11px; background: linear-gradient(120deg, rgba(252, 253, 252, .96), rgba(239, 247, 243, .72)); color: var(--ink); text-align: left; cursor: pointer; box-shadow: 0 5px 16px rgba(25, 45, 58, .04); transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease; }
+.report-attachment-card:hover { border-color: rgba(8, 118, 109, .35); box-shadow: 0 8px 21px rgba(25, 45, 58, .08); transform: translateY(-1px); }
+.report-attachment-icon { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--paper-bright); color: var(--jade); font-family: var(--mono); font-size: 18px; line-height: 1; }
+.report-attachment-copy { display: grid; min-width: 0; gap: 2px; }
+.report-attachment-copy strong { color: var(--ink); font-family: var(--sans); font-size: 13px; font-weight: 700; }
+.report-attachment-copy small { overflow: hidden; color: var(--ink-faint); font-family: var(--mono); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.report-attachment-action { color: var(--jade); font-size: 11px; white-space: nowrap; }
+.report-attachment-action i { display: inline-block; margin-left: 3px; font-style: normal; font-size: 14px; }
+.report-attachment .final-report { padding: 16px 4px 4px; }
 .final-report { padding: 2px 0 0; }
 .final-report-head { display: flex; align-items: end; justify-content: space-between; gap: 16px; padding: 14px 0 13px; margin-bottom: 14px; border-top: 2px solid var(--jade); border-bottom: 1px solid var(--line-strong); }
 .final-report-head > div { display: grid; gap: 3px; }

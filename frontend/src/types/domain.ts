@@ -28,6 +28,7 @@ export interface ResearchProgressUpdate {
 
 export type AgentRunStatus = 'queued' | 'running' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled'
 export type AgentStage = 'idle' | 'planning' | 'retrieving' | 'tooling' | 'generating' | 'network_wait'
+export type ResponseMode = 'auto' | 'report' | 'answer'
 
 export interface AgentRunRequest {
   question: string
@@ -35,6 +36,7 @@ export interface AgentRunRequest {
   audience_mode: AudienceMode
   thinking_level: ThinkingLevel
   search_enabled: boolean
+  response_mode?: ResponseMode
   provider?: string
   model?: string
   attachments?: string[]
@@ -204,9 +206,11 @@ export interface Session {
 
 export interface WorkspaceFile {
   path: string
-  kind: 'report' | 'research_frame' | 'evidence' | 'source'
+  kind: 'report' | 'report_draft' | 'research_frame' | 'artifact'
   size: number
   modified_at: string
+  media_type?: string
+  previewable?: boolean
 }
 
 export interface WorkspaceFilesResponse {
@@ -214,7 +218,7 @@ export interface WorkspaceFilesResponse {
   files: WorkspaceFile[]
 }
 
-export type ClinicianDocumentKind = 'report' | 'research_frame'
+export type ClinicianDocumentKind = 'report' | 'report_draft' | 'research_frame' | 'artifact'
 
 export interface ClinicianDocument extends Omit<WorkspaceFile, 'kind'> {
   kind: ClinicianDocumentKind

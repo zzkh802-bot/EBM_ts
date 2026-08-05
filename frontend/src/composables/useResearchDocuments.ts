@@ -31,8 +31,8 @@ export function useResearchDocuments(getSessionId: () => string | null) {
     conversationFileError.value = ''
   }
 
-  const loadConversationFiles = async () => {
-    const sessionId = getSessionId()
+  const loadConversationFiles = async (sessionIdOverride?: string) => {
+    const sessionId = sessionIdOverride || getSessionId()
     if (!sessionId) {
       conversationFiles.value = []
       return

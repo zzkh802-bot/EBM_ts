@@ -10,9 +10,11 @@ export class WorkspaceServiceError extends Error {
 
 export type WorkspaceFile = {
   path: string;
-  kind: "report" | "research_frame" | "evidence" | "source";
+  kind: "report" | "report_draft" | "research_frame" | "artifact";
   size: number;
   modified_at: string;
+  media_type: string;
+  previewable: boolean;
 };
 
 export function safeSessionId(sessionId: string): string {
@@ -42,17 +44,44 @@ export async function safeWorkspaceFile(workspace: string, relativePath: string)
 
 export function workspaceFileKind(relativePath: string): WorkspaceFile["kind"] {
   if (relativePath === "notes/research_frame.md") return "research_frame";
+  if (relativePath.startsWith("reports/drafts/") && relativePath.endsWith(".md")) return "report_draft";
   if (relativePath.startsWith("reports/")) return "report";
-  if (relativePath.startsWith("evidence/")) return "evidence";
-  return "source";
+  return "artifact";
 }
 
 export function visibleWorkspacePath(relativePath: string): boolean {
   return relativePath === "notes/research_frame.md"
-    || relativePath === "evidence/EVIDENCE.md"
-    || /^reports\/(?!drafts\/).+\.md$/.test(relativePath)
-    || /^evidence\/ev_[a-f0-9]{16}\.md$/.test(relativePath)
-    || /^sources\/(?:read|search)\/.+\/(?:full|toc)\.md$/.test(relativePath);
+    || /^reports\/.+\.md$/.test(relativePath)
+    || isUserArtifactPath(relativePath);
+}
+
+function isUserArtifactPath(relativePath: string): boolean {
+  if (!relativePath.startsWith("artifacts/")) return false;
+  const parts = relativePath.split("/");
+  return parts.length > 1 && parts.every((part) => Boolean(part) && part !== "." && part !== ".." && !part.startsWith("."));
+}
+
+function mediaTypeForWorkspacePath(relativePath: string): string {
+  const extension = path.extname(relativePath).toLowerCase();
+  return ({
+    ".md": "text/markdown", ".txt": "text/plain", ".json": "application/json", ".csv": "text/csv",
+    ".xml": "application/xml", ".html": "text/html", ".css": "text/css", ".js": "text/javascript",
+    ".ts": "text/typescript", ".yaml": "text/yaml", ".yml": "text/yaml", ".pdf": "application/pdf",
+    ".doc": "application/msword", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif",
+  } as Record<string, string>)[extension] ?? "application/octet-stream";
+}
+
+function workspaceFileDetails(relativePath: string, size: number, modifiedAt: string): WorkspaceFile {
+  const mediaType = mediaTypeForWorkspacePath(relativePath);
+  return {
+    path: relativePath,
+    kind: workspaceFileKind(relativePath),
+    size,
+    modified_at: modifiedAt,
+    media_type: mediaType,
+    previewable: mediaType.startsWith("text/") || mediaType === "application/json" || mediaType === "application/xml",
+  };
 }
 
 export async function listWorkspaceFiles(workspace: string): Promise<WorkspaceFile[]> {
@@ -70,11 +99,11 @@ export async function listWorkspaceFiles(workspace: string): Promise<WorkspaceFi
       if (entry.isDirectory()) await walk(child);
       else if (entry.isFile() && visibleWorkspacePath(child)) {
         const details = await stat(path.join(workspace, child));
-        files.push({ path: child, kind: workspaceFileKind(child), size: details.size, modified_at: details.mtime.toISOString() });
+        files.push(workspaceFileDetails(child, details.size, details.mtime.toISOString()));
       }
     }
   };
-  await Promise.all(["notes", "reports", "evidence", "sources"].map((directory) => walk(directory)));
+  await Promise.all(["notes", "reports", "artifacts"].map((directory) => walk(directory)));
   return files.sort((left, right) => right.modified_at.localeCompare(left.modified_at));
 }
 
@@ -89,5 +118,15 @@ export async function readWorkspaceFile(rootDir: string, sessionId: string, rela
     throw new WorkspaceServiceError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
   }
   if (!details.isFile()) throw new WorkspaceServiceError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
-  return { session_id: sessionId, path: relativePath, kind: workspaceFileKind(relativePath), size: details.size, modified_at: details.mtime.toISOString(), content: await readFile(absolutePath, "utf8") };
+  const metadata = workspaceFileDetails(relativePath, details.size, details.mtime.toISOString());
+  return { session_id: sessionId, ...metadata, content: metadata.previewable ? await readFile(absolutePath, "utf8") : "" };
+}
+
+export async function readWorkspaceDownload(rootDir: string, sessionId: string, relativePath: string): Promise<WorkspaceFile & { bytes: Buffer }> {
+  if (!visibleWorkspacePath(relativePath)) throw new WorkspaceServiceError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
+  const workspace = await sessionWorkspace(rootDir, sessionId);
+  const absolutePath = await safeWorkspaceFile(workspace, relativePath);
+  const details = await stat(absolutePath);
+  if (!details.isFile()) throw new WorkspaceServiceError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
+  return { ...workspaceFileDetails(relativePath, details.size, details.mtime.toISOString()), bytes: await readFile(absolutePath) };
 }

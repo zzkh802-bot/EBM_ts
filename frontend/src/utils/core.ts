@@ -1,4 +1,4 @@
-import type { AgentRunRequest, ModeSnapshot } from '../types/domain'
+import type { AgentRunRequest, ModeSnapshot, ResponseMode } from '../types/domain'
 
 export const STORAGE_KEYS = {
   sessions: 'dp_xunyi_sessions',
@@ -52,6 +52,7 @@ export function buildResearchRunRequest(
   provider?: string,
   model?: string,
   attachments?: string[],
+  responseMode: ResponseMode = 'auto',
 ): AgentRunRequest {
   return {
     question,
@@ -59,6 +60,7 @@ export function buildResearchRunRequest(
     audience_mode: mode.audienceMode,
     thinking_level: mode.thinkingLevel,
     search_enabled: true,
+    response_mode: responseMode,
     ...(provider ? { provider } : {}),
     ...(model ? { model } : {}),
     ...(attachments?.length ? { attachments } : {}),
