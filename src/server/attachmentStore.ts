@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
@@ -14,6 +14,7 @@ export type StoredAttachment = {
   size: number;
   path: string;
   clientSessionId?: string;
+  processedPath?: string;
 };
 
 export class AttachmentStoreError extends Error {
@@ -53,6 +54,26 @@ export class AttachmentStore {
   async resolveMany(userId: string, ids: string[]): Promise<StoredAttachment[]> {
     if (ids.length > MAX_ATTACHMENTS_PER_RUN) throw new AttachmentStoreError("invalid_attachment");
     return Promise.all(ids.map((id) => this.resolve(userId, id)));
+  }
+
+  async markProcessed(attachment: StoredAttachment, sessionId: string, processedPath: string): Promise<StoredAttachment> {
+    const stored = await this.resolve(attachment.userId, attachment.id);
+    const updated: StoredAttachment = { ...stored, clientSessionId: sessionId, processedPath };
+    await writeFile(path.join(path.dirname(path.dirname(stored.path)), "metadata.json"), `${JSON.stringify(updated, null, 2)}\n`, { mode: 0o600 });
+    return updated;
+  }
+
+  async listForSession(userId: string, sessionId: string): Promise<StoredAttachment[]> {
+    const root = path.join(this.rootDir, "data", "attachments", userHash(userId));
+    let entries;
+    try { entries = await readdir(root, { withFileTypes: true }); } catch { return []; }
+    const attachments = await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
+      try {
+        const stored = JSON.parse(await readFile(path.join(root, entry.name, "metadata.json"), "utf8")) as StoredAttachment;
+        return stored.userId === userId && stored.clientSessionId === sessionId ? stored : undefined;
+      } catch { return undefined; }
+    }));
+    return attachments.filter((attachment): attachment is StoredAttachment => Boolean(attachment));
   }
 }
 

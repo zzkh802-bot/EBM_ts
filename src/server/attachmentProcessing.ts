@@ -1,37 +1,47 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { archiveSource } from "../tools/archive.js";
 import { parseDocumentBytes, type MineruParseResult } from "../tools/mineru.js";
+import { preprocessExternalContent } from "../tools/markdown.js";
 import { loadProjectEnv } from "./projectEnv.js";
-import type { StoredAttachment } from "./attachmentStore.js";
+import { AttachmentStore, type StoredAttachment } from "./attachmentStore.js";
 
-export async function archiveUploadedAttachments(rootDir: string, sessionDir: string, attachments: StoredAttachment[], signal?: AbortSignal): Promise<string> {
+/** Keep upload context consistent with web_read's compact 5 KB preview. */
+export const ATTACHMENT_INLINE_LIMIT_BYTES = 5_000;
+
+type AttachmentProgress = (text: string) => void;
+
+export async function archiveUploadedAttachments(
+  rootDir: string,
+  sessionDir: string,
+  attachments: StoredAttachment[],
+  signal?: AbortSignal,
+  onProgress?: AttachmentProgress,
+): Promise<string> {
   if (!attachments.length) return "";
   const env = await loadProjectEnv(rootDir);
-  const contexts: string[] = [];
-  for (const attachment of attachments) {
+  onProgress?.(`正在并行解析 ${attachments.length} 个附件（OCR/文字提取）…`);
+  const results = await Promise.all(attachments.map(async (attachment, index) => {
+    if (signal?.aborted) throw signal.reason;
+    onProgress?.(`正在解析附件 ${index + 1}/${attachments.length}：${attachment.fileName}`);
     const bytes = new Uint8Array(await readFile(attachment.path));
     const parsed = await parseAttachment(env.MINERU_API_TOKEN, attachment, bytes, signal);
-    const originalResource = { path: `original/${attachment.fileName}`, bytes, mediaType: attachment.mediaType };
-    const resources = [originalResource, ...(parsed?.resources ?? [])];
-    const archive = await archiveSource({
-      sessionDir,
-      kind: "upload",
-      title: `用户附件：${attachment.fileName}`,
-      archiveName: `${attachment.id}-${attachment.fileName}`,
-      content: parsed?.content || `用户上传附件：${attachment.fileName}\n\n附件尚未完成文字解析。请根据原始文件或图像理解工具继续处理。`,
-      resources,
-    });
-    const originalPath = archive.archiveDir ? path.posix.join(archive.archiveDir, originalResource.path) : archive.path;
-    contexts.push([
-      `用户附件：${attachment.fileName}`,
-      `文字归档：${archive.path}`,
-      `原始文件：${originalPath}`,
-      ...(isImage(attachment.fileName) ? [`这是图像附件；如需视觉理解，请调用 medical_image_read，source_path=${originalPath}。`] : []),
+    const content = normalizeAttachmentContent(attachment, parsed);
+    const processedPath = await writeProcessedAttachment(sessionDir, attachment, content);
+    await new AttachmentStore(rootDir).markProcessed(attachment, path.basename(sessionDir), processedPath);
+    onProgress?.(`附件 ${index + 1}/${attachments.length} 已完成文字解析：${attachment.fileName}`);
+    const inline = Buffer.byteLength(content, "utf8") <= ATTACHMENT_INLINE_LIMIT_BYTES;
+    const fileBlock = inline
+      ? `<file name="${escapeAttribute(attachment.fileName)}">\n${content}\n</file>`
+      : `<file name="${escapeAttribute(attachment.fileName)}">\n文字已归档到 ${processedPath}，请先使用 read 读取；不要读取或寻找原始上传文件。\n</file>`;
+    return [
+      fileBlock,
+      ...(isImageAttachment(attachment.fileName) ? [`医学图像附件 ID（如需视觉辅助理解时调用 medical_image_read）：${attachment.id}`] : []),
+      `处理后文件：${processedPath}`,
       ...(parsed?.warning ? [`解析提示：${parsed.warning}`] : []),
-    ].join("\n"));
-  }
-  return contexts.join("\n\n");
+    ].join("\n");
+  }));
+  onProgress?.(`已完成 ${attachments.length} 个附件的文字解析，正在交给研究引擎。`);
+  return results.join("\n\n");
 }
 
 async function parseAttachment(apiToken: string | undefined, attachment: StoredAttachment, bytes: Uint8Array, signal?: AbortSignal): Promise<(MineruParseResult & { warning?: string }) | undefined> {
@@ -44,6 +54,37 @@ async function parseAttachment(apiToken: string | undefined, attachment: StoredA
   }
 }
 
-function isImage(fileName: string): boolean {
-  return /\.(?:png|jpe?g|webp|gif)$/i.test(fileName);
+function normalizeAttachmentContent(attachment: StoredAttachment, parsed?: MineruParseResult & { warning?: string }): string {
+  const raw = parsed?.content?.trim() || `附件“${attachment.fileName}”未提取出可读文字。`;
+  return preprocessExternalContent(raw, { format: "markdown" }).trim();
 }
+
+async function writeProcessedAttachment(sessionDir: string, attachment: StoredAttachment, content: string): Promise<string> {
+  const root = path.join(sessionDir, "artifacts", "uploads");
+  await mkdir(root, { recursive: true });
+  const stem = `${attachment.id}-${attachment.fileName.replace(/[^\p{L}\p{N}._-]+/gu, "-")}`;
+  if (Buffer.byteLength(content, "utf8") <= ATTACHMENT_INLINE_LIMIT_BYTES) {
+    const relative = path.posix.join("artifacts", "uploads", `${stem}.md`);
+    await writeFile(path.join(sessionDir, ...relative.split("/")), `${content}\n`, { encoding: "utf8", flag: "w", mode: 0o600 });
+    return relative;
+  }
+  const directory = path.join(root, stem);
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const full = path.posix.join("artifacts", "uploads", stem, "full.md");
+  const toc = path.posix.join("artifacts", "uploads", stem, "toc.md");
+  await writeFile(path.join(directory, "full.md"), `${content}\n`, { encoding: "utf8", mode: 0o600 });
+  await writeFile(path.join(directory, "toc.md"), renderToc(full, content), { encoding: "utf8", mode: 0o600 });
+  return full;
+}
+
+function renderToc(fullPath: string, content: string): string {
+  const lines = content.split("\n");
+  const headings = lines.flatMap((line, index) => {
+    const match = /^\s*(#{1,6})\s+(.+)$/.exec(line);
+    return match ? [`- ${match[1]!.length}级：${match[2]!.trim()} — 第 ${index + 1} 行`] : [];
+  });
+  return [`# 附件文字索引`, ``, `- 文件：\`${fullPath}\``, `- 总行数：${lines.length}`, ``, `## 章节`, ``, ...(headings.length ? headings : [`- 未检测到 Markdown 标题。`]), ``].join("\n");
+}
+
+function escapeAttribute(value: string): string { return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!); }
+function isImageAttachment(fileName: string): boolean { return /\.(?:png|jpe?g|webp|gif)$/i.test(fileName); }

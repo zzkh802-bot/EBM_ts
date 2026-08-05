@@ -3,7 +3,8 @@ import { computed, ref } from 'vue'
 import { feedbackService } from '../../services/feedback'
 import type { FeedbackPreferredTool, FeedbackRubric } from '../../types/domain'
 
-const props = defineProps<{ sessionId: string; runId: string }>()
+const props = defineProps<{ sessionId: string; runId: string; showPreferredTool?: boolean }>()
+const emit = defineEmits<{ closed: [] }>()
 const rubricDefinitions: Array<{ key: FeedbackRubric; label: string }> = [
   { key: 'requirement_understanding', label: '智能体正确理解了我的需求' },
   { key: 'clinical_interpretation_accuracy', label: '智能体对临床问题的理解准确' },
@@ -22,7 +23,7 @@ const submitted = ref(false)
 const dismissed = ref(false)
 const pending = ref(false)
 const error = ref('')
-const complete = computed(() => rubricDefinitions.every((item) => values.value[item.key] !== undefined) && Boolean(preferredTool.value))
+const complete = computed(() => rubricDefinitions.every((item) => values.value[item.key] !== undefined) && (!props.showPreferredTool || Boolean(preferredTool.value)))
 
 const choose = (key: FeedbackRubric, value: number) => { values.value[key] = value }
 const submit = async () => {
@@ -33,6 +34,7 @@ const submit = async () => {
   try {
     await feedbackService.submit(props.sessionId, props.runId, values.value, selectedTool, comment.value)
     submitted.value = true
+    emit('closed')
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : '反馈提交失败'
   } finally {
@@ -41,7 +43,7 @@ const submit = async () => {
 }
 
 const dismiss = () => {
-  if (!pending.value && !submitted.value) dismissed.value = true
+  if (!pending.value && !submitted.value) { dismissed.value = true; emit('closed') }
 }
 </script>
 
@@ -54,17 +56,6 @@ const dismiss = () => {
       <small v-else>请按这份报告是否符合描述评分：1 = 完全不符合，5 = 完全符合</small>
     </div>
     <p v-if="!submitted" class="feedback-note">只评价这份最终报告及其使用价值，不需要评价模型内部检索过程。</p>
-    <div v-if="!submitted" class="feedback-choice">
-      <span>下次做同类问题，你更愿意用哪个？</span>
-      <div class="feedback-choice-list" role="group" aria-label="偏好的工具">
-        <button v-for="item in [
-          { value: 'xunyi', label: '循医' },
-          { value: 'doubao', label: '豆包' },
-          { value: 'no_preference', label: '无偏好' },
-          { value: 'not_used', label: '没用过豆包' },
-        ]" :key="item.value" type="button" :class="{ selected: preferredTool === item.value }" @click="preferredTool = item.value as FeedbackPreferredTool">{{ item.label }}</button>
-      </div>
-    </div>
     <div v-if="!submitted" class="feedback-rubrics">
       <div v-for="item in rubricDefinitions" :key="item.key" class="feedback-rubric">
         <span>{{ item.label }}</span>
@@ -77,6 +68,17 @@ const dismiss = () => {
       <summary>补充自然语言反馈（可选）</summary>
       <textarea v-model="comment" maxlength="4000" placeholder="如发现疑似编造、引用与结论不一致，或遗漏了必要的假设/边界，请指出具体位置；也可说明哪一段最有帮助。" />
     </details>
+    <div v-if="!submitted && showPreferredTool" class="feedback-choice">
+      <span>下次做同类问题，你更愿意用哪个？</span>
+      <div class="feedback-choice-list" role="group" aria-label="偏好的工具">
+        <button v-for="item in [
+          { value: 'xunyi', label: '循医' },
+          { value: 'doubao', label: '豆包' },
+          { value: 'no_preference', label: '无偏好' },
+          { value: 'not_used', label: '没用过豆包' },
+        ]" :key="item.value" type="button" :class="{ selected: preferredTool === item.value }" @click="preferredTool = item.value as FeedbackPreferredTool">{{ item.label }}</button>
+      </div>
+    </div>
     <p v-if="error" class="feedback-error">{{ error }}</p>
     <button v-if="!submitted" class="feedback-submit" type="button" :disabled="pending || !complete" @click="submit">{{ pending ? '记录中…' : '提交反馈' }}</button>
   </section>

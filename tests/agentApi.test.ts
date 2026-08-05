@@ -8,6 +8,7 @@ import { buildPatientIntakePrompt, type PatientIntakeInput } from "../src/server
 import { archiveSource } from "../src/tools/archive.js";
 import { addEvidence } from "../src/tools/evidence.js";
 import { writeReport } from "../src/tools/report.js";
+import { InternalAuthStore } from "../src/server/internalAuth.js";
 
 type TestRunResponse = Omit<AgentRunResponse, "agent_trace" | "progress_updates" | "tools" | "summary"> & {
   agent_trace: Array<{ kind: string; label?: string }>;
@@ -97,6 +98,18 @@ describe("循医研究服务 API", () => {
       api.server.close();
       await once(api.server, "close");
     }
+  });
+
+  it("keeps a valid login session across a backend restart", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-auth-session-"));
+    const first = new InternalAuthStore("restart-test-key", rootDir);
+    const registration = await first.register("restart_user", "重启测试", "test-pass-1", "restart-test-key", "test-client");
+    expect(registration.ok).toBe(true);
+    if (!registration.ok) return;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const restarted = new InternalAuthStore("restart-test-key", rootDir);
+    const request = { headers: { cookie: restarted.cookie(registration.token, false).split(";")[0] } } as unknown as import("node:http").IncomingMessage;
+    expect(restarted.authenticate(request)?.id).toBe(registration.user.id);
   });
 
   it("delegates clinician report structure to the writing skill independently of thinking level", () => {

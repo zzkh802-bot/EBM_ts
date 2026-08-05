@@ -31,6 +31,7 @@ const uploadingAttachments = ref(false)
 type PendingUpload = { file: File; kind: 'document' | 'medical_image' }
 const pendingUploads = ref<PendingUpload[]>([])
 const expandedReportMessageId = ref<string | null>(null)
+const feedbackSeen = ref(false)
 const {
   conversationFiles,
   conversationFilesLoading,
@@ -54,6 +55,8 @@ const stages = {
 watch(() => sessions.activeSessionId, () => {
   question.value = ''
   run.queuedGuidance = []
+  const sessionId = sessions.active.researchSessionId
+  feedbackSeen.value = Boolean(sessionId && localStorage.getItem(`dp_xunyi_feedback_seen:${sessionId}`))
 })
 watch(() => route.path, (path) => {
   if (path === '/clinician') question.value = ''
@@ -79,11 +82,12 @@ const primaryActionLabel = computed(() => {
 })
 const homeMode = computed(() => route.path === '/clinician')
 const activeHasConversation = computed(() => sessions.active.messages.some((message) => message.role === 'user'))
+const firstReportMessage = computed(() => sessions.active.messages.find((message) => message.role === 'assistant' && !message.pending && (message.reportMarkdown || message.reportPath)))
 const hasConversation = computed(() => !homeMode.value && activeHasConversation.value)
 const researchCount = computed(() => sessions.active.messages.filter((message) => message.role === 'user').length)
 const sessionStatusLabel = computed(() => ({ draft: '待开始', active: '正在研究', complete: '可继续追踪' })[sessions.active.status])
 const documentKindLabel = (kind: ClinicianDocument['kind']) => ({
-  report: '最终报告', report_draft: '报告草稿', research_frame: '研究框架', artifact: '用户文件',
+  report: '最终报告', report_draft: '报告草稿', research_frame: '研究框架', artifact: '用户文件', attachment: '上传附件',
 }[kind])
 const documentTitle = (file: ClinicianDocument) => file.path.split('/').at(-1) || documentKindLabel(file.kind)
 const intermediateConversationFiles = computed(() => conversationFiles.value.filter((file) => file.kind !== 'report'))
@@ -97,6 +101,10 @@ const hydrateHistoricalReports = async () => {
     const markdown = await readFormalReport(sessionId, message.reportPath)
     if (markdown) sessions.patchMessageIn(localSessionId, message.id, { reportMarkdown: markdown })
   }))
+  if (!expandedReportMessageId.value) {
+    const reportMessage = [...sessions.active.messages].reverse().find((message) => message.role === 'assistant' && (message.reportMarkdown || message.reportPath))
+    if (reportMessage) expandedReportMessageId.value = reportMessage.id
+  }
 }
 watch(() => [route.path, sessions.activeSessionId, sessions.active.researchSessionId], () => {
   closeConversationFile()
@@ -157,11 +165,9 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
   try {
     attachmentError.value = ''
     uploadingAttachments.value = pendingUploads.value.length > 0
-    const attachmentIds: string[] = []
-    for (const pending of pendingUploads.value) {
-      const uploaded = await uploadAttachment(pending.file, requestResearchSessionId || undefined)
-      attachmentIds.push(uploaded.attachment_id)
-    }
+    const uploadedAttachments = await Promise.all(pendingUploads.value.map((pending) =>
+      uploadAttachment(pending.file, requestResearchSessionId || undefined)))
+    const attachmentIds = uploadedAttachments.map((uploaded) => uploaded.attachment_id)
     pendingUploads.value = []
     const dto = buildResearchRunRequest(
       text,
@@ -206,6 +212,7 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
       runStartedAt: data.started_at, runCompletedAt: data.completed_at,
       reportMarkdown, reportPath: data.report_path,
     })
+    if (reportMarkdown || data.report_path) expandedReportMessageId.value = pendingId
     sessions.completeResearchIn(localSessionId)
   } catch (error) {
     attachmentError.value = error instanceof Error ? error.message : '附件上传失败'
@@ -272,6 +279,12 @@ const openWorkspace = async (preferredPath = '') => {
   const target = conversationFiles.value.find((file) => file.path === preferredPath && file.kind !== 'report')
     || intermediateConversationFiles.value[0]
   if (target) await openConversationFile(target)
+}
+const markFeedbackSeen = () => {
+  const sessionId = sessions.active.researchSessionId
+  if (!sessionId) return
+  feedbackSeen.value = true
+  localStorage.setItem(`dp_xunyi_feedback_seen:${sessionId}`, '1')
 }
 const toggleReport = async (message: Message) => {
   if (expandedReportMessageId.value === message.id) {
@@ -346,7 +359,7 @@ const handlePrimaryAction = () => {
               {{ item.kind === 'medical_image' ? '医学图像 · ' : '' }}{{ item.file.name }}
               <button type="button" aria-label="移除附件" @click="removePendingFile(index)">×</button>
             </span>
-            <small v-if="uploadingAttachments">正在归档附件…</small>
+                    <small v-if="uploadingAttachments">正在上传附件；随后会并行进行 OCR/文字解析…</small>
             <small v-if="attachmentError" class="attachment-error">{{ attachmentError }}</small>
           </div>
         </div>
@@ -497,9 +510,11 @@ const handlePrimaryAction = () => {
                 </details>
               </div>
               <FeedbackPanel
-                v-if="feedbackEnabled && message.role === 'assistant' && !message.pending && message.reportMarkdown && message.runId && sessions.active.researchSessionId"
+                v-if="feedbackEnabled && !feedbackSeen && firstReportMessage?.id === message.id && message.reportMarkdown && message.runId && sessions.active.researchSessionId"
                 :session-id="sessions.active.researchSessionId"
                 :run-id="message.queryId || message.runId"
+                :show-preferred-tool="researchCount >= 3"
+                @closed="markFeedbackSeen"
               />
             </div>
           </article>

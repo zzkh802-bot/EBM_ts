@@ -207,7 +207,7 @@ export interface Session {
 
 export interface WorkspaceFile {
   path: string
-  kind: 'report' | 'report_draft' | 'research_frame' | 'artifact'
+  kind: 'report' | 'report_draft' | 'research_frame' | 'artifact' | 'attachment'
   size: number
   modified_at: string
   media_type?: string
@@ -219,7 +219,7 @@ export interface WorkspaceFilesResponse {
   files: WorkspaceFile[]
 }
 
-export type ClinicianDocumentKind = 'report' | 'report_draft' | 'research_frame' | 'artifact'
+export type ClinicianDocumentKind = 'report' | 'report_draft' | 'research_frame' | 'artifact' | 'attachment'
 
 export interface ClinicianDocument extends Omit<WorkspaceFile, 'kind'> {
   kind: ClinicianDocumentKind
@@ -232,6 +232,19 @@ export interface ClinicianDocumentsResponse extends Omit<WorkspaceFilesResponse,
 export interface WorkspaceFileResponse extends WorkspaceFile {
   session_id: string
   content: string
+}
+
+export interface SessionAttachment {
+  attachment_id: string
+  file_name: string
+  media_type: string
+  size: number
+  processed_path?: string
+}
+
+export interface SessionAttachmentsResponse {
+  session_id: string
+  attachments: SessionAttachment[]
 }
 
 export interface CitationEvidenceExcerpt {

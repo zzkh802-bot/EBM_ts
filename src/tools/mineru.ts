@@ -195,7 +195,7 @@ export async function parseDocumentBytes(input: {
   signal?: AbortSignal;
 }): Promise<MineruParseResult> {
   if (!input.bytes.byteLength) throw new Error("cannot upload an empty document to MinerU");
-  if (!/^[^/\\]+\.(?:pdf|docx?|pptx?|png|jpe?g)$/i.test(input.fileName)) throw new Error("MinerU upload requires a safe supported filename");
+  if (!/^[^/\\]+\.(?:pdf|docx?|pptx?|png|jpe?g|webp|gif)$/i.test(input.fileName)) throw new Error("MinerU upload requires a safe supported filename");
   if (!input.apiToken.trim()) throw new Error("MINERU_API_TOKEN is not configured");
   const fetcher = input.fetcher ?? fetch;
   const baseUrl = (input.baseUrl ?? "https://mineru.net/api/v4").replace(/\/$/, "");

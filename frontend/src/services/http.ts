@@ -36,6 +36,7 @@ export async function request<T>(
         text,
       )
     }
+    if (response.status === 401 && !path.includes('/auth/')) window.dispatchEvent(new Event('ebm-auth-expired'))
     if (!response.ok || (payload as { ok?: boolean }).ok === false) {
       throw new HttpError(payload.error?.message || payload.message || `请求失败 (${response.status})`, response.status, payload)
     }

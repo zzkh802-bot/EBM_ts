@@ -50,6 +50,7 @@ const onThemeChange = () => syncBody()
 const onKeydown = (event: KeyboardEvent) => {
   if (event.key === 'Escape') ui.closeTopLayer()
 }
+const onAuthExpired = () => { if (authRequired.value) authUser.value = null }
 
 watch([moduleName, clinicianShell, hasConversation, resolvedTheme, () => ui.sessionDrawerOpen, () => ui.detailOpen], syncBody, { immediate: true })
 
@@ -58,11 +59,13 @@ onMounted(() => {
   syncBody()
   media.addEventListener('change', onThemeChange)
   document.addEventListener('keydown', onKeydown)
+  window.addEventListener('ebm-auth-expired', onAuthExpired)
 })
 
 onBeforeUnmount(() => {
   media.removeEventListener('change', onThemeChange)
   document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('ebm-auth-expired', onAuthExpired)
 })
 
 onMounted(async () => {

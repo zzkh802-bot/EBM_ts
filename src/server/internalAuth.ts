@@ -1,4 +1,4 @@
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { chmod, mkdir, rename, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -25,13 +25,17 @@ export class InternalAuthStore {
   private readonly sessions = new Map<string, Session>();
   private readonly attempts = new Map<string, LoginAttempts>();
   private readonly usersFile?: string;
+  private readonly sessionsFile?: string;
   private users = new Map<string, StoredUser>();
+  private persistedSessions = new Map<string, Session>();
   private writeQueue = Promise.resolve();
 
   constructor(private readonly accessKey?: string, rootDir?: string) {
     if (rootDir) {
       this.usersFile = path.join(path.resolve(rootDir), "data", "internal-users.json");
+      this.sessionsFile = path.join(path.resolve(rootDir), "data", "internal-sessions.json");
       this.loadUsers();
+      this.loadSessions();
     }
   }
 
@@ -72,15 +76,25 @@ export class InternalAuthStore {
     if (!this.enabled) return undefined;
     const token = bearerToken(request) ?? cookieToken(request);
     if (!token) return undefined;
-    const session = this.sessions.get(token);
-    if (!session || session.expiresAt <= Date.now()) { this.sessions.delete(token); return undefined; }
+    const session = this.sessions.get(token) ?? this.persistedSessions.get(tokenHash(token));
+    if (!session || session.expiresAt <= Date.now()) {
+      this.sessions.delete(token);
+      this.persistedSessions.delete(tokenHash(token));
+      void this.persistSessions().catch(() => undefined);
+      return undefined;
+    }
+    this.sessions.set(token, session);
     session.expiresAt = Date.now() + SESSION_TTL_MS;
     return session.user;
   }
 
   logout(request: IncomingMessage): void {
     const token = bearerToken(request) ?? cookieToken(request);
-    if (token) this.sessions.delete(token);
+    if (token) {
+      this.sessions.delete(token);
+      this.persistedSessions.delete(tokenHash(token));
+      void this.persistSessions().catch(() => undefined);
+    }
   }
 
   cookie(token: string, secure: boolean): string {
@@ -91,7 +105,10 @@ export class InternalAuthStore {
 
   private issueSession(user: InternalUser): { token: string; user: InternalUser } {
     const token = randomBytes(32).toString("base64url");
-    this.sessions.set(token, { user, expiresAt: Date.now() + SESSION_TTL_MS });
+    const session = { user, expiresAt: Date.now() + SESSION_TTL_MS };
+    this.sessions.set(token, session);
+    this.persistedSessions.set(tokenHash(token), session);
+    void this.persistSessions().catch(() => undefined);
     this.prune();
     return { token, user };
   }
@@ -121,6 +138,29 @@ export class InternalAuthStore {
     await this.writeQueue;
   }
 
+  private loadSessions(): void {
+    if (!this.sessionsFile) return;
+    try {
+      const parsed = JSON.parse(readFileSync(this.sessionsFile, "utf8")) as { sessions?: unknown };
+      if (Array.isArray(parsed.sessions)) {
+        this.persistedSessions = new Map(parsed.sessions.filter(isPersistedSession).map((item) => [item.token_hash, { user: item.user, expiresAt: item.expires_at }]));
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") throw error;
+    }
+  }
+
+  private async persistSessions(): Promise<void> {
+    if (!this.sessionsFile) return;
+    const directory = path.dirname(this.sessionsFile);
+    await mkdir(directory, { recursive: true });
+    const temporary = `${this.sessionsFile}.${process.pid}.tmp`;
+    const sessions = [...this.persistedSessions.entries()].map(([token_hash, session]) => ({ token_hash, user: session.user, expires_at: session.expiresAt }));
+    await writeFile(temporary, `${JSON.stringify({ version: 1, sessions }, null, 2)}\n`, { mode: 0o600 });
+    await chmod(temporary, 0o600);
+    await rename(temporary, this.sessionsFile);
+  }
+
   private newUserId(): string {
     let id = "";
     do { id = `u-${randomReadable(8)}`; } while ([...this.users.values()].some((user) => user.id === id));
@@ -130,6 +170,7 @@ export class InternalAuthStore {
   private prune(): void {
     const now = Date.now();
     for (const [token, session] of this.sessions) if (session.expiresAt <= now) this.sessions.delete(token);
+    for (const [hash, session] of this.persistedSessions) if (session.expiresAt <= now) this.persistedSessions.delete(hash);
     if (this.sessions.size <= 2_000) return;
     const oldest = [...this.sessions.entries()].sort((left, right) => left[1].expiresAt - right[1].expiresAt).slice(0, this.sessions.size - 2_000);
     for (const [token] of oldest) this.sessions.delete(token);
@@ -162,8 +203,17 @@ function toPublicUser(user: StoredUser): InternalUser {
 }
 
 function hashPassword(password: string, salt: string): string { return scryptSync(password, salt, 32).toString("hex"); }
+function tokenHash(token: string): string { return createHash("sha256").update(token).digest("hex"); }
 function verifyPassword(password: string, salt: string, expectedHex: string): boolean {
   try { return timingSafeEqual(Buffer.from(hashPassword(password, salt), "hex"), Buffer.from(expectedHex, "hex")); } catch { return false; }
+}
+
+function isPersistedSession(value: unknown): value is { token_hash: string; user: InternalUser; expires_at: number } {
+  if (!value || typeof value !== "object") return false;
+  const session = value as Partial<{ token_hash: string; user: InternalUser; expires_at: number }>;
+  return typeof session.token_hash === "string"
+    && Boolean(session.user && typeof session.user.id === "string" && typeof session.user.username === "string")
+    && typeof session.expires_at === "number";
 }
 
 function isStoredUser(value: unknown): value is StoredUser {
