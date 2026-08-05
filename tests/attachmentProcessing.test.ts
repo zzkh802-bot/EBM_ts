@@ -35,8 +35,9 @@ describe("uploaded attachment processing", () => {
     const store = new AttachmentStore(rootDir);
     const attachment = await store.create("user-b", "long.txt", "text/plain", new TextEncoder().encode("长文本。".repeat(2_000)));
     const context = await archiveUploadedAttachments(rootDir, sessionDir, [attachment]);
-    expect(context).toContain("请先使用 read 读取");
-    expect(context).not.toContain("长文本。长文本。长文本。");
+    expect(context).toContain("请使用 read 读取");
+    expect(context).toContain("长文本");
+    expect(context).toContain("预览已截断");
     const files = await readFile(path.join(sessionDir, "artifacts", "uploads", `${attachment.id}-long.txt`, "full.md"), "utf8");
     expect(files).toContain("长文本");
     await expect(stat(path.join(sessionDir, "artifacts", "uploads", `${attachment.id}-long.txt`, "toc.md"))).resolves.toBeTruthy();

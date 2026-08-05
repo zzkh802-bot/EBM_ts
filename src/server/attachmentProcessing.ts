@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { truncateHead } from "@earendil-works/pi-coding-agent";
 import { parseDocumentBytes, type MineruParseResult } from "../tools/mineru.js";
 import { preprocessExternalContent } from "../tools/markdown.js";
 import { loadProjectEnv } from "./projectEnv.js";
@@ -30,9 +31,10 @@ export async function archiveUploadedAttachments(
     await new AttachmentStore(rootDir).markProcessed(attachment, path.basename(sessionDir), processedPath);
     onProgress?.(`附件 ${index + 1}/${attachments.length} 已完成文字解析：${attachment.fileName}`);
     const inline = Buffer.byteLength(content, "utf8") <= ATTACHMENT_INLINE_LIMIT_BYTES;
-    const fileBlock = inline
-      ? `<file name="${escapeAttribute(attachment.fileName)}">\n${content}\n</file>`
-      : `<file name="${escapeAttribute(attachment.fileName)}">\n文字已归档到 ${processedPath}，请先使用 read 读取；不要读取或寻找原始上传文件。\n</file>`;
+    const preview = inline
+      ? content
+      : `${previewContent(content)}\n[预览已截断；完整处理后文件请使用 read 读取：${processedPath}]`;
+    const fileBlock = `<file name="${escapeAttribute(attachment.fileName)}">\n${preview}\n</file>`;
     return [
       fileBlock,
       ...(isImageAttachment(attachment.fileName) ? [`医学图像附件 ID（如需视觉辅助理解时调用 medical_image_read）：${attachment.id}`] : []),
@@ -88,3 +90,11 @@ function renderToc(fullPath: string, content: string): string {
 
 function escapeAttribute(value: string): string { return value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!); }
 function isImageAttachment(fileName: string): boolean { return /\.(?:png|jpe?g|webp|gif)$/i.test(fileName); }
+
+function previewContent(content: string): string {
+  const excerpt = truncateHead(content, { maxBytes: ATTACHMENT_INLINE_LIMIT_BYTES, maxLines: 2_000 }).content;
+  if (excerpt) return excerpt;
+  let end = Math.min(content.length, ATTACHMENT_INLINE_LIMIT_BYTES);
+  while (end > 0 && Buffer.byteLength(content.slice(0, end), "utf8") > ATTACHMENT_INLINE_LIMIT_BYTES) end -= 1;
+  return content.slice(0, end);
+}
