@@ -51,12 +51,15 @@ watch(() => route.path, (path) => {
   if (path === '/clinician') question.value = ''
 })
 
-const availableModels = computed(() => runtimeConfig.value?.models.filter((item) => item.available) || [])
+// Subscription integrations stay implemented on the server, but are temporarily hidden from the clinician UI.
+// Flip this flag when ChatGPT/Claude account connections are ready for product use again.
+const showSubscriptionProviders = false
+const availableModels = computed(() => runtimeConfig.value?.models.filter((item) => item.available && (showSubscriptionProviders || !item.connection_provider)) || [])
 const providers = computed(() => availableModels.value.filter((item, index, items) =>
   items.findIndex((candidate) => candidate.provider === item.provider) === index,
 ))
 const modelsForProvider = computed(() => availableModels.value.filter((item) => item.provider === preferences.provider))
-const subscriptionProviders = computed(() => runtimeConfig.value?.models.filter((item) => item.connection_provider) || [])
+const subscriptionProviders = computed(() => showSubscriptionProviders ? runtimeConfig.value?.models.filter((item) => item.connection_provider) || [] : [])
 const questionInput = ref<HTMLTextAreaElement | null>(null)
 const thinkingLevelLabel = (level: ModeSnapshot['thinkingLevel']) => ({
   off: 'off · 关闭', minimal: 'minimal · 极低', low: 'low · 低', medium: 'medium · 中',
@@ -479,7 +482,7 @@ const handlePrimaryAction = () => {
           <div><span>检索</span><small>按需调用证据工具</small></div>
         </div>
       </section>
-      <section v-if="subscriptionProviders.length" class="workspace-info-card account-connect-card">
+      <section v-if="showSubscriptionProviders && subscriptionProviders.length" class="workspace-info-card account-connect-card">
         <div class="workspace-info-title"><span>订阅账户</span></div>
         <p>连接后的账户可直接在模型选择器中使用。</p>
         <div v-for="item in subscriptionProviders" :key="item.connection_provider" class="account-provider-row">
@@ -496,7 +499,7 @@ const handlePrimaryAction = () => {
           >{{ item.available ? '重新连接' : '连接账户' }}</button>
         </div>
       </section>
-      <section v-if="accountConnection" class="workspace-info-card account-connect-card" aria-live="polite">
+      <section v-if="showSubscriptionProviders && accountConnection" class="workspace-info-card account-connect-card" aria-live="polite">
         <div class="workspace-info-title"><span>账户连接</span><strong>{{ accountConnection.status === 'waiting' ? '进行中' : accountConnection.status === 'connected' ? '已连接' : '未完成' }}</strong></div>
         <p>{{ accountConnection.message }}</p>
         <a v-if="accountConnection.authorization?.url" class="account-connect-button" :href="accountConnection.authorization.url" target="_blank" rel="noopener">打开授权页面</a>
