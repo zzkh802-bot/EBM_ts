@@ -51,6 +51,7 @@ export function buildResearchRunRequest(
   mode: ModeSnapshot,
   provider?: string,
   model?: string,
+  attachments?: string[],
 ): AgentRunRequest {
   return {
     question,
@@ -60,6 +61,7 @@ export function buildResearchRunRequest(
     search_enabled: true,
     ...(provider ? { provider } : {}),
     ...(model ? { model } : {}),
+    ...(attachments?.length ? { attachments } : {}),
   }
 }
 

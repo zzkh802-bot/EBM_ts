@@ -79,7 +79,7 @@ function formatMarkdown(record: TrajectoryRecord): string {
   const lines: string[] = [];
   switch (record.event) {
     case "run_start":
-      lines.push(`## Run ${record.run_id}`, "", `- ${meta.join(" · ")}`, "", "### User prompt", "", String(data.prompt ?? ""), "");
+      lines.push(`## Run ${record.run_id}`, "", `- ${meta.join(" · ")}`, "", "### User query", "", String(data.user_query ?? data.prompt ?? ""), "", "### Agent prompt", "", String(data.prompt ?? ""), "");
       if (data.runtime) lines.push("### Runtime", "", blockText(data.runtime), "");
       break;
     case "turn_start":

@@ -40,11 +40,14 @@ describe("trajectory analysis", () => {
         usage: { input: 100, output: 20, cacheRead: 50, cacheWrite: 0, totalTokens: 170, cost: { total: 0.01 } },
       }, "run-1", 1),
       record(9, "2026-01-01T00:00:08.000Z", "run_settled", {}),
+      record(10, "2026-01-01T00:00:08.500Z", "system_reminder", { prompt_kind: "system_reminder" }),
     ];
     const analysis = analyzeTrajectory(records);
     expect(analysis).toMatchObject({
       session_id: "s1",
       runs: 1,
+      user_queries: 1,
+      system_reminders: 1,
       turns: 2,
       thinking_chars: 16,
       response_chars: 6,

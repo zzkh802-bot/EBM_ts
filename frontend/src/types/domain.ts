@@ -1,4 +1,4 @@
-export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high'
 export type AudienceMode = 'clinician' | 'public'
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type ResearchSessionStatus = 'draft' | 'active' | 'complete'
@@ -37,6 +37,14 @@ export interface AgentRunRequest {
   search_enabled: boolean
   provider?: string
   model?: string
+  attachments?: string[]
+}
+
+export interface AttachmentUploadResponse {
+  attachment_id: string
+  file_name: string
+  media_type: string
+  size: number
 }
 
 export interface RuntimeModel {
@@ -67,6 +75,7 @@ export interface RuntimeConfig {
   default_provider: string
   default_model: string
   models: RuntimeModel[]
+  feedback_enabled?: boolean
 }
 
 export interface InternalUser {
@@ -78,9 +87,23 @@ export interface InternalAuthConfig {
   auth_required: boolean
 }
 
+export type FeedbackRubric =
+  | 'requirement_understanding'
+  | 'clinical_interpretation_accuracy'
+  | 'subquestion_decomposition'
+  | 'evidence_support'
+  | 'report_trustworthiness'
+  | 'report_completeness'
+  | 'report_clarity'
+  | 'ebm_standard_compliance'
+  | 'time_worth'
+export type FeedbackRubrics = Partial<Record<FeedbackRubric, number>>
+export type FeedbackPreferredTool = 'xunyi' | 'doubao' | 'no_preference' | 'not_used'
+
 export interface AgentRunResponse {
   contract_version: string
   run_id: string
+  query_id?: string
   status: AgentRunStatus
   stage?: AgentStage
   created_at?: string
@@ -116,6 +139,8 @@ export interface Message extends ModeSnapshot {
   pending?: boolean
   stage?: AgentStage
   showMarkdown?: boolean
+  runId?: string
+  queryId?: string
 }
 
 export interface PatientMessage {

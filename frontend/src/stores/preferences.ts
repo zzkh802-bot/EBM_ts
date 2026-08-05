@@ -7,7 +7,7 @@ export const defaultModes: ModeSnapshot = {
   audienceMode: 'clinician', thinkingLevel: 'high', searchEnabled: true,
 }
 
-const thinkingLevels: ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+const thinkingLevels: ThinkingLevel[] = ['off', 'low', 'medium', 'high']
 
 export const usePreferencesStore = defineStore('preferences', () => {
   const stored = safeRead<Partial<ModeSnapshot>>(STORAGE_KEYS.modes, {})

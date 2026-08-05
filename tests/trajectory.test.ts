@@ -3,16 +3,38 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { registerTrajectoryRecorder } from "../src/extensions/trajectoryRecorder.js";
+import { writeQueryMetadata } from "../src/observability/queryMetadata.js";
 
 function mockPi() {
   const handlers = new Map<string, Array<(event: any, ctx: any) => Promise<void> | void>>();
+  const eventHandlers = new Map<string, Array<(data: any) => void>>();
   return {
     handlers,
+    events: {
+      on(name: string, handler: (data: any) => void) {
+        const list = eventHandlers.get(name) ?? [];
+        list.push(handler);
+        eventHandlers.set(name, list);
+      },
+      emit(name: string, data: any) {
+        for (const handler of eventHandlers.get(name) ?? []) handler(data);
+      },
+    },
     pi: {
       on(name: string, handler: (event: any, ctx: any) => Promise<void> | void) {
         const list = handlers.get(name) ?? [];
         list.push(handler);
         handlers.set(name, list);
+      },
+      events: {
+        on(name: string, handler: (data: any) => void) {
+          const list = eventHandlers.get(name) ?? [];
+          list.push(handler);
+          eventHandlers.set(name, list);
+        },
+        emit(name: string, data: any) {
+          for (const handler of eventHandlers.get(name) ?? []) handler(data);
+        },
       },
     },
     async emit(name: string, event: any, ctx: any) {
@@ -33,6 +55,11 @@ describe("developer trajectory recorder", () => {
       getContextUsage: () => ({ tokens: 1200, contextWindow: 128000, percent: 0.94 }),
     };
 
+    const queryId = "12345678-1234-1234-1234-123456789012";
+    await writeQueryMetadata(path.join(cwd, "data", "sessions", "session-1"), {
+      schema_version: 1, query_id: queryId, session_id: "session-1", question: "Should treatment be used?", created_at: new Date().toISOString(),
+    });
+
     await harness.emit("session_start", { type: "session_start", reason: "startup" }, ctx);
     await harness.emit("before_agent_start", {
       type: "before_agent_start",
@@ -41,6 +68,7 @@ describe("developer trajectory recorder", () => {
       systemPromptOptions: { selectedTools: ["pubmed_search"], skills: [{ name: "ebm-research" }] },
     }, ctx);
     await harness.emit("turn_start", { type: "turn_start", turnIndex: 0, timestamp: 100 }, ctx);
+    harness.events.emit("ebm:system_reminder", { text: "仅用于控制研究范围", source: "research_round_hint", turn_index: 1 });
     await harness.emit("tool_execution_start", {
       type: "tool_execution_start",
       toolCallId: "call-1",
@@ -97,6 +125,11 @@ describe("developer trajectory recorder", () => {
       "session_start", "run_start", "turn_start", "tool_start", "tool_end", "provider_request",
       "provider_response", "model_first_delta", "assistant_message", "run_settled",
     ]));
+    const runStart = lines.find((line) => line.event === "run_start");
+    expect(runStart?.run_id).toBe(queryId);
+    expect(runStart?.data.prompt_kind).toBe("user_query");
+    expect(runStart?.data.user_query).toBe("Should treatment be used?");
+    expect(lines.find((line) => line.event === "system_reminder")?.data.prompt_kind).toBe("system_reminder");
     expect(lines.every((line) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+08:00$/.test(line.timestamp))).toBe(true);
     expect(lines.find((line) => line.event === "tool_start").data.args.api_key).toBe("[REDACTED]");
     expect(lines.find((line) => line.event === "assistant_message").data.content[0].thinking).toContain("compare benefit and harm");

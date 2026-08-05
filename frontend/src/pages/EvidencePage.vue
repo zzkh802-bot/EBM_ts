@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { agentService } from '../services'
+import { agentService, uploadAttachment } from '../services'
 import { useAgentRunStore, usePreferencesStore, useSessionsStore, useUiStore } from '../stores'
 import type { ClinicianDocument, Message, ModeSnapshot, RuntimeConfig } from '../types/domain'
 import { buildResearchRunRequest, newId, nowIso, responseText } from '../utils/core'
@@ -9,6 +9,7 @@ import { parseReport, reportPlainText, type Reference } from '../utils/report'
 import { copyText } from '../utils/browser'
 import ReportRenderer from '../components/report/ReportRenderer.vue'
 import RunActivity from '../components/evidence/RunActivity.vue'
+import FeedbackPanel from '../components/evidence/FeedbackPanel.vue'
 import { goodCases } from '../data/goodCases'
 import { useAccountConnection } from '../composables/useAccountConnection'
 import { useResearchDocuments } from '../composables/useResearchDocuments'
@@ -23,6 +24,12 @@ const question = ref('')
 const feed = ref<HTMLElement | null>(null)
 const runtimeConfig = ref<RuntimeConfig | null>(null)
 const runtimeConfigError = ref('')
+const fileInput = ref<HTMLInputElement | null>(null)
+const medicalImageInput = ref<HTMLInputElement | null>(null)
+const attachmentError = ref('')
+const uploadingAttachments = ref(false)
+type PendingUpload = { file: File; kind: 'document' | 'medical_image' }
+const pendingUploads = ref<PendingUpload[]>([])
 const {
   conversationFiles,
   conversationFilesLoading,
@@ -55,6 +62,7 @@ watch(() => route.path, (path) => {
 // Flip this flag when ChatGPT/Claude account connections are ready for product use again.
 const showSubscriptionProviders = false
 const availableModels = computed(() => runtimeConfig.value?.models.filter((item) => item.available && (showSubscriptionProviders || !item.connection_provider)) || [])
+const feedbackEnabled = computed(() => runtimeConfig.value?.feedback_enabled !== false)
 const providers = computed(() => availableModels.value.filter((item, index, items) =>
   items.findIndex((candidate) => candidate.provider === item.provider) === index,
 ))
@@ -62,8 +70,7 @@ const modelsForProvider = computed(() => availableModels.value.filter((item) => 
 const subscriptionProviders = computed(() => showSubscriptionProviders ? runtimeConfig.value?.models.filter((item) => item.connection_provider) || [] : [])
 const questionInput = ref<HTMLTextAreaElement | null>(null)
 const thinkingLevelLabel = (level: ModeSnapshot['thinkingLevel']) => ({
-  off: 'off · 关闭', minimal: 'minimal · 极低', low: 'low · 低', medium: 'medium · 中',
-  high: 'high · 高', xhigh: 'xhigh · 极高', max: 'max · 最大',
+  off: 'off · 关闭', low: 'low · 低', medium: 'medium · 中', high: 'high · 高',
 }[level])
 const primaryActionLabel = computed(() => {
   if (!run.busy) return '开始研究'
@@ -140,12 +147,21 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
   })
   const signal = run.start()
   try {
+    attachmentError.value = ''
+    uploadingAttachments.value = pendingUploads.value.length > 0
+    const attachmentIds: string[] = []
+    for (const pending of pendingUploads.value) {
+      const uploaded = await uploadAttachment(pending.file, sessions.active.researchSessionId || undefined)
+      attachmentIds.push(uploaded.attachment_id)
+    }
+    pendingUploads.value = []
     const dto = buildResearchRunRequest(
       text,
       sessions.active.researchSessionId,
       mode,
       preferences.provider || undefined,
       preferences.model || undefined,
+      attachmentIds,
     )
     const data = await agentService.run(dto, signal, {
           onStatus: (status) => {
@@ -158,6 +174,8 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
             else if (status.status === 'running') run.setStage('retrieving')
             else if (status.status === 'cancelling') run.setStage('network_wait')
             sessions.patchMessageIn(localSessionId, pendingId, {
+              runId: status.run_id,
+              queryId: status.query_id || status.run_id,
               trace: status.agent_trace || [],
               progressUpdates: status.progress_updates || [],
               tools: status.tools || [],
@@ -171,6 +189,8 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
     const reportMarkdown = data.report_markdown || await readFormalReport(data.session_id, data.report_path)
     void loadConversationFiles()
     sessions.patchMessageIn(localSessionId, pendingId, {
+      runId: data.run_id,
+      queryId: data.query_id || data.run_id,
       pending: false, stage: 'idle', content: responseText(data), trace: data.agent_trace || [],
       progressUpdates: data.progress_updates || [], tools: data.tools || [],
       runStartedAt: data.started_at, runCompletedAt: data.completed_at,
@@ -178,6 +198,7 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
     })
     sessions.completeResearchIn(localSessionId)
   } catch (error) {
+    attachmentError.value = error instanceof Error ? error.message : '附件上传失败'
     const stopped = error instanceof DOMException && error.name === 'AbortError'
     sessions.patchMessageIn(localSessionId, pendingId, {
       pending: false, stage: 'idle',
@@ -188,9 +209,21 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
     })
     sessions.completeResearchIn(localSessionId)
   } finally {
+    uploadingAttachments.value = false
     run.finish()
   }
 }
+
+const addPendingFiles = (files: FileList | null, kind: PendingUpload['kind']) => {
+  if (!files) return
+  const allowed = /\.(?:pdf|docx?|png|jpe?g|webp|gif|txt|md)$/i
+  const additions = Array.from(files).filter((file) => allowed.test(file.name) && file.size > 0 && file.size <= 25 * 1024 * 1024)
+  pendingUploads.value.push(...additions.map((file) => ({ file, kind })))
+  if (additions.length < files.length) attachmentError.value = '仅支持 PDF、DOC/DOCX、常见图片、TXT/Markdown，单个文件不超过 25 MB。'
+  if (kind === 'medical_image') medicalImageInput.value && (medicalImageInput.value.value = '')
+  else if (fileInput.value) fileInput.value.value = ''
+}
+const removePendingFile = (index: number) => { pendingUploads.value.splice(index, 1) }
 
 const projectedText = (message: Message) =>
   reportPlainText(parseReport(message.reportMarkdown || message.content))
@@ -274,6 +307,18 @@ const handlePrimaryAction = () => {
             @keydown.ctrl.enter.prevent="submit()"
             @keydown.meta.enter.prevent="submit()"
           />
+          <div class="attachment-tray" aria-label="本轮附件">
+            <input ref="fileInput" type="file" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.gif,.txt,.md" hidden @change="addPendingFiles(($event.target as HTMLInputElement).files, 'document')" />
+            <input ref="medicalImageInput" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.gif" hidden @change="addPendingFiles(($event.target as HTMLInputElement).files, 'medical_image')" />
+            <button type="button" :disabled="run.busy || uploadingAttachments" @click="fileInput?.click()">上传附件</button>
+            <button type="button" :disabled="run.busy || uploadingAttachments" @click="medicalImageInput?.click()">上传医学图像</button>
+            <span v-for="(item, index) in pendingUploads" :key="`${item.file.name}-${index}`" class="attachment-chip">
+              {{ item.kind === 'medical_image' ? '医学图像 · ' : '' }}{{ item.file.name }}
+              <button type="button" aria-label="移除附件" @click="removePendingFile(index)">×</button>
+            </span>
+            <small v-if="uploadingAttachments">正在归档附件…</small>
+            <small v-if="attachmentError" class="attachment-error">{{ attachmentError }}</small>
+          </div>
         </div>
         <div class="composer-options" aria-label="检索选项">
           <label class="runtime-select">
@@ -292,12 +337,9 @@ const handlePrimaryAction = () => {
             <span>推理强度</span>
             <select v-model="preferences.thinkingLevel" :disabled="run.busy">
               <option value="off">off · 关闭</option>
-              <option value="minimal">minimal · 极低</option>
               <option value="low">low · 低</option>
               <option value="medium">medium · 中</option>
               <option value="high">high · 高</option>
-              <option value="xhigh">xhigh · 极高</option>
-              <option value="max">max · 最大</option>
             </select>
           </label>
           <span class="composer-option active" aria-label="证据检索已开启">证据检索已开启</span>
@@ -422,6 +464,11 @@ const handlePrimaryAction = () => {
                   </div>
                 </details>
               </div>
+              <FeedbackPanel
+                v-if="feedbackEnabled && message.role === 'assistant' && !message.pending && message.reportMarkdown && message.runId && sessions.active.researchSessionId"
+                :session-id="sessions.active.researchSessionId"
+                :run-id="message.queryId || message.runId"
+              />
             </div>
           </article>
         </section>
@@ -532,3 +579,12 @@ const handlePrimaryAction = () => {
     </aside>
   </div>
 </template>
+
+<style scoped>
+.attachment-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 8px 0 0; color: var(--ink-faint, #7d888d); font-size: 12px; }
+.attachment-tray > button { padding: 5px 8px; border: 1px solid rgba(49, 123, 107, .24); border-radius: 5px; background: rgba(255, 255, 255, .72); color: var(--ink-soft, #56636f); cursor: pointer; }
+.attachment-tray > button:disabled { cursor: not-allowed; opacity: .55; }
+.attachment-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 260px; padding: 4px 6px; border-radius: 5px; background: rgba(49, 123, 107, .1); color: var(--ink-soft, #56636f); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-chip button { border: 0; background: transparent; color: inherit; cursor: pointer; }
+.attachment-error { color: #a43d36; }
+</style>

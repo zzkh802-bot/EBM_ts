@@ -52,6 +52,8 @@ export type EvidenceAttemptAnalysis = EvidenceAttemptBreakdown & {
 export type TrajectoryAnalysis = {
   session_id: string;
   runs: number;
+  user_queries: number;
+  system_reminders: number;
   turns: number;
   assistant_messages: number;
   thinking_chars: number;
@@ -210,6 +212,8 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
   const actionCounts = new Map<string, number>();
   const turns = new Set<string>();
   let assistantMessages = 0;
+  let userQueries = 0;
+  let systemReminders = 0;
   let thinkingChars = 0;
   let responseChars = 0;
   let toolCalls = 0;
@@ -281,7 +285,11 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
     if (state && record.event === "context_snapshot") state.contextTokens = numeric(data?.context_usage?.tokens);
     if (state && record.event === "turn_end") state.elapsedMs = numeric(data?.duration_ms);
     if (state && record.event === "assistant_message") state.modelMs = numeric(data?.request_timing?.duration_ms);
-    if (record.event === "run_start" && run) runStarts.set(run, record.timestamp);
+    if (record.event === "run_start" && run) {
+      runStarts.set(run, record.timestamp);
+      if (data?.prompt_kind !== "system_reminder") userQueries += 1;
+    }
+    if (record.event === "system_reminder") systemReminders += 1;
     if (record.event === "run_settled" && run) runEnds.set(run, record.timestamp);
     if (record.event === "assistant_message") {
       assistantMessages += 1;
@@ -509,6 +517,8 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
   return {
     session_id: sessionId,
     runs: runIds.length,
+    user_queries: userQueries,
+    system_reminders: systemReminders,
     turns: turns.size,
     assistant_messages: assistantMessages,
     thinking_chars: thinkingChars,

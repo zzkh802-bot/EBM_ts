@@ -14,6 +14,10 @@ import { listWorkspaceFiles, readWorkspaceFile, sessionWorkspace, WorkspaceServi
 import { readFinalReportRevisions } from "./reportPublication.js";
 import { InternalAuthStore } from "./internalAuth.js";
 import { SessionOwnershipError, SessionOwnershipStore } from "./sessionOwnership.js";
+import { FeedbackValidationError, validatePreferredTool, writeFeedback } from "./feedback.js";
+import { AttachmentStore, AttachmentStoreError, MAX_ATTACHMENT_BYTES, type StoredAttachment } from "./attachmentStore.js";
+import { archiveUploadedAttachments } from "./attachmentProcessing.js";
+import { queryMetadataExists, writeQueryMetadata } from "../observability/queryMetadata.js";
 
 const CONTRACT_VERSION = "xunyi-research/v1";
 const PATIENT_CONTRACT_VERSION = "xunyi-patient/v1";
@@ -24,7 +28,7 @@ const DEFAULT_STREAM_STALL_TIMEOUT_MS = 90_000;
 
 export type AgentRunStatus = "queued" | "running" | "cancelling" | "succeeded" | "failed" | "cancelled";
 export type ResearchStage = "idle" | "planning" | "retrieving" | "tooling" | "generating" | "network_wait";
-export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+export type ThinkingLevel = "off" | "low" | "medium" | "high";
 export type AudienceMode = "clinician" | "public";
 export type RetrievalPolicy = "all" | "mcp_only";
 
@@ -42,6 +46,8 @@ export type ResearchProgressUpdate = {
 };
 
 export type AgentRunInput = {
+  /** Server-assigned stable query id; never accepted from the browser. */
+  runId?: string;
   question: string;
   sessionId?: string;
   audienceMode: AudienceMode;
@@ -52,6 +58,7 @@ export type AgentRunInput = {
   requestTimeoutSeconds: number;
   provider: string;
   model: string;
+  attachments?: StoredAttachment[];
 };
 
 export type RuntimeModel = {
@@ -68,6 +75,7 @@ export type RuntimeConfig = {
   default_provider: string;
   default_model: string;
   models: RuntimeModel[];
+  feedback_enabled?: boolean;
 };
 
 type AccountConnectionStatus = "waiting" | "connected" | "failed" | "cancelled";
@@ -111,6 +119,7 @@ export type PiRpcExecutor = AgentExecutor & { dispose(): Promise<void> };
 export type AgentRunResponse = {
   contract_version: string;
   run_id: string;
+  query_id: string;
   status: AgentRunStatus;
   stage: ResearchStage;
   created_at: string;
@@ -156,9 +165,10 @@ export class AgentRunStore {
 
   submit(input: AgentRunInput, ownerId?: string): AgentRunResponse {
     this.pruneCompletedRuns();
+    const runId = randomUUID();
     const run: InternalRun = {
-      id: randomUUID(),
-      input,
+      id: runId,
+      input: { ...input, runId },
       status: "queued",
       stage: "planning",
       createdAt: new Date().toISOString(),
@@ -278,6 +288,7 @@ export class AgentRunStore {
     return {
       contract_version: CONTRACT_VERSION,
       run_id: run.id,
+      query_id: run.id,
       status: run.status,
       stage: run.stage,
       created_at: run.createdAt,
@@ -334,6 +345,7 @@ export function createAgentApiServer(options: AgentApiServerOptions): { server: 
   const rootDir = path.resolve(options.rootDir ?? process.cwd());
   const auth = new InternalAuthStore(options.internalAccessKey);
   const ownership = new SessionOwnershipStore(rootDir);
+  const attachments = new AttachmentStore(rootDir);
   const store = new AgentRunStore(options.executor, options.maxCompletedRuns, (sessionId, ownerId) => {
     if (ownerId) void ownership.claim(sessionId, ownerId).catch(() => undefined);
   });
@@ -344,7 +356,7 @@ export function createAgentApiServer(options: AgentApiServerOptions): { server: 
   const staticDir = options.staticDir ? path.resolve(options.staticDir) : undefined;
   const patientWorkspace = new PatientWorkspace(rootDir);
   const server = createServer((request, response) => {
-    void handleRequest(request, response, store, options.corsOrigin ?? "*", runtimeConfig, options.accountConnections, options.patientIntakeExecutor, patientWorkspace, staticDir, rootDir, auth, ownership);
+    void handleRequest(request, response, store, options.corsOrigin ?? "*", runtimeConfig, options.accountConnections, options.patientIntakeExecutor, patientWorkspace, staticDir, rootDir, auth, ownership, attachments);
   });
   return { server, store };
 }
@@ -382,6 +394,7 @@ export async function loadRuntimeConfig(rootDir: string): Promise<RuntimeConfig>
     default_provider: fallback.provider,
     default_model: fallback.model,
     models,
+    feedback_enabled: !["0", "false", "off"].includes(String(env.EBM_FEEDBACK_ENABLED ?? "1").toLowerCase()),
   };
 }
 
@@ -588,7 +601,7 @@ export function createPiRpcExecutor(input: {
   return executor;
 }
 
-async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: () => Promise<RuntimeConfig>, accountConnections?: AccountConnectionStore, patientIntakeExecutor?: PatientIntakeExecutor, patientWorkspace = new PatientWorkspace(process.cwd()), staticDir?: string, rootDir = process.cwd(), auth = new InternalAuthStore(), ownership = new SessionOwnershipStore(rootDir)): Promise<void> {
+async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: () => Promise<RuntimeConfig>, accountConnections?: AccountConnectionStore, patientIntakeExecutor?: PatientIntakeExecutor, patientWorkspace = new PatientWorkspace(process.cwd()), staticDir?: string, rootDir = process.cwd(), auth = new InternalAuthStore(), ownership = new SessionOwnershipStore(rootDir), attachments = new AttachmentStore(rootDir)): Promise<void> {
   setCors(response, corsOrigin);
   if (request.method === "OPTIONS") {
     response.writeHead(204);
@@ -640,7 +653,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
         ok: true,
         service: "xunyi-research-service",
         contract_version: CONTRACT_VERSION,
-        endpoints: ["GET /api/v1/runtime-config", "POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel", "POST /api/v1/patient-intake/messages", "POST /api/v1/patient-intake/summary", "GET /api/v1/research-sessions/{session_id}/files", "GET /api/v1/research-sessions/{session_id}/citations"],
+        endpoints: ["GET /api/v1/runtime-config", "POST /api/v1/attachments", "POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel", "POST /api/v1/research-sessions/{session_id}/feedback", "POST /api/v1/patient-intake/messages", "POST /api/v1/patient-intake/summary", "GET /api/v1/research-sessions/{session_id}/files", "GET /api/v1/research-sessions/{session_id}/citations"],
       });
       return;
     }
@@ -688,6 +701,39 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       sendJson(response, 200, await readCitationDetail(rootDir, sessionId, reportPath, number));
       return;
     }
+    const feedbackMatch = /^\/api\/v1\/research-sessions\/([^/]+)\/feedback$/.exec(pathname);
+    if (feedbackMatch && request.method === "POST") {
+      if ((await runtimeConfig()).feedback_enabled === false) throw new ApiError(404, "feedback_disabled", "反馈功能当前未启用。 ");
+      const sessionId = decodePathSegment(feedbackMatch[1] ?? "");
+      if (authUser) await ownership.assertOwner(sessionId, authUser.id);
+      const body = await readJsonBody(request);
+      if (!isRecord(body)) throw new ApiError(422, "invalid_feedback", "反馈内容必须是 JSON 对象。 ");
+      const workspace = await sessionWorkspace(rootDir, sessionId);
+      const comment = body.comment === undefined ? undefined : optionalString(body.comment, "comment", 4_000);
+      const preferredTool = validatePreferredTool(body.preferred_tool);
+      const runId = requiredString(body.run_id, "run_id", 100);
+      const queryId = optionalString(body.query_id, "query_id", 100) ?? runId;
+      if (!(await queryMetadataExists(workspace, sessionId, queryId))) throw new ApiError(404, "query_not_found", "未找到属于当前会话的用户问题。 ");
+      const feedback = await writeFeedback(rootDir, workspace, authUser?.id ?? "anonymous", sessionId, {
+        runId,
+        queryId,
+        rubrics: body.rubrics as Record<string, unknown>,
+        ...(preferredTool ? { preferredTool } : {}),
+        ...(comment ? { comment } : {}),
+      });
+      sendJson(response, 201, { ok: true, session_id: sessionId, ...feedback });
+      return;
+    }
+    if (request.method === "POST" && pathname === "/api/v1/attachments") {
+      if (auth.enabled && !authUser) throw new ApiError(401, "authentication_required", "请先登录内部测试服务。 ");
+      const fileName = request.headers["x-file-name"];
+      if (typeof fileName !== "string") throw new ApiError(422, "invalid_attachment", "附件缺少文件名。 ");
+      const clientSessionId = typeof request.headers["x-client-session-id"] === "string" ? request.headers["x-client-session-id"] : undefined;
+      const bytes = await readBinaryBody(request, MAX_ATTACHMENT_BYTES);
+      const stored = await attachments.create(authUser?.id ?? "anonymous", decodeHeaderValue(fileName), request.headers["content-type"]?.split(";", 1)[0] || "", bytes, clientSessionId);
+      sendJson(response, 201, { attachment_id: stored.id, file_name: stored.fileName, media_type: stored.mediaType, size: stored.size });
+      return;
+    }
     if (accountConnections && request.method === "POST" && pathname === "/api/v1/account-connections") {
       const body = await readJsonBody(request);
       const provider = isRecord(body) ? body.provider : undefined;
@@ -714,7 +760,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       }
     }
     if (request.method === "POST" && pathname === "/api/v1/agent-runs") {
-      const input = validateAgentRunInput(await readJsonBody(request), await runtimeConfig());
+      const input = await validateAgentRunInput(await readJsonBody(request), await runtimeConfig(), authUser?.id ?? (auth.enabled ? undefined : "anonymous"), attachments);
       if (authUser && input.sessionId) await ownership.assertOwner(input.sessionId, authUser.id);
       const run = store.submit(input, authUser?.id);
       sendJson(response, 202, {
@@ -757,6 +803,10 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
           ? new ApiError(error.status, error.code, error.message)
         : error instanceof SessionOwnershipError
           ? new ApiError(404, error.code, error.message)
+        : error instanceof FeedbackValidationError
+          ? new ApiError(422, "invalid_feedback", error.message)
+        : error instanceof AttachmentStoreError
+          ? new ApiError(error.code === "attachment_not_found" ? 404 : 422, error.code, error.message)
         : new ApiError(500, "internal_error", errorMessage(error));
     const responseContract = pathname.startsWith("/api/v1/patient-intake/") ? PATIENT_CONTRACT_VERSION : CONTRACT_VERSION;
     sendJson(response, apiError.status, { ok: false, contract_version: responseContract, error: { code: apiError.code, message: apiError.message } });
@@ -812,15 +862,18 @@ async function safeStaticFile(staticRoot: string, candidate: string): Promise<st
   }
 }
 
-function validateAgentRunInput(value: unknown, runtimeConfig: RuntimeConfig): AgentRunInput {
+async function validateAgentRunInput(value: unknown, runtimeConfig: RuntimeConfig, userId?: string, attachments?: AttachmentStore): Promise<AgentRunInput> {
   if (!isRecord(value)) throw new ApiError(400, "invalid_json", "请求体必须是 JSON 对象。");
   const question = requiredString(value.question, "question", 12_000);
-  const attachments = value.attachments;
-  if (Array.isArray(attachments) && attachments.length > 0) {
-    throw new ApiError(422, "attachments_not_supported", "TypeScript 适配层首版尚未接入文件上传；请先移除附件，或继续使用旧 Python 后端处理附件。");
+  const attachmentIds = value.attachments;
+  if (attachmentIds !== undefined && (!Array.isArray(attachmentIds) || attachmentIds.some((item) => typeof item !== "string"))) {
+    throw new ApiError(422, "invalid_attachment", "attachments 必须是附件 ID 数组。 ");
   }
+  const uploadedAttachments = userId && attachments && Array.isArray(attachmentIds)
+    ? await attachments.resolveMany(userId, attachmentIds as string[])
+    : [];
   const audienceMode = enumValue(value.audience_mode, ["clinician", "public"] as const, "audience_mode", "clinician");
-  const thinkingLevel = enumValue(value.thinking_level, ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const, "thinking_level", "high");
+  const thinkingLevel = enumValue(value.thinking_level, ["off", "low", "medium", "high"] as const, "thinking_level", "high");
   const maxIterations = 32;
   const requestTimeoutSeconds = 600;
   // This endpoint runs the clinician research workflow. Keep audience_mode in
@@ -847,6 +900,7 @@ function validateAgentRunInput(value: unknown, runtimeConfig: RuntimeConfig): Ag
     requestTimeoutSeconds,
     provider,
     model,
+    ...(uploadedAttachments.length ? { attachments: uploadedAttachments } : {}),
   };
 }
 
@@ -866,6 +920,24 @@ async function readJsonBody(request: IncomingMessage): Promise<unknown> {
   } catch {
     throw new ApiError(400, "invalid_json", "请求体不是有效 JSON。");
   }
+}
+
+async function readBinaryBody(request: IncomingMessage, maxBytes: number): Promise<Uint8Array> {
+  const declared = Number(request.headers["content-length"] ?? 0);
+  if (Number.isFinite(declared) && declared > maxBytes) throw new ApiError(413, "attachment_too_large", "附件超过大小限制。 ");
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    bytes += buffer.length;
+    if (bytes > maxBytes) throw new ApiError(413, "attachment_too_large", "附件超过大小限制。 ");
+    chunks.push(buffer);
+  }
+  return new Uint8Array(Buffer.concat(chunks));
+}
+
+function decodeHeaderValue(value: string): string {
+  try { return decodeURIComponent(value); } catch { return value; }
 }
 
 async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks: AgentExecutionHooks; client: PiRpcClientLike; sessionId: string; streamStallTimeoutMs: number }): Promise<AgentExecutionResult> {
@@ -992,6 +1064,20 @@ async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks:
     sessionName: sessionWorkspaceLabel(request.question),
     firstPrompt: request.question,
   });
+  if (request.runId) {
+    await writeQueryMetadata(piSessionDirectory(rootDir, sessionId), {
+      schema_version: 1,
+      query_id: request.runId,
+      session_id: sessionId,
+      question: request.question,
+      created_at: new Date().toISOString(),
+    });
+  }
+  let attachmentContext = "";
+  if (request.attachments?.length) {
+    attachmentContext = await archiveUploadedAttachments(rootDir, piSessionDirectory(rootDir, sessionId), request.attachments, hooks.signal);
+    addTrace(trace("attachments.archived", "用户附件已归档", `${request.attachments.length} 个附件已加入本轮研究输入。`));
+  }
   try {
     await initResearchFrame({ sessionDir: piSessionDirectory(rootDir, sessionId), userQuestion: request.question });
     addTrace(trace("research_frame.ready", "研究框架已就绪", "可在本题文档中查看并随研究进展更新。"));
@@ -1016,7 +1102,7 @@ async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks:
     armStreamStallTimer();
     const operation = (async () => {
       const settled = client.waitForIdle((request.requestTimeoutSeconds + 5) * 1000);
-      await client.prompt(buildAgentPrompt(request));
+      await client.prompt(buildAgentPrompt(request, attachmentContext));
       await settled;
     })();
     await Promise.race([operation, termination]);
@@ -1082,7 +1168,7 @@ function modelErrorSummary(value: string): string {
   return `${status ? `模型服务返回 ${status}：` : "模型服务错误："}${message}`.slice(0, 500);
 }
 
-export function buildAgentPrompt(input: AgentRunInput): string {
+export function buildAgentPrompt(input: AgentRunInput, attachmentContext = ""): string {
   const audienceInstruction = "使用面向临床人员的中文；按临床决策需要呈现证据等级、效应量和适用边界。";
   const retrievalInstruction = input.retrievalPolicy === "mcp_only"
     ? "本轮外部临床知识检索仅使用指南库：使用 guideline_mcp_search、guideline_mcp_retrieve、guideline_mcp_read，不使用 PubMed、公共网页或本地来源库检索。Pi 的 read、bash 等本地工具仍可用于读取和定位本会话已归档内容，但不得借此增加其他外部检索来源。若指南证据不足，明确报告证据缺口。最终面向用户的报告不得出现 MCP、RAG、工具调用、内部文件路径或内部 evidence ID。"
@@ -1095,6 +1181,10 @@ export function buildAgentPrompt(input: AgentRunInput): string {
     "本轮必须生成正式循证报告：在最终回复前调用 report_write；若 report_write 只保存了 draft，则修复后调用 report_finalize。不得只在聊天消息中输出摘要而跳过正式报告文件。最终聊天消息使用自然、简洁的中文答复，概括结论、重要边界和下一步，不复制完整报告；该摘要会与正式报告同时展示。",
     "研究过程中，可在工具调用前用一句简短中文说明对医生有意义的进展。只有研究目标、临床判断或面向医生的阶段发生实质变化时才说明进展，例如完成问题框定、找到会改变决策的关键证据、发现重要冲突或缺口、停止检索并进入写作。原文定位、登记证据和可自动恢复的工具重试属于内部操作，无需播报；同一阶段不要反复说明‘证据已足够’或下一项内部动作。不要暴露工具参数、内部路径，也不要把未经核验的中间发现写成结论；无需为了展示而凑数量。",
     retrievalInstruction,
+    ...(attachmentContext ? [
+      "本轮用户上传了附件。附件已经归档到当前会话，请先阅读其文字归档；对医学图像按需调用 medical_image_read。附件是本轮报告的输入材料，不要把内部归档路径、附件 ID 或工具过程写入面向医生的最终报告。",
+      attachmentContext,
+    ] : []),
     `本轮最大工具迭代预算为 ${input.maxIterations}（提示性约束）。`,
     "临床问题：",
     input.question,
@@ -1114,7 +1204,7 @@ function trace(kind: string, label: string, detail: string): AgentTraceEvent {
 function setCors(response: ServerResponse, origin: string): void {
   response.setHeader("Access-Control-Allow-Origin", origin);
   response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-File-Name, X-Client-Session-Id");
   if (origin !== "*") response.setHeader("Access-Control-Allow-Credentials", "true");
 }
 

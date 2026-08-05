@@ -93,7 +93,7 @@ describe("循医研究服务 API", () => {
 
   it("delegates clinician report structure to the writing skill independently of thinking level", () => {
     const low = buildAgentPrompt(promptInput({ thinkingLevel: "low" }));
-    const maximum = buildAgentPrompt(promptInput({ thinkingLevel: "max" }));
+    const maximum = buildAgentPrompt(promptInput({ thinkingLevel: "high" }));
     const publicPrompt = buildAgentPrompt(promptInput({ audienceMode: "public", retrievalPolicy: "mcp_only" }));
     for (const prompt of [low, maximum, publicPrompt]) {
       expect(prompt).toContain("在最终回复前调用 report_write")
@@ -250,7 +250,7 @@ describe("循医研究服务 API", () => {
       const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question: "类风湿关节炎患者该如何升级治疗？", thinking_level: "xhigh" }),
+        body: JSON.stringify({ question: "类风湿关节炎患者该如何升级治疗？", thinking_level: "high" }),
       });
       expect(created.status).toBe(202);
       const accepted = await created.json() as { run_id: string; status: string; contract_version: string };
@@ -265,8 +265,8 @@ describe("循医研究服务 API", () => {
       expect(result.report_markdown).toContain("完整循证报告");
       expect(result.summary.request_timeout_seconds).toBe(600);
       expect(result.summary.retrieval_policy).toBe("all");
-      expect(result.summary.thinking_level).toBe("xhigh");
-      expect(receivedInput?.thinkingLevel).toBe("xhigh");
+      expect(result.summary.thinking_level).toBe("high");
+      expect(receivedInput?.thinkingLevel).toBe("high");
       expect(receivedInput?.retrievalPolicy).toBe("all");
       expect(result.agent_trace.some((event: { kind: string }) => event.kind === "tool.completed")).toBe(true);
       expect(result.progress_updates).toEqual([expect.objectContaining({ text: "正在核对最新治疗建议。" })]);
@@ -426,7 +426,7 @@ describe("循医研究服务 API", () => {
     expect(buildPatientIntakePrompt({ ...input, message: "ignored", intent: "summary" })).toContain("用户明确提供的信息");
   });
 
-  it.each(["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const)("passes Pi thinking level %s through without a research-mode mapping", async (thinkingLevel) => {
+  it.each(["off", "low", "medium", "high"] as const)("passes Pi thinking level %s through without a research-mode mapping", async (thinkingLevel) => {
     let receivedInput: Parameters<AgentExecutor>[0] | undefined;
     const { api, baseUrl } = await startApi(async (input) => {
       receivedInput = input;
@@ -541,7 +541,7 @@ describe("循医研究服务 API", () => {
     }
   });
 
-  it("cancels a running job and rejects unsupported file attachments explicitly", async () => {
+  it("cancels a running job and validates attachment IDs explicitly", async () => {
     const executor: AgentExecutor = async (_input, hooks) => new Promise((_resolve, reject) => {
       if (hooks.signal.aborted) {
         const error = new Error("cancelled");
@@ -563,7 +563,7 @@ describe("循医研究服务 API", () => {
         body: JSON.stringify({ question: "带附件的问题", attachments: [{ name: "paper.pdf" }] }),
       });
       expect(unsupported.status).toBe(422);
-      expect(await unsupported.json()).toMatchObject({ error: { code: "attachments_not_supported" } });
+      expect(await unsupported.json()).toMatchObject({ error: { code: "invalid_attachment" } });
 
       const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
         method: "POST",

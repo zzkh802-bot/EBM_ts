@@ -10,6 +10,8 @@
 EBM_INTERNAL_ACCESS_KEY=替换为足够长的随机字符串
 EBM_ENABLE_PATIENT_INTAKE=0
 EBM_ENABLE_ACCOUNT_CONNECTIONS=0
+# 关闭后不展示问卷，也不接受反馈写入；默认开启
+EBM_FEEDBACK_ENABLED=1
 ```
 
 如果前端由不同域名提供，再设置反向代理的精确来源；不要使用 `*`：
@@ -31,6 +33,10 @@ DP_XUNYI_TS_CORS_ORIGIN=https://internal.example.com
 - 共享来源库仍是全局知识缓存，不应放入用户私密笔记。
 - Pi 只接收当前 provider 所需的密钥；不会把整个 `.env` 传给子进程。
 - Bash 保留用于内部测试，但安全扩展会拦截常见凭据路径、外部网络命令和高风险破坏命令。它是防误用层，不替代操作系统隔离。
+- 用户附件通过独立上传接口保存到用户隔离目录；PDF、DOC/DOCX 和图片会尽量交给 MinerU 解析，原始文件和解析结果归档到对应报告会话。
+- 医学图像理解使用独立的 `medical_image_read` 工具调用视觉服务，结果仅作为报告输入的辅助描述，不作为诊断结论。
+- 反馈问卷由 `EBM_FEEDBACK_ENABLED` 控制；关闭后前端不展示问卷，已有反馈文件仍保留供分析。
+- 问卷字段和轨迹关联方法见 [`docs/internal-beta-feedback.md`](internal-beta-feedback.md)。
 
 ## 测试前检查
 

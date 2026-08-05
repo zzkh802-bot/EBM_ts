@@ -22,7 +22,7 @@ function isFullSourceReview(toolName: string, args: unknown): boolean {
   return false;
 }
 
-export function registerResearchRoundHint(pi: Pick<ExtensionAPI, "on">): void {
+export function registerResearchRoundHint(pi: Pick<ExtensionAPI, "on" | "events">): void {
   let currentTurn = 1;
   let sourceReviews = 0;
 
@@ -47,12 +47,14 @@ export function registerResearchRoundHint(pi: Pick<ExtensionAPI, "on">): void {
     const reviewText = exhausted
       ? `完整来源复核预算已用 ${sourceReviews}/${reviewBudget}。停止继续翻阅来源；除非能明确指出仍缺少哪一项足以逆转临床结论的信息，否则请登记已有证据、披露缺口并进入正式报告。`
       : `完整来源复核预算已用 ${sourceReviews}/${reviewBudget}。优先使用已读取片段的 read_id + 起止原文锚点归档证据；只为适用性、冲突或决策关键缺口继续打开完整来源。`;
+    const reminder = `[运行状态，仅用于控制研究范围，不代表新的临床问题：${roundText}${reviewText} guideline_mcp_retrieve 等聚焦检索和 evidence_add 不计入完整来源复核预算。若证据已足以回答，请优先完成证据记录与正式报告，不为凑轮次扩展检索。]`;
+    pi.events?.emit?.("ebm:system_reminder", { text: reminder, source: "research_round_hint", turn_index: currentTurn });
     return {
       messages: [...event.messages, {
         role: "user",
         content: [{
           type: "text",
-          text: `[运行状态，仅用于控制研究范围，不代表新的临床问题：${roundText}${reviewText} guideline_mcp_retrieve 等聚焦检索和 evidence_add 不计入完整来源复核预算。若证据已足以回答，请优先完成证据记录与正式报告，不为凑轮次扩展检索。]`,
+          text: reminder,
         }],
         timestamp: Date.now(),
       }],
