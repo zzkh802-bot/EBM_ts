@@ -57,7 +57,7 @@ describe("developer trajectory recorder", () => {
 
     const queryId = "12345678-1234-1234-1234-123456789012";
     await writeQueryMetadata(path.join(cwd, "data", "sessions", "session-1"), {
-      schema_version: 1, query_id: queryId, session_id: "session-1", question: "Should treatment be used?", created_at: new Date().toISOString(),
+      schema_version: 1, query_id: queryId, session_id: "session-1", user_id: "u-test1234", question: "Should treatment be used?", created_at: new Date().toISOString(),
     });
 
     await harness.emit("session_start", { type: "session_start", reason: "startup" }, ctx);
@@ -128,6 +128,7 @@ describe("developer trajectory recorder", () => {
     const runStart = lines.find((line) => line.event === "run_start");
     expect(runStart?.run_id).toBe(queryId);
     expect(runStart?.data.prompt_kind).toBe("user_query");
+    expect(runStart?.data.user_id).toBe("u-test1234");
     expect(runStart?.data.user_query).toBe("Should treatment be used?");
     expect(lines.find((line) => line.event === "system_reminder")?.data.prompt_kind).toBe("system_reminder");
     expect(lines.every((line) => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+08:00$/.test(line.timestamp))).toBe(true);

@@ -5,6 +5,7 @@ export type QueryMetadata = {
   schema_version: 1;
   query_id: string;
   session_id: string;
+  user_id?: string;
   question: string;
   created_at: string;
 };
@@ -24,7 +25,7 @@ export async function readCurrentQueryMetadata(sessionDir: string): Promise<Quer
   const currentPath = path.join(sessionDir, "trace", "current-query.json");
   try {
     const value = JSON.parse(await readFile(currentPath, "utf8")) as QueryMetadata;
-    if (!queryIdPattern.test(value.query_id) || typeof value.session_id !== "string" || typeof value.question !== "string") return undefined;
+    if (!queryIdPattern.test(value.query_id) || typeof value.session_id !== "string" || (value.user_id !== undefined && typeof value.user_id !== "string") || typeof value.question !== "string") return undefined;
     return value;
   } catch {
     return undefined;

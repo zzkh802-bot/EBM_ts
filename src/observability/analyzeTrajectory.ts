@@ -51,6 +51,7 @@ export type EvidenceAttemptAnalysis = EvidenceAttemptBreakdown & {
 
 export type TrajectoryAnalysis = {
   session_id: string;
+  user_ids: string[];
   runs: number;
   user_queries: number;
   system_reminders: number;
@@ -89,6 +90,7 @@ export type TrajectoryAnalysis = {
   evidence_add_attempts: EvidenceAttemptAnalysis;
   run_summaries: Array<{
     run_id: string;
+    user_id?: string;
     duration_ms?: number;
     duration_seconds?: number;
     turns: number;
@@ -203,6 +205,7 @@ function emptyEvidenceBreakdown(): EvidenceAttemptBreakdown {
 export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalysis {
   const sessionId = records[0]?.session_id ?? "unknown";
   const runStarts = new Map<string, string>();
+  const runUsers = new Map<string, string>();
   const runEnds = new Map<string, string>();
   const runTurns = new Map<string, Set<number>>();
   const runToolCalls = new Map<string, number>();
@@ -287,6 +290,7 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
     if (state && record.event === "assistant_message") state.modelMs = numeric(data?.request_timing?.duration_ms);
     if (record.event === "run_start" && run) {
       runStarts.set(run, record.timestamp);
+      if (typeof data?.user_id === "string" && data.user_id.trim()) runUsers.set(run, data.user_id.trim());
       if (data?.prompt_kind !== "system_reminder") userQueries += 1;
     }
     if (record.event === "system_reminder") systemReminders += 1;
@@ -516,6 +520,7 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
 
   return {
     session_id: sessionId,
+    user_ids: [...new Set(runUsers.values())].sort(),
     runs: runIds.length,
     user_queries: userQueries,
     system_reminders: systemReminders,
@@ -549,8 +554,10 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
     evidence_add_attempts: evidenceAddAttempts,
     run_summaries: runIds.map((runId) => {
       const duration = milliseconds(runStarts.get(runId), runEnds.get(runId));
+      const userId = runUsers.get(runId);
       return {
         run_id: runId,
+        ...(userId ? { user_id: userId } : {}),
         ...(duration === undefined ? {} : { duration_ms: duration, duration_seconds: Math.round(duration) / 1000 }),
         turns: runTurns.get(runId)?.size ?? 0,
         tool_calls: runToolCalls.get(runId) ?? 0,

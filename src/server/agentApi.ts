@@ -49,6 +49,8 @@ export type ResearchProgressUpdate = {
 export type AgentRunInput = {
   /** Server-assigned stable query id; never accepted from the browser. */
   runId?: string;
+  /** Server-assigned authenticated user id; never accepted from the browser. */
+  userId?: string;
   question: string;
   sessionId?: string;
   audienceMode: AudienceMode;
@@ -170,7 +172,7 @@ export class AgentRunStore {
     const runId = randomUUID();
     const run: InternalRun = {
       id: runId,
-      input: { ...input, runId },
+      input: { ...input, runId, ...(ownerId ? { userId: ownerId } : {}) },
       status: "queued",
       stage: "planning",
       createdAt: new Date().toISOString(),
@@ -578,7 +580,7 @@ export function createPiRpcExecutor(input: {
           "--skill", path.join(rootDir, ".pi", "skills", "clinical-report-writing", "SKILL.md"),
         ];
         if (request.sessionId) args.push("--session", request.sessionId);
-        else args.push("--name", sessionWorkspaceLabel(request.question));
+        else args.push("--name", request.userId ? `${request.userId}__${sessionWorkspaceLabel(request.question)}` : sessionWorkspaceLabel(request.question));
         return factory(await buildPiRpcClientOptions(rootDir, {
           runtimeDirectory: "data/pi-agent",
           sessionDirectory: "data/pi-sessions",
@@ -1134,12 +1136,14 @@ async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks:
   await initializePiSessionDirectory(rootDir, sessionId, {
     sessionName: sessionWorkspaceLabel(request.question),
     firstPrompt: request.question,
+    ...(request.userId ? { userId: request.userId } : {}),
   });
   if (request.runId) {
     await writeQueryMetadata(piSessionDirectory(rootDir, sessionId), {
       schema_version: 1,
       query_id: request.runId,
       session_id: sessionId,
+      ...(request.userId ? { user_id: request.userId } : {}),
       question: request.question,
       created_at: new Date().toISOString(),
     });

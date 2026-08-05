@@ -149,6 +149,7 @@ export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on" | "events
       prompt_kind: "user_query",
       user_query: query?.question ?? event.prompt,
       ...(query ? { query_id: query.query_id } : {}),
+      ...(query?.user_id ? { user_id: query.user_id } : {}),
       runtime: {
         provider: ctx.model?.provider,
         model: ctx.model?.id,

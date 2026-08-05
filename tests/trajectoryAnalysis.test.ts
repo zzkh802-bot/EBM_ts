@@ -28,7 +28,7 @@ describe("trajectory analysis", () => {
 
   it("summarizes rounds, thinking, tools, evidence timing, usage, and duplicate actions", () => {
     const records: TrajectoryRecord[] = [
-      record(1, "2026-01-01T00:00:00.000Z", "run_start", { prompt: "question" }),
+      record(1, "2026-01-01T00:00:00.000Z", "run_start", { prompt: "question", user_id: "u-test1234" }),
       record(2, "2026-01-01T00:00:01.000Z", "turn_start", {}, "run-1", 0),
       record(3, "2026-01-01T00:00:02.000Z", "tool_start", { tool_call_id: "a", tool_name: "pubmed_search", args: { query: "aspirin" } }, "run-1", 0),
       record(4, "2026-01-01T00:00:03.000Z", "tool_end", { tool_call_id: "a", tool_name: "pubmed_search", is_error: false, duration_ms: 1000 }, "run-1", 0),
@@ -45,6 +45,7 @@ describe("trajectory analysis", () => {
     const analysis = analyzeTrajectory(records);
     expect(analysis).toMatchObject({
       session_id: "s1",
+      user_ids: ["u-test1234"],
       runs: 1,
       user_queries: 1,
       system_reminders: 1,
@@ -67,7 +68,7 @@ describe("trajectory analysis", () => {
       total_duration_seconds: 1.9,
       average_duration_seconds: 0.95,
     });
-    expect(analysis.run_summaries[0]).toMatchObject({ duration_seconds: 8 });
+    expect(analysis.run_summaries[0]).toMatchObject({ duration_seconds: 8, user_id: "u-test1234" });
   });
 
   it("separates model time, concurrent tool wall time, context growth, and workflow phases", () => {

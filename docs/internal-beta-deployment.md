@@ -36,6 +36,12 @@ DP_XUNYI_TS_CORS_ORIGIN=https://internal.example.com
 - 用户附件通过独立上传接口保存到用户隔离目录；PDF、DOC/DOCX 和图片会尽量交给 MinerU 解析，原始文件和解析结果归档到对应报告会话。
 - 医学图像理解使用独立的 `medical_image_read` 工具调用视觉服务，结果仅作为报告输入的辅助描述，不作为诊断结论。
 - 反馈问卷由 `EBM_FEEDBACK_ENABLED` 控制；关闭后前端不展示问卷，已有反馈文件仍保留供分析。
+
+## 会话与轨迹归档
+
+- 新的已登录研究会话目录使用 `data/sessions/<user_id>__<session_id前8位>_<临床问题语义名>/`，例如 `u-7k3m9p2c__019fc823_卒中循证问题/`。
+- Pi 原始完整会话仍由 Pi 保存在 `data/pi-sessions/`，文件名保留 Pi 的时间戳和完整 session ID；`data/sessions/.metadata/workspaces/` 与会话 `.metadata/session.json` 保存二者映射及 `user_id`。
+- `trace/trajectory.jsonl`、`trace/queries/` 和反馈文件都写入同一用户会话目录。`npm run trace:analyze -- --all --by-user` 可按用户汇总；没有归属字段的历史轨迹显示为 `unknown/pre-auth`，不会猜测用户。
 - 问卷字段和轨迹关联方法见 [`docs/internal-beta-feedback.md`](internal-beta-feedback.md)。
 
 ## 测试前检查
