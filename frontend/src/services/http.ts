@@ -21,6 +21,7 @@ export async function request<T>(
   try {
     const response = await fetch(path, {
       ...init,
+      credentials: 'include',
       signal,
       headers: { 'Content-Type': 'application/json', ...init.headers },
     })

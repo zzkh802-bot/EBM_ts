@@ -48,6 +48,49 @@ describe("循医研究服务 API", () => {
     ...overrides,
   });
 
+  it("uses the shared internal key as an access gate and keeps agent runs user-scoped", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-auth-api-"));
+    const runtimeConfig: RuntimeConfig = {
+      default_provider: "deepseek", default_model: "deepseek-v4-flash",
+      models: [{ provider: "deepseek", provider_label: "DeepSeek", model: "deepseek-v4-flash", model_label: "DeepSeek V4 Flash", available: true }],
+    };
+    const api = createAgentApiServer({ executor: async () => ({ sessionId: "owned-session", message: "完成。" }), rootDir, runtimeConfig, internalAccessKey: "shared-test-key" });
+    api.server.listen(0, "127.0.0.1");
+    await once(api.server, "listening");
+    const address = api.server.address();
+    if (!address || typeof address === "string") throw new Error("Expected a TCP test server");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+    try {
+      const config = await fetch(`${baseUrl}/api/v1/auth/config`);
+      expect(await config.json()).toEqual({ auth_required: true });
+      const denied = await fetch(`${baseUrl}/api/v1/agent-runs`);
+      expect(denied.status).toBe(401);
+      const login = await fetch(`${baseUrl}/api/v1/auth/login`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "Annotator_01", access_key: "shared-test-key" }),
+      });
+      expect(login.status).toBe(200);
+      const cookie = login.headers.get("set-cookie");
+      expect(cookie).toContain("ebm_internal_session=");
+      const sessionCookie = cookie!.split(";")[0]!;
+      const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
+        method: "POST", headers: { "content-type": "application/json", cookie: sessionCookie }, body: JSON.stringify({ question: "内部测试问题" }),
+      });
+      expect(created.status).toBe(202);
+      const accepted = await created.json() as { run_id: string };
+      const own = await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`, { headers: { cookie: sessionCookie } });
+      expect(own.status).toBe(200);
+      const otherLogin = await fetch(`${baseUrl}/api/v1/auth/login`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "annotator_02", access_key: "shared-test-key" }),
+      });
+      const otherCookie = otherLogin.headers.get("set-cookie")!.split(";")[0]!;
+      const crossUser = await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`, { headers: { cookie: otherCookie } });
+      expect(crossUser.status).toBe(404);
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
+  });
+
   it("delegates clinician report structure to the writing skill independently of thinking level", () => {
     const low = buildAgentPrompt(promptInput({ thinkingLevel: "low" }));
     const maximum = buildAgentPrompt(promptInput({ thinkingLevel: "max" }));

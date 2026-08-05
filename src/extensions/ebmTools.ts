@@ -18,6 +18,7 @@ import { registerReportTools } from "./reportTools.js";
 import { registerResearchRoundHint } from "./researchRoundHint.js";
 import { registerResearchFrameTools } from "./researchFrameTools.js";
 import { registerReadRegistry } from "./readRegistry.js";
+import { registerSecurityGuard } from "./securityGuard.js";
 import { piReadableSessionPath, piSessionDirectory, registerSessionWorkspace } from "./sessionPath.js";
 import { registerStreamStallWatchdog } from "./streamStallWatchdog.js";
 import { registerTrajectoryRecorder } from "./trajectoryRecorder.js";
@@ -39,6 +40,7 @@ export function registerEbmTools(pi: ExtensionAPI): void {
   registerEbmIdentity(pi);
   registerResearchRoundHint(pi);
   registerStreamStallWatchdog(pi);
+  registerSecurityGuard(pi);
 
   pi.registerTool({
     name: "evidence_add",

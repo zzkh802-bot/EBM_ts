@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppShell from './components/shell/AppShell.vue'
+import InternalLoginPage from './pages/InternalLoginPage.vue'
+import { authService } from './services/auth'
+import type { InternalUser } from './types/domain'
 import { usePreferencesStore, useSessionsStore, useUiStore } from './stores'
 
 const preferences = usePreferencesStore()
@@ -10,6 +13,9 @@ const ui = useUiStore()
 const route = useRoute()
 const clinicianShell = computed(() => route.meta.shell === 'clinician')
 const media = matchMedia('(prefers-color-scheme: dark)')
+const authReady = ref(false)
+const authRequired = ref(false)
+const authUser = ref<InternalUser | null>(null)
 
 const moduleName = computed(() => {
   if (route.path.startsWith('/clinician/knowledge')) return 'knowledge'
@@ -58,9 +64,38 @@ onBeforeUnmount(() => {
   media.removeEventListener('change', onThemeChange)
   document.removeEventListener('keydown', onKeydown)
 })
+
+onMounted(async () => {
+  try {
+    const config = await authService.config()
+    authRequired.value = config.auth_required
+    if (!config.auth_required) {
+      authReady.value = true
+      return
+    }
+    try {
+      authUser.value = (await authService.me()).user
+    } catch {
+      authUser.value = null
+    }
+  } catch {
+    // Keep the existing local/dev mode usable if the auth endpoint is unavailable.
+    authRequired.value = false
+  } finally {
+    authReady.value = true
+  }
+})
+
+const onAuthenticated = (user: InternalUser) => {
+  authUser.value = user
+  authReady.value = true
+}
 </script>
 
 <template>
-  <AppShell v-if="clinicianShell" />
-  <RouterView v-else />
+  <InternalLoginPage v-if="authReady && authRequired && !authUser" @authenticated="onAuthenticated" />
+  <template v-else-if="authReady">
+    <AppShell v-if="clinicianShell" />
+    <RouterView v-else />
+  </template>
 </template>

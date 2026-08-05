@@ -12,6 +12,8 @@ import { loadProjectEnv } from "./projectEnv.js";
 import { readCitationDetail } from "./citationService.js";
 import { listWorkspaceFiles, readWorkspaceFile, sessionWorkspace, WorkspaceServiceError } from "./workspaceService.js";
 import { readFinalReportRevisions } from "./reportPublication.js";
+import { InternalAuthStore } from "./internalAuth.js";
+import { SessionOwnershipError, SessionOwnershipStore } from "./sessionOwnership.js";
 
 const CONTRACT_VERSION = "xunyi-research/v1";
 const PATIENT_CONTRACT_VERSION = "xunyi-patient/v1";
@@ -144,14 +146,15 @@ type InternalRun = {
   tools: Array<Record<string, unknown>>;
   error?: { code: string; message: string };
   controller: AbortController;
+  ownerId?: string;
 };
 
 export class AgentRunStore {
   private readonly runs = new Map<string, InternalRun>();
 
-  constructor(private readonly executor: AgentExecutor, private readonly maxCompletedRuns = 100) {}
+  constructor(private readonly executor: AgentExecutor, private readonly maxCompletedRuns = 100, private readonly onSessionId?: (sessionId: string, ownerId?: string) => void) {}
 
-  submit(input: AgentRunInput): AgentRunResponse {
+  submit(input: AgentRunInput, ownerId?: string): AgentRunResponse {
     this.pruneCompletedRuns();
     const run: InternalRun = {
       id: randomUUID(),
@@ -164,20 +167,21 @@ export class AgentRunStore {
       progressUpdates: [],
       tools: [],
       controller: new AbortController(),
+      ...(ownerId ? { ownerId } : {}),
     };
     this.runs.set(run.id, run);
     queueMicrotask(() => void this.execute(run));
     return this.toResponse(run);
   }
 
-  get(runId: string): AgentRunResponse | undefined {
+  get(runId: string, ownerId?: string): AgentRunResponse | undefined {
     const run = this.runs.get(runId);
-    return run ? this.toResponse(run) : undefined;
+    return run && (!ownerId || run.ownerId === ownerId) ? this.toResponse(run) : undefined;
   }
 
-  cancel(runId: string): AgentRunResponse | undefined {
+  cancel(runId: string, ownerId?: string): AgentRunResponse | undefined {
     const run = this.runs.get(runId);
-    if (!run) return undefined;
+    if (!run || (ownerId && run.ownerId !== ownerId)) return undefined;
     if (["succeeded", "failed", "cancelled"].includes(run.status)) return this.toResponse(run);
     run.status = "cancelling";
     run.message = "已请求中断任务，正在停止 Agent 进程。";
@@ -201,6 +205,7 @@ export class AgentRunStore {
         signal: run.controller.signal,
         setSessionId: (sessionId) => {
           run.sessionId = sessionId;
+          this.onSessionId?.(sessionId, run.ownerId);
         },
         onTrace: (event) => this.addTrace(run, event),
         onProgress: (update) => this.addProgress(run, update),
@@ -322,19 +327,24 @@ export type AgentApiServerOptions = {
   accountConnections?: AccountConnectionStore;
   staticDir?: string;
   rootDir?: string;
+  internalAccessKey?: string;
 };
 
 export function createAgentApiServer(options: AgentApiServerOptions): { server: Server; store: AgentRunStore } {
-  const store = new AgentRunStore(options.executor, options.maxCompletedRuns);
+  const rootDir = path.resolve(options.rootDir ?? process.cwd());
+  const auth = new InternalAuthStore(options.internalAccessKey);
+  const ownership = new SessionOwnershipStore(rootDir);
+  const store = new AgentRunStore(options.executor, options.maxCompletedRuns, (sessionId, ownerId) => {
+    if (ownerId) void ownership.claim(sessionId, ownerId).catch(() => undefined);
+  });
   const configuredRuntimeConfig = options.runtimeConfig;
   const runtimeConfig = typeof configuredRuntimeConfig === "function"
     ? configuredRuntimeConfig
     : async () => configuredRuntimeConfig ?? defaultRuntimeConfig();
   const staticDir = options.staticDir ? path.resolve(options.staticDir) : undefined;
-  const rootDir = path.resolve(options.rootDir ?? process.cwd());
   const patientWorkspace = new PatientWorkspace(rootDir);
   const server = createServer((request, response) => {
-    void handleRequest(request, response, store, options.corsOrigin ?? "*", runtimeConfig, options.accountConnections, options.patientIntakeExecutor, patientWorkspace, staticDir, rootDir);
+    void handleRequest(request, response, store, options.corsOrigin ?? "*", runtimeConfig, options.accountConnections, options.patientIntakeExecutor, patientWorkspace, staticDir, rootDir, auth, ownership);
   });
   return { server, store };
 }
@@ -578,7 +588,7 @@ export function createPiRpcExecutor(input: {
   return executor;
 }
 
-async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: () => Promise<RuntimeConfig>, accountConnections?: AccountConnectionStore, patientIntakeExecutor?: PatientIntakeExecutor, patientWorkspace = new PatientWorkspace(process.cwd()), staticDir?: string, rootDir = process.cwd()): Promise<void> {
+async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: () => Promise<RuntimeConfig>, accountConnections?: AccountConnectionStore, patientIntakeExecutor?: PatientIntakeExecutor, patientWorkspace = new PatientWorkspace(process.cwd()), staticDir?: string, rootDir = process.cwd(), auth = new InternalAuthStore(), ownership = new SessionOwnershipStore(rootDir)): Promise<void> {
   setCors(response, corsOrigin);
   if (request.method === "OPTIONS") {
     response.writeHead(204);
@@ -589,6 +599,42 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
   const requestPathname = url.pathname.replace(/\/$/, "") || "/";
   const pathname = requestPathname === "/ts-api" ? "/" : requestPathname.startsWith("/ts-api/") ? requestPathname.slice(7) : requestPathname;
   try {
+  if (request.method === "GET" && pathname === "/api/v1/auth/config") {
+    sendJson(response, 200, { auth_required: auth.enabled });
+    return;
+  }
+  if (request.method === "POST" && pathname === "/api/v1/auth/login") {
+    const body = await readJsonBody(request);
+    const clientKey = request.socket.remoteAddress ?? "unknown";
+    const login = isRecord(body) ? auth.login(body.username, body.access_key, clientKey) : undefined;
+    if (auth.enabled && !login) {
+      sendJson(response, 401, { ok: false, contract_version: CONTRACT_VERSION, error: { code: "invalid_credentials", message: "用户名或内部访问密钥不正确。 " } });
+      return;
+    }
+    if (!auth.enabled) {
+      sendJson(response, 200, { auth_required: false });
+      return;
+    }
+    response.setHeader("Set-Cookie", auth.cookie(login!.token, request.headers["x-forwarded-proto"] === "https"));
+    sendJson(response, 200, { auth_required: true, user: login!.user });
+    return;
+  }
+  const authUser = auth.authenticate(request);
+  const requiresAuth = auth.enabled && pathname.startsWith("/api/");
+  if (requiresAuth && !authUser) {
+    sendJson(response, 401, { ok: false, contract_version: CONTRACT_VERSION, error: { code: "authentication_required", message: "请先登录内部测试服务。 " } });
+    return;
+  }
+  if (request.method === "POST" && pathname === "/api/v1/auth/logout") {
+    auth.logout(request);
+    response.setHeader("Set-Cookie", auth.clearCookie(request.headers["x-forwarded-proto"] === "https"));
+    sendJson(response, 200, { ok: true });
+    return;
+  }
+  if (request.method === "GET" && pathname === "/api/v1/auth/me") {
+    sendJson(response, 200, { user: authUser });
+    return;
+  }
     if (request.method === "GET" && pathname === "/health") {
       sendJson(response, 200, {
         ok: true,
@@ -622,6 +668,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     const workspaceMatch = /^\/api\/v1\/research-sessions\/([^/]+)\/files$/.exec(pathname);
     if (workspaceMatch && request.method === "GET") {
       const sessionId = decodePathSegment(workspaceMatch[1] ?? "");
+      if (authUser) await ownership.assertOwner(sessionId, authUser.id);
       const requestedPath = url.searchParams.get("path");
       if (requestedPath) {
         sendJson(response, 200, await readWorkspaceFile(rootDir, sessionId, requestedPath));
@@ -634,6 +681,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     const citationMatch = /^\/api\/v1\/research-sessions\/([^/]+)\/citations$/.exec(pathname);
     if (citationMatch && request.method === "GET") {
       const sessionId = decodePathSegment(citationMatch[1] ?? "");
+      if (authUser) await ownership.assertOwner(sessionId, authUser.id);
       const reportPath = url.searchParams.get("report_path") ?? "";
       const number = Number(url.searchParams.get("number"));
       if (!Number.isInteger(number) || number < 1) throw new ApiError(422, "invalid_citation_number", "引用编号必须是正整数。 ");
@@ -667,7 +715,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     }
     if (request.method === "POST" && pathname === "/api/v1/agent-runs") {
       const input = validateAgentRunInput(await readJsonBody(request), await runtimeConfig());
-      const run = store.submit(input);
+      if (authUser && input.sessionId) await ownership.assertOwner(input.sessionId, authUser.id);
+      const run = store.submit(input, authUser?.id);
       sendJson(response, 202, {
         ...run,
         poll_url: `/api/v1/agent-runs/${run.run_id}`,
@@ -679,13 +728,13 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     if (match) {
       const runId = decodePathSegment(match[1] ?? "");
       if (request.method === "GET" && !match[2]) {
-        const run = store.get(runId);
+        const run = store.get(runId, authUser?.id);
         if (!run) throw new ApiError(404, "run_not_found", "未找到该 Agent 任务。");
         sendJson(response, 200, run);
         return;
       }
       if (request.method === "POST" && match[2] === "cancel") {
-        const run = store.cancel(runId);
+        const run = store.cancel(runId, authUser?.id);
         if (!run) throw new ApiError(404, "run_not_found", "未找到该 Agent 任务。");
         sendJson(response, 202, run);
         return;
@@ -706,6 +755,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
         ? new ApiError(error.status, error.code, error.message)
         : error instanceof WorkspaceServiceError
           ? new ApiError(error.status, error.code, error.message)
+        : error instanceof SessionOwnershipError
+          ? new ApiError(404, error.code, error.message)
         : new ApiError(500, "internal_error", errorMessage(error));
     const responseContract = pathname.startsWith("/api/v1/patient-intake/") ? PATIENT_CONTRACT_VERSION : CONTRACT_VERSION;
     sendJson(response, apiError.status, { ok: false, contract_version: responseContract, error: { code: apiError.code, message: apiError.message } });
@@ -1064,6 +1115,7 @@ function setCors(response: ServerResponse, origin: string): void {
   response.setHeader("Access-Control-Allow-Origin", origin);
   response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (origin !== "*") response.setHeader("Access-Control-Allow-Credentials", "true");
 }
 
 function sendJson(response: ServerResponse, status: number, value: unknown): void {

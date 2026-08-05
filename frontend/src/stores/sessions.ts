@@ -1,7 +1,7 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import type { Message, Session } from '../types/domain'
-import { newId, nowIso, safeRead, safeWrite, STORAGE_KEYS } from '../utils/core'
+import { newId, nowIso, safeRead, safeWrite, STORAGE_KEYS, userScopedStorageKey } from '../utils/core'
 import { defaultModes } from './preferences'
 
 const welcome = (): Message => ({
@@ -22,15 +22,17 @@ const normalizeQuestion = (question: string) => question.replace(/\s+/g, ' ').tr
 const sessionTitle = (question: string) => question.length > 28 ? `${question.slice(0, 28)}…` : question || '新的循证问题'
 
 export const useSessionsStore = defineStore('sessions', () => {
-  const initial = safeRead<Session[]>(STORAGE_KEYS.sessions, [])
+  const sessionsKey = userScopedStorageKey(STORAGE_KEYS.sessions)
+  const activeSessionKey = userScopedStorageKey(STORAGE_KEYS.activeSession)
+  const initial = safeRead<Session[]>(sessionsKey, [])
   const sessions = ref<Session[]>(initial.length ? initial : [createSession()])
-  const storedActive = safeRead(STORAGE_KEYS.activeSession, '')
+  const storedActive = safeRead(activeSessionKey, '')
   const activeSessionId = ref(sessions.value.some((s) => s.id === storedActive) ? storedActive : sessions.value[0].id)
   const active = computed(() => sessions.value.find((s) => s.id === activeSessionId.value) || sessions.value[0])
   const byId = (id: string) => sessions.value.find((session) => session.id === id)
   watch([sessions, activeSessionId], () => {
-    safeWrite(STORAGE_KEYS.sessions, sessions.value)
-    safeWrite(STORAGE_KEYS.activeSession, activeSessionId.value)
+    safeWrite(sessionsKey, sessions.value)
+    safeWrite(activeSessionKey, activeSessionId.value)
   }, { deep: true })
   const create = () => {
     const session = createSession()

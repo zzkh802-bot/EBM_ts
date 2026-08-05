@@ -11,6 +11,18 @@ export const STORAGE_KEYS = {
   patientProfiles: 'dp_xunyi_patient_profiles',
 } as const
 
+export const AUTH_USER_STORAGE_KEY = 'dp_xunyi_internal_user'
+
+export const userScopedStorageKey = (key: string) => {
+  let user = 'anonymous'
+  try {
+    user = localStorage.getItem(AUTH_USER_STORAGE_KEY) || user
+  } catch {
+    // Keep the anonymous namespace when storage is unavailable.
+  }
+  return user === 'anonymous' ? key : `${key}:${user}`
+}
+
 export const newId = (prefix: string) =>
   `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
 

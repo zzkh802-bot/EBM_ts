@@ -69,6 +69,15 @@ export interface RuntimeConfig {
   models: RuntimeModel[]
 }
 
+export interface InternalUser {
+  id: string
+  username: string
+}
+
+export interface InternalAuthConfig {
+  auth_required: boolean
+}
+
 export interface AgentRunResponse {
   contract_version: string
   run_id: string
