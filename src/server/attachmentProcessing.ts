@@ -33,11 +33,13 @@ export async function archiveUploadedAttachments(
     const preview = inline
       ? content
       : `${previewContent(content)}\n[预览已截断；完整处理后文件请使用 read 读取：${processedPath}]`;
-    const fileType = isImageAttachment(attachment.fileName) ? ' type="medical_image"' : '';
-    const fileBlock = `<file name="${escapeAttribute(attachment.fileName)}"${fileType}>\n${preview}\n</file>`;
+    const imageAttachment = isImageAttachment(attachment.fileName);
+    const fileBlock = imageAttachment
+      ? `<medical_image name="${escapeAttribute(attachment.fileName)}" attachment_id="${attachment.id}">\n${preview}\n</medical_image>`
+      : `<file name="${escapeAttribute(attachment.fileName)}">\n${preview}\n</file>`;
     return [
       fileBlock,
-      ...(isImageAttachment(attachment.fileName) ? [`医学图像附件 ID（如需视觉辅助理解时调用 medical_image_read）：${attachment.id}`] : []),
+      ...(imageAttachment ? [`如需视觉辅助理解，请调用 medical_image_read(attachment_id="${attachment.id}")；原始图像不会直接提供给主 Agent。`] : []),
       `处理后文件：${processedPath}`,
       ...(parsed?.warning ? [`解析提示：${parsed.warning}`] : []),
     ].join("\n");

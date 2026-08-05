@@ -29,7 +29,21 @@ describe("uploaded attachment processing", () => {
     expect(updated.processedPath).toMatch(/^artifacts\/uploads\//);
   });
 
-  it("switches to a read-first archive for content above the shared 5 KB preview limit", async () => {
+  it("wraps image attachments in a medical_image block and exposes only the attachment id", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-upload-image-"));
+    const sessionDir = path.join(rootDir, "data", "pi-sessions", "session-image");
+    const store = new AttachmentStore(rootDir);
+    const attachment = await store.create("user-image", "scan.png", "image/png", new Uint8Array([137, 80, 78, 71]));
+    const context = await archiveUploadedAttachments(rootDir, sessionDir, [attachment]);
+
+    expect(context).toContain(`<medical_image name="scan.png" attachment_id="${attachment.id}">`);
+    expect(context).toContain("</medical_image>");
+    expect(context).toContain(`medical_image_read(attachment_id="${attachment.id}")`);
+    expect(context).not.toContain("data/attachments");
+    expect(context).not.toContain("<file name=\"scan.png\">");
+  });
+
+  it("switches to a read-first archive for content above the shared 3500-character preview limit", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-upload-long-"));
     const sessionDir = path.join(rootDir, "data", "pi-sessions", "session-b");
     const store = new AttachmentStore(rootDir);
