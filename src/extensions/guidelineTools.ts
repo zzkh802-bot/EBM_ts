@@ -45,6 +45,8 @@ function informativeHeading(text: string): boolean {
   return /(abstract|method|result|recommend|discussion|conclusion|pico|population|scope|treatment|therapy|diagnos|management|secondary prevention|acute)/i.test(normalized);
 }
 
+const MCP_READ_PREVIEW_CHARS = 3_500;
+
 export function renderGuidelineReadText(
   readablePath: string,
   record: { content: string; bodyLineStart: number; lines: number; tocPath?: string },
@@ -65,10 +67,15 @@ export function renderGuidelineReadText(
   ].map((pattern) => lines.findIndex((line) => pattern.test(line))).find((index) => index >= 0) ?? -1;
   const startIndex = Math.max(0, targetIndex >= 0 ? targetIndex : 0);
   const previewLines: Array<{ line: number; text: string }> = [];
+  let previewChars = 0;
   for (const [offset, line] of lines.slice(startIndex).entries()) {
     if (previewLines.length && /^(?:#{1,6}\s+|Keywords\b|Date received\b|Correspondence\b|References\b)/i.test(line.trim())) break;
-    if (!/^\s*\d+\s*$/.test(line)) previewLines.push({ line: record.bodyLineStart + startIndex + offset, text: line });
-    if (previewLines.length >= 12) break;
+    if (!/^\s*\d+\s*$/.test(line)) {
+      const nextChars = Array.from(line).length + (previewLines.length ? 1 : 0);
+      if (previewChars + nextChars > MCP_READ_PREVIEW_CHARS) break;
+      previewLines.push({ line: record.bodyLineStart + startIndex + offset, text: line });
+      previewChars += nextChars;
+    }
   }
   const previewStart = previewLines[0]?.line ?? record.bodyLineStart + startIndex;
   const previewEnd = previewLines.at(-1)?.line ?? previewStart;
@@ -91,6 +98,7 @@ export function renderGuidelineReadText(
     `Informative preview lines ${previewStart}-${previewEnd}:`,
     "",
     numberLines(previewLines),
+    ...(previewChars < Array.from(lines.slice(startIndex).join("\n")).length ? [`[Preview truncated at ${MCP_READ_PREVIEW_CHARS} characters; full normalized source remains at ${readablePath}.]`] : []),
   ].join("\n");
 }
 
