@@ -784,7 +784,9 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       const userId = authUser?.id ?? "anonymous";
       const attachmentId = attachmentMatch[2] ? decodePathSegment(attachmentMatch[2]) : undefined;
       if (!attachmentId) {
-        const files = await attachments.listForSession(userId, sessionId);
+        let legacySessionId: string | undefined;
+        try { legacySessionId = path.basename(await sessionWorkspace(rootDir, sessionId)); } catch { /* the attachment may precede workspace creation */ }
+        const files = await attachments.listForSession(userId, sessionId, legacySessionId);
         sendJson(response, 200, {
           session_id: sessionId,
           attachments: files.map((file) => ({

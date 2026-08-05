@@ -63,14 +63,15 @@ export class AttachmentStore {
     return updated;
   }
 
-  async listForSession(userId: string, sessionId: string): Promise<StoredAttachment[]> {
+  async listForSession(userId: string, sessionId: string, legacySessionId?: string): Promise<StoredAttachment[]> {
     const root = path.join(this.rootDir, "data", "attachments", userHash(userId));
+    const sessionIds = new Set([sessionId, ...(legacySessionId ? [legacySessionId] : [])]);
     let entries;
     try { entries = await readdir(root, { withFileTypes: true }); } catch { return []; }
     const attachments = await Promise.all(entries.filter((entry) => entry.isDirectory()).map(async (entry) => {
       try {
         const stored = JSON.parse(await readFile(path.join(root, entry.name, "metadata.json"), "utf8")) as StoredAttachment;
-        return stored.userId === userId && stored.clientSessionId === sessionId ? stored : undefined;
+        return stored.userId === userId && stored.clientSessionId && sessionIds.has(stored.clientSessionId) ? stored : undefined;
       } catch { return undefined; }
     }));
     return attachments.filter((attachment): attachment is StoredAttachment => Boolean(attachment));

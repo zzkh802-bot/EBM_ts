@@ -28,6 +28,7 @@ export async function archiveUploadedAttachments(
     const parsed = await parseAttachment(env.MINERU_API_TOKEN, attachment, bytes, signal);
     const content = normalizeAttachmentContent(attachment, parsed);
     const processedPath = await writeProcessedAttachment(sessionDir, attachment, content);
+    const readableProcessedPath = readableSessionFilePath(sessionDir, processedPath);
     // `sessionDir` is a semantic workspace path (it may include a user prefix),
     // while attachment listings are keyed by the public API session id.
     await new AttachmentStore(rootDir).markProcessed(attachment, sessionId, processedPath);
@@ -35,7 +36,7 @@ export async function archiveUploadedAttachments(
     const inline = Array.from(content).length <= ATTACHMENT_INLINE_LIMIT_CHARS;
     const preview = inline
       ? content
-      : `${previewContent(content)}\n[预览已截断；完整处理后文件请使用 read 读取：${processedPath}]`;
+      : `${previewContent(content)}\n[预览已截断；完整处理后文件请使用 read 读取：${readableProcessedPath}]`;
     const imageAttachment = isImageAttachment(attachment.fileName);
     const fileBlock = imageAttachment
       ? `<medical_image name="${escapeAttribute(attachment.fileName)}" attachment_id="${attachment.id}">\n${preview}\n</medical_image>`
@@ -43,12 +44,16 @@ export async function archiveUploadedAttachments(
     return [
       fileBlock,
       ...(imageAttachment ? [`如需视觉辅助理解，请调用 medical_image_read(attachment_id="${attachment.id}")；原始图像不会直接提供给主 Agent。`] : []),
-      `处理后文件：${processedPath}`,
+      `处理后文件（请使用 read 读取）：${readableProcessedPath}`,
       ...(parsed?.warning ? [`解析提示：${parsed.warning}`] : []),
     ].join("\n");
   }));
   onProgress?.(`已完成 ${attachments.length} 个附件的文字解析，正在交给研究引擎。`);
   return results.join("\n\n");
+}
+
+function readableSessionFilePath(sessionDir: string, relativePath: string): string {
+  return path.posix.join("data", "sessions", path.basename(sessionDir), relativePath);
 }
 
 async function parseAttachment(apiToken: string | undefined, attachment: StoredAttachment, bytes: Uint8Array, signal?: AbortSignal): Promise<(MineruParseResult & { warning?: string }) | undefined> {

@@ -27,6 +27,7 @@ describe("uploaded attachment processing", () => {
     const updated = await store.resolve("user-a", first.id);
     expect(updated.clientSessionId).toBe("session-a");
     expect(updated.processedPath).toMatch(/^artifacts\/uploads\//);
+    expect(context).toContain("data/sessions/session-a/artifacts/uploads/");
   });
 
   it("wraps image attachments in a medical_image block and exposes only the attachment id", async () => {
@@ -66,6 +67,16 @@ describe("uploaded attachment processing", () => {
     await archiveUploadedAttachments(rootDir, sessionDir, "session-a", [attachment]);
 
     const listed = await store.listForSession("user-a", "session-a");
+    expect(listed.map((item) => item.id)).toEqual([attachment.id]);
+  });
+
+  it("lists legacy attachments tagged with the semantic workspace directory", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-upload-legacy-session-"));
+    const store = new AttachmentStore(rootDir);
+    const attachment = await store.create("user-a", "legacy.txt", "text/plain", new TextEncoder().encode("旧附件"));
+    await store.markProcessed(attachment, "u-user-a__session-a", "artifacts/uploads/legacy.md");
+
+    const listed = await store.listForSession("user-a", "session-a", "u-user-a__session-a");
     expect(listed.map((item) => item.id)).toEqual([attachment.id]);
   });
 
