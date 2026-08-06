@@ -38,6 +38,10 @@ Expected:
 | Reports | `tests/report.test.ts` | unknown/stale evidence blocks report writes; evidence-gap reports require explicit opt-in |
 | Pi extension | `tests/ebmToolsExtension.test.ts` | project extension loads and evidence tools emit a domain event |
 | Providers | `tests/providerCatalog.test.ts` | Pi owns native DeepSeek; Xinqiong registers only its OpenAI-compatible endpoint |
+| Internal auth/session ownership | `tests/agentApi.test.ts`, `tests/sessionPath.test.ts` | registration/login persistence, run/citation/file ownership and user-scoped session workspaces reject cross-user access |
+| Feedback/query linkage | `tests/feedback.test.ts` | all nine rubrics are required and `run_id` must match the query metadata before feedback is archived |
+| Native file-tool isolation | `tests/securityGuard.test.ts` | read-only project instructions are allowed, while native writes and symlink/cross-session paths are rejected |
+| Upload processing | `tests/attachmentProcessing.test.ts`, `tests/feedback.test.ts` | attachments are user/session-bound after processing, original material stays out of model context, and unsupported/cross-owner reads fail |
 | Bloat boundary | `scripts/check-boundaries.ts` | no SQLite/ORM/LangChain/LlamaIndex dependency in foundation |
 
 ## Future acceptance before web product
@@ -50,3 +54,4 @@ Add tests before implementation for:
 4. internal guideline MCP reconnect/session-expiry behavior is covered if the server starts expiring long-lived sessions.
 5. PubMed/PMC evaluation measures whether separately archived abstracts and acquired full text reduce model rounds on representative EBM questions.
 6. cloud API session isolation prevents one user reading another user's session directory when cloud work begins.
+7. large-PDF browser preview remains bounded by page/pixel budgets and supports a safe download fallback.

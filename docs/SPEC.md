@@ -19,7 +19,7 @@ The final product is a web agent service. A user opens a research workspace, ask
 
 ## Architecture decisions
 
-The governing architecture decisions are [ADR-0001: Pi-first architecture for EBM Agent TS](adr/0001-pi-first-architecture.md), [ADR-0002: Initial product and integration choices](adr/0002-product-and-integration-choices.md), and [ADR-0003: EBM tooling and runtime defaults](adr/0003-ebm-tooling-and-runtime-defaults.md). If future work conflicts with these documents, update the ADRs first.
+The governing architecture decisions are [ADR-0001: Pi-first architecture for EBM Agent TS](adr/0001-pi-first-architecture.md), [ADR-0002: Initial product and integration choices](adr/0002-product-and-integration-choices.md), [ADR-0003: EBM tooling and runtime defaults](adr/0003-ebm-tooling-and-runtime-defaults.md), and [ADR-0004: Internal beta web isolation and feedback](adr/0004-internal-beta-web-isolation.md). ADR-0004 supersedes the single-user/web-future scope of ADR-0002 for the internal beta; the Pi-first runtime and storage decisions remain in force.
 
 ### Runtime
 

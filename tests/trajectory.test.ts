@@ -57,7 +57,7 @@ describe("developer trajectory recorder", () => {
 
     const queryId = "12345678-1234-1234-1234-123456789012";
     await writeQueryMetadata(path.join(cwd, "data", "sessions", "session-1"), {
-      schema_version: 1, query_id: queryId, session_id: "session-1", user_id: "u-test1234", question: "Should treatment be used?", created_at: new Date().toISOString(),
+      schema_version: 1, query_id: queryId, run_id: queryId, session_id: "session-1", user_id: "u-test1234", question: "Should treatment be used?", created_at: new Date().toISOString(),
     });
 
     await harness.emit("session_start", { type: "session_start", reason: "startup" }, ctx);

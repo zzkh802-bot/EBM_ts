@@ -31,7 +31,7 @@ const attachmentError = ref('')
 const uploadingAttachments = ref(false)
 type PendingUpload = { file: File; kind: 'document' | 'medical_image' }
 const pendingUploads = ref<PendingUpload[]>([])
-const expandedReportMessageId = ref<string | null>(null)
+const expandedReportMessageIds = ref<Set<string>>(new Set())
 const feedbackSeen = ref(false)
 const {
   conversationFiles,
@@ -102,14 +102,14 @@ const hydrateHistoricalReports = async () => {
     const markdown = await readFormalReport(sessionId, message.reportPath)
     if (markdown) sessions.patchMessageIn(localSessionId, message.id, { reportMarkdown: markdown })
   }))
-  if (!expandedReportMessageId.value) {
+  if (!expandedReportMessageIds.value.size) {
     const reportMessage = [...sessions.active.messages].reverse().find((message) => message.role === 'assistant' && (message.reportMarkdown || message.reportPath))
-    if (reportMessage) expandedReportMessageId.value = reportMessage.id
+    if (reportMessage) expandedReportMessageIds.value.add(reportMessage.id)
   }
 }
 watch(() => [route.path, sessions.activeSessionId, sessions.active.researchSessionId], () => {
   closeConversationFile()
-  expandedReportMessageId.value = null
+  expandedReportMessageIds.value = new Set()
   if (homeMode.value) {
     conversationFiles.value = []
     return
@@ -167,7 +167,7 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
     attachmentError.value = ''
     uploadingAttachments.value = pendingUploads.value.length > 0
     const uploadedAttachments = await Promise.all(pendingUploads.value.map((pending) =>
-      uploadAttachment(pending.file, requestResearchSessionId || undefined)))
+      uploadAttachment(pending.file, requestResearchSessionId || localSessionId)))
     const attachmentIds = uploadedAttachments.map((uploaded) => uploaded.attachment_id)
     pendingUploads.value = []
     const dto = buildResearchRunRequest(
@@ -217,7 +217,7 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
       runStartedAt: data.started_at, runCompletedAt: data.completed_at,
       reportMarkdown, reportPath: data.report_path,
     })
-    if (reportMarkdown || data.report_path) expandedReportMessageId.value = pendingId
+    if (reportMarkdown || data.report_path) expandedReportMessageIds.value.add(pendingId)
     sessions.completeResearchIn(localSessionId)
   } catch (error) {
     attachmentError.value = error instanceof Error ? error.message : '附件上传失败'
@@ -284,6 +284,7 @@ const openCitation = (reference: Reference, reportPath?: string) => {
 const openWorkspace = async (preferredPath = '') => {
   if (!conversationFiles.value.length) await loadConversationFiles()
   const target = conversationFiles.value.find((file) => file.path === preferredPath)
+    || [...conversationFiles.value].reverse().find((file) => file.kind === 'report')
     || conversationFiles.value.find((file) => file.kind !== 'report')
     || conversationDocuments.value[0]
   if (target) await openConversationFile(target)
@@ -295,15 +296,15 @@ const markFeedbackSeen = () => {
   localStorage.setItem(`dp_xunyi_feedback_seen:${sessionId}`, '1')
 }
 const toggleReport = async (message: Message) => {
-  if (expandedReportMessageId.value === message.id) {
-    expandedReportMessageId.value = null
+  if (expandedReportMessageIds.value.has(message.id)) {
+    expandedReportMessageIds.value.delete(message.id)
     return
   }
   if (!message.reportMarkdown && message.reportPath) {
     const markdown = await readFormalReport(sessions.active.researchSessionId || undefined, message.reportPath)
     if (markdown) sessions.patchMessage(message.id, { reportMarkdown: markdown })
   }
-  expandedReportMessageId.value = message.id
+  expandedReportMessageIds.value.add(message.id)
 }
 const runQueued = (index: number) => {
   const text = run.queuedGuidance.splice(index, 1)[0]
@@ -477,15 +478,15 @@ const handlePrimaryAction = () => {
               />
               <p v-else-if="message.role !== 'assistant' || !message.pending">{{ message.content }}</p>
               <section v-if="message.role === 'assistant' && !message.pending && (message.reportMarkdown || message.reportPath)" class="report-attachment" aria-label="正式报告附件">
-                <button class="report-attachment-card" type="button" :aria-expanded="expandedReportMessageId === message.id" @click="toggleReport(message)">
+                <button class="report-attachment-card" type="button" :aria-expanded="expandedReportMessageIds.has(message.id)" @click="toggleReport(message)">
                   <span class="report-attachment-icon" aria-hidden="true">＋</span>
                   <span class="report-attachment-copy">
                     <strong>最终报告</strong>
                     <small>{{ message.reportPath?.split('/').at(-1) || '本轮研究结论与依据' }}</small>
                   </span>
-                  <span class="report-attachment-action">{{ expandedReportMessageId === message.id ? '收起' : '展开' }} <i aria-hidden="true">{{ expandedReportMessageId === message.id ? '⌃' : '⌄' }}</i></span>
+                  <span class="report-attachment-action">{{ expandedReportMessageIds.has(message.id) ? '收起' : '展开' }} <i aria-hidden="true">{{ expandedReportMessageIds.has(message.id) ? '⌃' : '⌄' }}</i></span>
                 </button>
-                <section v-if="expandedReportMessageId === message.id" class="final-report" aria-label="正式报告">
+                <section v-if="expandedReportMessageIds.has(message.id)" class="final-report" aria-label="正式报告">
                   <header class="final-report-head">
                     <div>
                       <span>最终报告</span>
@@ -513,7 +514,7 @@ const handlePrimaryAction = () => {
                     <button type="button" @click="speak(message)">朗读</button>
                     <button type="button" @click="share(message)">分享</button>
                     <button type="button" @click="retry(message)">重新运行</button>
-                    <button v-if="message.reportMarkdown || message.reportPath" type="button" @click="toggleReport(message)">{{ expandedReportMessageId === message.id ? '收起最终报告' : '展开最终报告' }}</button>
+                    <button v-if="message.reportMarkdown || message.reportPath" type="button" @click="toggleReport(message)">{{ expandedReportMessageIds.has(message.id) ? '收起最终报告' : '展开最终报告' }}</button>
                   </div>
                 </details>
               </div>

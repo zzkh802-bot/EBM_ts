@@ -8,12 +8,16 @@ const host = ref<HTMLElement | null>(null)
 const loading = ref(true)
 const error = ref('')
 let renderSequence = 0
+let activeDocument: { destroy: () => Promise<void> } | undefined
+const MAX_RENDERED_PAGES = 40
 
 const renderDocument = async () => {
   const sequence = ++renderSequence
   loading.value = true
   error.value = ''
   if (host.value) host.value.replaceChildren()
+  await activeDocument?.destroy().catch(() => undefined)
+  activeDocument = undefined
   try {
     const response = await fetch(props.src, { credentials: 'include' })
     if (!response.ok) throw new Error(`原件读取失败（${response.status}）`)
@@ -21,10 +25,15 @@ const renderDocument = async () => {
     const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
     pdfjs.GlobalWorkerOptions.workerSrc = workerSrc
     const document = await pdfjs.getDocument({ data: bytes }).promise
+    activeDocument = document
     await nextTick()
     if (sequence !== renderSequence || !host.value) return
+    const pageLimit = Math.min(document.numPages, MAX_RENDERED_PAGES)
+    if (document.numPages > MAX_RENDERED_PAGES) {
+      error.value = `该 PDF 共 ${document.numPages} 页，当前仅预览前 ${MAX_RENDERED_PAGES} 页；请下载原件查看全部内容。`
+    }
     const width = Math.max(host.value.clientWidth - 32, 320)
-    for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+    for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
       const page = await document.getPage(pageNumber)
       const baseViewport = page.getViewport({ scale: 1 })
       const scale = Math.max(width / baseViewport.width, 1)
@@ -52,7 +61,11 @@ const renderDocument = async () => {
 
 onMounted(() => { void renderDocument() })
 watch(() => props.src, () => { void renderDocument() })
-onBeforeUnmount(() => { renderSequence += 1 })
+onBeforeUnmount(() => {
+  renderSequence += 1
+  void activeDocument?.destroy()
+  activeDocument = undefined
+})
 </script>
 
 <template>

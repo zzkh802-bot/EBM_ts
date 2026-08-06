@@ -1,6 +1,6 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { queryMetadataExists } from "../observability/queryMetadata.js";
+import { queryMetadataMatchesRun } from "../observability/queryMetadata.js";
 
 export const FEEDBACK_RUBRICS = [
   "requirement_understanding",
@@ -31,7 +31,7 @@ export async function writeFeedback(_rootDir: string, sessionDir: string, userId
   const rubrics = validateRubrics(input.rubrics);
   if (!input.runId || !/^[0-9a-f-]{20,64}$/i.test(input.runId)) throw new FeedbackValidationError("run_id 无效。 ");
   if (!input.queryId || !/^[0-9a-f-]{20,64}$/i.test(input.queryId)) throw new FeedbackValidationError("query_id 无效。 ");
-  if (!(await queryMetadataExists(sessionDir, sessionId, input.queryId))) throw new FeedbackValidationError("query_id 不属于当前研究会话。 ");
+  if (!(await queryMetadataMatchesRun(sessionDir, sessionId, input.queryId, input.runId))) throw new FeedbackValidationError("run_id 与 query_id 不匹配，反馈不能归属到当前问题。 ");
   const comment = input.comment?.trim() || undefined;
   if (comment && comment.length > 4_000) throw new FeedbackValidationError("反馈文字不能超过 4000 个字符。 ");
   const createdAt = new Date().toISOString();
@@ -69,6 +69,8 @@ function validateRubrics(value: unknown): Partial<Record<FeedbackRubric, number>
     if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 1 || raw > 5) throw new FeedbackValidationError(`反馈指标 ${key} 必须是 1 到 5 的整数。`);
     output[key as FeedbackRubric] = raw;
   }
-  if (!Object.keys(output).length) throw new FeedbackValidationError("至少需要填写一个反馈指标。 ");
+  if (Object.keys(output).length !== FEEDBACK_RUBRICS.length) {
+    throw new FeedbackValidationError(`必须完整填写全部 ${FEEDBACK_RUBRICS.length} 项反馈指标。`);
+  }
   return output;
 }

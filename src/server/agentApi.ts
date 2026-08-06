@@ -678,11 +678,13 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     return;
   }
     if (request.method === "GET" && pathname === "/health") {
+      const endpoints = ["GET /api/v1/runtime-config", "POST /api/v1/attachments", "POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel", "POST /api/v1/research-sessions/{session_id}/feedback", "GET /api/v1/research-sessions/{session_id}/files", "GET /api/v1/research-sessions/{session_id}/citations"];
+      if (patientIntakeExecutor) endpoints.push("POST /api/v1/patient-intake/messages", "POST /api/v1/patient-intake/summary");
       sendJson(response, 200, {
         ok: true,
         service: "xunyi-research-service",
         contract_version: CONTRACT_VERSION,
-        endpoints: ["GET /api/v1/runtime-config", "POST /api/v1/attachments", "POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel", "POST /api/v1/research-sessions/{session_id}/feedback", "POST /api/v1/patient-intake/messages", "POST /api/v1/patient-intake/summary", "GET /api/v1/research-sessions/{session_id}/files", "GET /api/v1/research-sessions/{session_id}/citations"],
+        endpoints,
       });
       return;
     }
@@ -772,6 +774,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       const fileName = request.headers["x-file-name"];
       if (typeof fileName !== "string") throw new ApiError(422, "invalid_attachment", "附件缺少文件名。 ");
       const clientSessionId = typeof request.headers["x-client-session-id"] === "string" ? request.headers["x-client-session-id"] : undefined;
+      if (!clientSessionId) throw new ApiError(422, "invalid_attachment", "附件必须绑定到当前研究会话。 ");
       const bytes = await readBinaryBody(request, MAX_ATTACHMENT_BYTES);
       const stored = await attachments.create(authUser?.id ?? "anonymous", decodeHeaderValue(fileName), request.headers["content-type"]?.split(";", 1)[0] || "", bytes, clientSessionId);
       sendJson(response, 201, { attachment_id: stored.id, file_name: stored.fileName, media_type: stored.mediaType, size: stored.size });
@@ -796,7 +799,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
         });
         return;
       }
-      const file = await attachments.resolve(userId, attachmentId);
+      const file = await attachments.resolve(userId, attachmentId, sessionId);
       const bytes = await readFile(file.path);
       const disposition = url.searchParams.get("inline") === "1" ? "inline" : "attachment";
       response.writeHead(200, {
@@ -944,7 +947,7 @@ async function validateAgentRunInput(value: unknown, runtimeConfig: RuntimeConfi
     throw new ApiError(422, "invalid_attachment", "attachments 必须是附件 ID 数组。 ");
   }
   const uploadedAttachments = userId && attachments && Array.isArray(attachmentIds)
-    ? await attachments.resolveMany(userId, attachmentIds as string[])
+    ? await attachments.resolveMany(userId, attachmentIds as string[], typeof value.session_id === "string" ? value.session_id : undefined)
     : [];
   const audienceMode = enumValue(value.audience_mode, ["clinician", "public"] as const, "audience_mode", "clinician");
   const thinkingLevel = enumValue(value.thinking_level, ["off", "low", "medium", "high"] as const, "thinking_level", "low");
@@ -1145,6 +1148,7 @@ async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks:
     await writeQueryMetadata(piSessionDirectory(rootDir, sessionId), {
       schema_version: 1,
       query_id: request.runId,
+      run_id: request.runId,
       session_id: sessionId,
       ...(request.userId ? { user_id: request.userId } : {}),
       question: request.question,

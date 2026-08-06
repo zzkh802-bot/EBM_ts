@@ -4,6 +4,7 @@ import path from "node:path";
 export type QueryMetadata = {
   schema_version: 1;
   query_id: string;
+  run_id: string;
   session_id: string;
   user_id?: string;
   question: string;
@@ -25,7 +26,7 @@ export async function readCurrentQueryMetadata(sessionDir: string): Promise<Quer
   const currentPath = path.join(sessionDir, "trace", "current-query.json");
   try {
     const value = JSON.parse(await readFile(currentPath, "utf8")) as QueryMetadata;
-    if (!queryIdPattern.test(value.query_id) || typeof value.session_id !== "string" || (value.user_id !== undefined && typeof value.user_id !== "string") || typeof value.question !== "string") return undefined;
+    if (!queryIdPattern.test(value.query_id) || !queryIdPattern.test(value.run_id) || typeof value.session_id !== "string" || (value.user_id !== undefined && typeof value.user_id !== "string") || typeof value.question !== "string") return undefined;
     return value;
   } catch {
     return undefined;
@@ -35,11 +36,26 @@ export async function readCurrentQueryMetadata(sessionDir: string): Promise<Quer
 }
 
 export async function queryMetadataExists(sessionDir: string, sessionId: string, queryId: string): Promise<boolean> {
-  if (!queryIdPattern.test(queryId)) return false;
+  return Boolean(await readQueryMetadata(sessionDir, sessionId, queryId));
+}
+
+export async function queryMetadataMatchesRun(sessionDir: string, sessionId: string, queryId: string, runId: string): Promise<boolean> {
+  const value = await readQueryMetadata(sessionDir, sessionId, queryId);
+  return value?.run_id === runId;
+}
+
+async function readQueryMetadata(sessionDir: string, sessionId: string, queryId: string): Promise<QueryMetadata | undefined> {
+  if (!queryIdPattern.test(queryId)) return undefined;
   try {
     const value = JSON.parse(await readFile(path.join(sessionDir, "trace", "queries", `${queryId}.json`), "utf8")) as QueryMetadata;
-    return value.query_id === queryId && value.session_id === sessionId && typeof value.question === "string";
+    return queryIdPattern.test(value.query_id)
+      && queryIdPattern.test(value.run_id)
+      && value.query_id === queryId
+      && value.session_id === sessionId
+      && typeof value.question === "string"
+      ? value
+      : undefined;
   } catch {
-    return false;
+    return undefined;
   }
 }

@@ -30,7 +30,7 @@
 
 自然语言反馈保持可选，优先提示用户指出具体的结论、引用、遗漏边界或疑似编造位置。这样可以把 1–5 分转化为可执行样本；不提示用户评价某个检索步骤。
 
-问卷默认在每个已完成 query 的报告下展开；用户可点击“暂不填写”关闭本轮问卷。关闭只影响当前 query，不会关闭后续问卷，也不会写入一条空反馈。管理员仍可通过 `EBM_FEEDBACK_ENABLED=0` 在服务端全局关闭反馈接口。
+问卷在每个 session 的首份正式报告下只出现一次；9 项评分均需填写后才能提交。用户可点击“暂不填写”关闭本 session 的问卷；关闭不会写入空反馈，也不会在该 session 的后续 query 中再次出现。管理员仍可通过 `EBM_FEEDBACK_ENABLED=0` 在服务端全局关闭反馈接口。
 
 ## 分析方式
 
@@ -43,4 +43,4 @@
 - 选择“豆包”且上述质量分较高：结合文字反馈记录缺失能力，作为产品差异化线索。
 - 选择“没用过豆包”：不参与工具偏好胜负统计，但仍参与本系统质量分析。
 
-问卷记录保存在会话的 `feedback/feedback.jsonl`；每个用户 query 都会在 `trace/queries/{query_id}.json` 留下归属元数据，完整轨迹仍追加保存在 `trace/trajectory.jsonl`，后台分析时通过 `session_id`、`query_id` 和 `run_id` 关联。轨迹中的用户问题标为 `prompt_kind=user_query`，研究范围提醒标为 `prompt_kind=system_reminder`，不会混入用户问题统计。问卷开关由 `EBM_FEEDBACK_ENABLED` 控制。
+问卷记录保存在会话的 `feedback/feedback.jsonl`，并与首份正式报告对应的 `query_id` 关联；每个用户 query 都会在 `trace/queries/{query_id}.json` 留下归属元数据，完整轨迹仍追加保存在 `trace/trajectory.jsonl`，后台分析时通过 `session_id`、`query_id` 和 `run_id` 关联。轨迹中的用户问题标为 `prompt_kind=user_query`，研究范围提醒标为 `prompt_kind=system_reminder`，不会混入用户问题统计。问卷开关由 `EBM_FEEDBACK_ENABLED` 控制。

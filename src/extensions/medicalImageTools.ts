@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, realpath, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { piSessionDirectory } from "./sessionPath.js";
+import { attachmentMetadataPath } from "../tools/attachmentIdentity.js";
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const DEFAULT_BASE_URL = "https://cloud.infini-ai.com/maas/v1";
@@ -24,7 +25,7 @@ export function registerMedicalImageTools(pi: Pick<ExtensionAPI, "registerTool">
       const sessionId = ctx.sessionManager.getSessionId();
       const sessionDir = piSessionDirectory(ctx.cwd, sessionId);
       const imagePath = params.attachment_id
-        ? await resolveAttachmentImage(ctx.cwd, params.attachment_id)
+        ? await resolveAttachmentImage(ctx.cwd, sessionDir, sessionId, params.attachment_id)
         : params.source_path ? await resolveImagePath(sessionDir, params.source_path) : (() => { throw new Error("请提供 attachment_id。 "); })();
       const imageStat = await stat(imagePath);
       if (imageStat.size <= 0 || imageStat.size > MAX_IMAGE_BYTES) throw new Error("医学图像为空或超过 10 MB 限制。");
@@ -80,22 +81,20 @@ export function registerMedicalImageTools(pi: Pick<ExtensionAPI, "registerTool">
   });
 }
 
-async function resolveAttachmentImage(rootDir: string, attachmentId: string): Promise<string> {
+async function resolveAttachmentImage(rootDir: string, sessionDir: string, sessionId: string, attachmentId: string): Promise<string> {
   if (!/^att_[a-f0-9]{24}$/.test(attachmentId)) throw new Error("附件 ID 无效。 ");
-  const root = path.join(rootDir, "data", "attachments");
-  let owners;
-  try { owners = await readdir(root, { withFileTypes: true }); } catch { throw new Error("未找到该医学图像附件。 "); }
-  for (const owner of owners.filter((entry) => entry.isDirectory())) {
-    const metadataPath = path.join(root, owner.name, attachmentId, "metadata.json");
-    try {
-      const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as { id?: string; path?: string; fileName?: string };
-      if (metadata.id !== attachmentId || typeof metadata.path !== "string" || !/\.(?:png|jpe?g|webp|gif)$/i.test(metadata.fileName || metadata.path)) continue;
-      return metadata.path;
-    } catch {
-      // Continue searching the hashed user directories.
-    }
+  let userId: string | undefined;
+  try {
+    const metadata = JSON.parse(await readFile(path.join(sessionDir, ".metadata", "session.json"), "utf8")) as { user_id?: unknown };
+    userId = typeof metadata.user_id === "string" ? metadata.user_id : undefined;
+  } catch {
+    // A local unauthenticated TUI session has no user-owned upload namespace.
   }
-  throw new Error("未找到该医学图像附件。 ");
+  if (!userId) throw new Error("医学图像附件没有当前用户归属。 ");
+  const attachment = JSON.parse(await readFile(attachmentMetadataPath(rootDir, userId, attachmentId), "utf8")) as { id?: string; userId?: string; fileName?: string; path?: string; clientSessionId?: string };
+  if (attachment.id !== attachmentId || attachment.userId !== userId || attachment.clientSessionId !== sessionId || typeof attachment.path !== "string") throw new Error("附件不属于当前研究会话。 ");
+  if (!/\.(?:png|jpe?g|webp|gif)$/i.test(attachment.fileName || attachment.path)) throw new Error("该附件不是支持的医学图像格式。 ");
+  return attachment.path;
 }
 
 async function resolveImagePath(sessionDir: string, sourcePath: string): Promise<string> {
