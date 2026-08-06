@@ -17,7 +17,13 @@ const filtered = computed(() => {
       || session.title.toLowerCase().includes(text)
       || session.clinicalQuestion.toLowerCase().includes(text)
       || session.messages.some((message) => message.content.toLowerCase().includes(text))))
-  return [...matching].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+  // Every progress/tool update touches updatedAt. Re-sorting while several
+  // sessions are running makes the drawer jump under the pointer and makes
+  // selecting a specific session unreliable. Keep the creation order stable
+  // during active runs; restore recency ordering once all runs settle.
+  return run.anyBusy
+    ? [...matching]
+    : [...matching].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
 })
 
 const openSession = (id: string) => {
