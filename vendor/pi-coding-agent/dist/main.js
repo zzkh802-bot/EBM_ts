@@ -8,6 +8,7 @@ import { createInterface } from "node:readline";
 import { modelsAreEqual } from "@earendil-works/pi-ai";
 import chalk from "chalk";
 import { parseArgs, printHelp } from "./cli/args.js";
+import { CredentialPrintError, isCredentialPrintHelp, parseCredentialPrintCommand, printCredentialPrintHelp, resolveCredentialForPrint, validateCredentialPrintArgs, } from "./cli/credential-print.js";
 import { processFileArguments } from "./cli/file-processor.js";
 import { buildInitialMessage } from "./cli/initial-message.js";
 import { listModels } from "./cli/list-models.js";
@@ -21,6 +22,7 @@ import { formatNoModelsAvailableMessage } from "./core/auth-guidance.js";
 import { exportFromFile } from "./core/export-html/index.js";
 import { applyHttpProxySettings, configureHttpDispatcher } from "./core/http-dispatcher.js";
 import { resolveCliModel, resolveModelScope } from "./core/model-resolver.js";
+import { ModelRuntime } from "./core/model-runtime.js";
 import { restoreStdout, takeOverStdout } from "./core/output-guard.js";
 import { resolveProjectTrusted } from "./core/project-trust.js";
 import { formatMissingSessionCwdPrompt, getMissingSessionCwdIssue, MissingSessionCwdError, } from "./core/session-cwd.js";
@@ -28,6 +30,7 @@ import { assertValidSessionId, SessionManager } from "./core/session-manager.js"
 import { SettingsManager } from "./core/settings-manager.js";
 import { printTimings, resetTimings, time } from "./core/timings.js";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.js";
+import { builtInExtensions } from "./extensions/index.js";
 import { runMigrations, showDeprecationWarnings } from "./migrations.js";
 import { InteractiveMode, runPrintMode, runRpcMode } from "./modes/index.js";
 import { initTheme, stopThemeWatcher } from "./modes/interactive/theme/theme.js";
@@ -91,6 +94,44 @@ function toPrintOutputMode(appMode) {
 }
 function isPlainRuntimeMetadataCommand(parsed) {
     return !parsed.print && parsed.mode === undefined && (parsed.help === true || parsed.listModels !== undefined);
+}
+async function runCredentialPrintCommand(args) {
+    if (isCredentialPrintHelp(args)) {
+        printCredentialPrintHelp();
+        return true;
+    }
+    let command;
+    try {
+        command = parseCredentialPrintCommand(args);
+    }
+    catch (error) {
+        const message = error instanceof CredentialPrintError ? error.message : "Failed to parse auth command";
+        console.error(chalk.red(`Error: ${message}`));
+        process.exitCode = 1;
+        return true;
+    }
+    if (!command)
+        return false;
+    const parsed = parseArgs(command.args);
+    if (parsed.diagnostics.length > 0) {
+        for (const diagnostic of parsed.diagnostics) {
+            console.error(chalk.red(`Error: ${diagnostic.message}`));
+        }
+        process.exitCode = 1;
+        return true;
+    }
+    try {
+        validateCredentialPrintArgs(parsed);
+        const modelRuntime = await ModelRuntime.create({ allowModelNetwork: false });
+        const credential = await resolveCredentialForPrint(parsed, modelRuntime, command.kind, command.minExpiryMs);
+        process.stdout.write(`${credential}\n`);
+    }
+    catch (error) {
+        const message = error instanceof CredentialPrintError ? error.message : "Failed to resolve credential";
+        console.error(chalk.red(`Error: ${message}`));
+        process.exitCode = 1;
+    }
+    return true;
 }
 async function prepareInitialMessage(parsed, autoResizeImages, stdinContent) {
     if (parsed.fileArgs.length === 0) {
@@ -361,6 +402,7 @@ async function promptForMissingSessionCwd(issue, settingsManager) {
 }
 export async function main(args, options) {
     resetTimings();
+    const extensionFactories = [...builtInExtensions, ...(options?.extensionFactories ?? [])];
     const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env.PI_OFFLINE);
     if (offlineMode) {
         process.env.PI_OFFLINE = "1";
@@ -374,7 +416,7 @@ export async function main(args, options) {
     const bootstrapSettingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: false });
     applyHttpProxySettings(bootstrapSettingsManager.getGlobalSettings().httpProxy);
     configureHttpDispatcher();
-    if (await handlePackageCommand(args, { extensionFactories: options?.extensionFactories })) {
+    if (await handlePackageCommand(args, { extensionFactories })) {
         const exitCode = process.exitCode ?? 0;
         if (process.platform === "win32" && exitCode === 0 && args[0] === "update") {
             // We normally prefer process.exit(0) for package commands so bad extensions cannot keep
@@ -386,7 +428,10 @@ export async function main(args, options) {
         process.exit(exitCode);
         return;
     }
-    if (await handleConfigCommand(args, { extensionFactories: options?.extensionFactories })) {
+    if (await handleConfigCommand(args, { extensionFactories })) {
+        return;
+    }
+    if (await runCredentialPrintCommand(args)) {
         return;
     }
     const parsed = parseArgs(args);
@@ -536,7 +581,7 @@ export async function main(args, options) {
                 noContextFiles: parsed.noContextFiles,
                 systemPrompt: parsed.systemPrompt,
                 appendSystemPrompt: parsed.appendSystemPrompt,
-                extensionFactories: options?.extensionFactories,
+                extensionFactories,
             },
         });
         const { settingsManager, modelRuntime, resourceLoader } = services;
@@ -561,7 +606,7 @@ export async function main(args, options) {
                 });
             }
             else {
-                await modelRuntime.setRuntimeApiKey(sessionOptions.model.provider, parsed.apiKey);
+                await modelRuntime.setRuntimeApiKey(sessionOptions.model.provider, parsed.apiKey, { allowNetwork: false });
                 await services.modelRuntime.getAvailable();
             }
         }
@@ -644,6 +689,10 @@ export async function main(args, options) {
     if (startupBenchmark && appMode !== "interactive") {
         console.error(chalk.red("Error: PI_STARTUP_BENCHMARK only supports interactive mode"));
         process.exit(1);
+    }
+    // RPC refreshes catalogs here in the background; interactive mode starts its refresh after TUI initialization.
+    if (!offlineMode && appMode === "rpc") {
+        void modelRuntime.refresh().catch(() => { });
     }
     if (appMode === "rpc") {
         printTimings();

@@ -19,9 +19,9 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
   pi.registerTool({
     name: "source_library_search",
     label: "Search Local Source Library",
-    description: "Search the local curated source library (for example data/source_library/guidelines) without network access. Use to supplement guideline MCP when known local guidelines or parsed full texts may exist.",
-    promptSnippet: "Search local curated guidelines/source cache before web fallbacks",
-    promptGuidelines: ["Use Chinese queries for Chinese guideline/library content; use source_url from a hit with web_read to archive the full local source into the current session."],
+    description: "Search the persistent local curated source library without network access. It returns document-level historical candidates, not citation-ready evidence passages.",
+    promptSnippet: "Search the accumulated local source library before MCP/PubMed/web fallbacks",
+    promptGuidelines: ["This is a persistent cross-session index. Search it first for each new sub-question; if a direct hit has source_url, call web_read on that URL to materialize the cached source in the current session. Do not treat the result list or snippet as evidence. Use Chinese queries for Chinese guideline/library content.", "guideline_mcp_search returns document candidates only; use guideline_mcp_retrieve or a read operation for evidence passages."],
     parameters: Type.Object({
       query: Type.String({ minLength: 2 }),
       max_results: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
@@ -35,8 +35,9 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
         "",
         `Results: ${candidates.length}`,
         "",
-        ...(candidates.length ? ["These are local archived sources with provenance. Prefer reading a relevant local hit before repeating PubMed/web search; re-search only for a specific freshness gap, missing identifier, or conflicting source.", "", ...candidates.flatMap((candidate, index) => [
+        ...(candidates.length ? ["These are local archived sources with provenance, ranked as discovery candidates. Prefer a direct local hit before MCP/PubMed/web; re-search only for a specific freshness gap, missing identifier, or conflicting source. The list itself is not citation evidence.", "", ...candidates.flatMap((candidate, index) => [
           `${index + 1}. ${candidate.title}`,
+          `   Match quality: ${candidate.matchQuality}; matched query terms: ${candidate.matchedQueryTerms.join(", ") || "none"}`,
           `   Slug: ${candidate.slug}`,
           ...(candidate.sourceUrl ? [`   Source URL: ${candidate.sourceUrl}`, `   Next: web_read(url=${JSON.stringify(candidate.sourceUrl)}) will reuse the local library copy if source_url matches.`] : []),
           `   Acquisition route: ${candidate.discoveryQueries.length ? `${candidate.provider ?? "source"}_search(query=${JSON.stringify(candidate.discoveryQueries.at(-1))}) → ${candidate.sourceUrl ? `web_read(url=${JSON.stringify(candidate.sourceUrl)})` : "local archive"}` : `${candidate.provider ?? "unknown"}${candidate.sourceUrl ? ` read(url=${JSON.stringify(candidate.sourceUrl)})` : " local archive"}`}`,
@@ -65,8 +66,8 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
     name: "web_read",
     label: "Read Web Source",
     description: "Read documents through MinerU Premium or web pages through Jina with Firecrawl fallback, then normalize and archive before exposure.",
-    promptSnippet: "Read and archive a public web source with stable citation offsets",
-    promptGuidelines: ["Use the returned archive path and absolute offsets when creating evidence."],
+    promptSnippet: "Read and archive a public web source for quote-verified citation",
+    promptGuidelines: ["After reading, choose read_id with start_text/end_text (source_path optional), or source_path with line_start/line_end. Layout/XML/entity/punctuation noise is normalized, but never paraphrase, repair clinical text, or join discontinuous passages."],
     parameters: Type.Object({
       url: Type.String({ description: "Public HTTP(S) URL" }),
       pdf_pages: Type.Optional(Type.String({ description: "Optional focused PDF page range such as 1-5. Use only when the relevant pages are known; max 25 pages." })),

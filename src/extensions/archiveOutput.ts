@@ -4,6 +4,12 @@ import type { SourceArchiveRecord } from "../tools/archive.js";
 const READ_PREVIEW_BYTES = 5_000;
 const MAP_MAX_ITEMS = 20;
 
+function numberLines(content: string, startLine: number): string {
+  return content.split("\n")
+    .map((line, index) => `${String(startLine + index).padStart(5, " ")}│${line}`)
+    .join("\n");
+}
+
 export function readableArchivePath(sessionId: string, sourcePath: string): string {
   return ["data", "sessions", sessionId, sourcePath].join("/");
 }
@@ -52,14 +58,14 @@ export function archiveToolText(
       `Read any archive window with read(path=${JSON.stringify(readablePath)}, offset=N, limit=M).`,
       ...(options.citationEligible === false
         ? ["This search snapshot is discovery history and cannot be passed to evidence_add; use an individually archived sources/read document."]
-        : ["For evidence_add, use this readable archive path with the exact 1-based offset/limit."]),
+        : ["After read, use the returned read_id with start_text/end_text (source_path is optional), or use source_path with line_start/line_end (text anchors are optional). Layout/XML/entity/punctuation noise is normalized for matching, but clinical numbers and wording are not repaired."]),
       ...(excerpt.truncated ? [`Continue without gaps (the last preview line is intentionally repeated): read(path=${JSON.stringify(readablePath)}, offset=${Math.max(record.bodyLineStart, visibleEnd)}, limit=200).`] : []),
       ...(readableTocPath ? [`Read the complete section index with read(path=${JSON.stringify(readableTocPath)}).`] : []),
       ...(map.items.length ? ["", `Source map${map.total > map.items.length ? ` (first ${map.items.length} of ${map.total}; complete index is in toc.md)` : ""}:`, ...map.items] : []),
       "",
       "Preview:",
       "",
-      excerpt.content,
+      numberLines(excerpt.content, visibleStart),
       ...(excerpt.truncated ? [
         "",
         `[Preview truncated at ${previewBytes} bytes; full normalized source remains at ${readablePath}.]`,

@@ -61,6 +61,18 @@ export const SOURCE_LIBRARY_QUERY_EXPANSIONS: QueryExpansionRule[] = [
     terms: ["stroke", "ischemic stroke", "脑卒中", "卒中"],
   },
   {
+    pattern: /房颤|心房颤动|atrial fibrillation|\baf\b/iu,
+    terms: ["atrial fibrillation", "AF", "房颤", "心房颤动"],
+  },
+  {
+    pattern: /抗凝|口服抗凝|华法林|warfarin|DOAC|NOAC|anticoag/iu,
+    terms: ["anticoagulation", "anticoagulant", "oral anticoagulant", "warfarin", "DOAC", "NOAC", "抗凝", "华法林"],
+  },
+  {
+    pattern: /血压|收缩压|舒张压|blood pressure|\bBP\b|\bSBP\b|\bDBP\b/iu,
+    terms: ["blood pressure", "BP", "SBP", "DBP", "血压", "收缩压", "舒张压"],
+  },
+  {
     pattern: /溶栓|阿替普酶|rt-?pa|alteplase|thrombolysis/iu,
     terms: ["thrombolysis", "alteplase", "rt-PA", "recombinant tissue plasminogen activator", "溶栓", "阿替普酶"],
   },

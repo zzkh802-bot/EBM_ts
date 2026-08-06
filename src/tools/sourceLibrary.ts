@@ -11,6 +11,8 @@ export type SourceLibraryCandidate = {
   sourceUrl?: string;
   aliases: string[];
   score: number;
+  matchQuality: "direct" | "related";
+  matchedQueryTerms: string[];
   provider?: string;
   sourceStatus?: string;
   importedFrom?: string;
@@ -49,6 +51,28 @@ function tokenize(value: string): string[] {
   const tokens = normalized.split(/[^\p{L}\p{N}]+/u).filter((token) => token.length >= 2);
   const expansions = expandSourceLibraryQueryTerms(normalized);
   return uniqueStrings([...tokens, ...expansions]).filter((token) => token.length >= 2);
+}
+
+function baseQueryTokens(value: string): string[] {
+  return uniqueStrings(value.normalize("NFKC").toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((token) => token.length >= 2));
+}
+
+function queryConceptGroups(value: string): Array<{ name: string; terms: string[] }> {
+  const query = value.normalize("NFKC").toLowerCase();
+  const groups: Array<{ name: string; terms: string[] }> = [];
+  const add = (name: string, terms: string[]) => { if (terms.some((term) => query.includes(term))) groups.push({ name, terms }); };
+  add("atrial_fibrillation", ["房颤", "心房颤动", "atrial fibrillation"]);
+  add("anticoagulation", ["抗凝", "华法林", "doac", "noac", "anticoag"]);
+  add("stroke", ["卒中", "脑卒中", "中风", "stroke"]);
+  add("thrombolysis", ["溶栓", "阿替普酶", "alteplase", "thrombolysis", "rt-pa"]);
+  add("blood_pressure", ["血压", "收缩压", "舒张压", "blood pressure", "bp", "sbp", "dbp"]);
+  add("guideline", ["指南", "guideline", "recommendation"]);
+  return groups;
+}
+
+function noisyArchiveTitle(value?: string): boolean {
+  if (!value) return false;
+  return value.length > 140 || /(?:收稿日期|本文编辑|DATA SOURCES|METHODS|【摘要】|\*\*BACKGROUND\*\*)/iu.test(value);
 }
 
 function sourceLibrarySlug(value: string): string {
@@ -109,6 +133,7 @@ function extractedTitleFromContent(content: string): string | undefined {
 function bestSourceTitle(input: { title?: string; content: string; sourceUrl?: string; fallback: string }): string {
   const extracted = extractedTitleFromContent(input.content);
   if (poorArchiveTitle(input.title)) return extracted || input.sourceUrl || input.fallback;
+  if (extracted && noisyArchiveTitle(input.title)) return extracted;
   if (extracted && titleCandidateScore(extracted) > titleCandidateScore(input.title!) + 10) return extracted;
   return input.title!.trim();
 }
@@ -243,6 +268,8 @@ function snippetFor(content: string, tokens: string[]): string | undefined {
 export async function searchSourceLibrary(input: { sourceLibraryDir?: string; query: string; limit?: number }): Promise<SourceLibraryCandidate[]> {
   if (!input.sourceLibraryDir) return [];
   const queryTokens = tokenize(input.query);
+  const rawQueryTokens = baseQueryTokens(input.query);
+  const conceptGroups = queryConceptGroups(input.query);
   if (!queryTokens.length) return [];
   let entries;
   try {
@@ -265,6 +292,10 @@ export async function searchSourceLibrary(input: { sourceLibraryDir?: string; qu
         .filter((item): item is string | number => typeof item === "string" || typeof item === "number")
         .join(" ")
         .toLowerCase();
+      const metadataHaystack = [title, ...aliases, ...publicationTypes, metadata.organization, metadata.year, metadata.pmid, metadata.pmcid, metadata.doi, metadata.provider, metadata.source_status]
+        .filter((item): item is string | number => typeof item === "string" || typeof item === "number")
+        .join(" ")
+        .toLowerCase();
       let score = queryTokens.reduce((sum, token) => sum + (highValueHaystack.includes(token) ? 3 : 0), 0)
         + comparatorBonus(input.query, title)
         + sourceTypeBonus(input.query, title, highValueHaystack)
@@ -280,6 +311,24 @@ export async function searchSourceLibrary(input: { sourceLibraryDir?: string; qu
         }
       }
       if (score <= 0) continue;
+      const matchedQueryTerms = uniqueStrings([
+        ...rawQueryTokens.filter((token) => metadataHaystack.includes(token)),
+        ...conceptGroups.filter((group) => group.terms.some((term) => metadataHaystack.includes(term))).map((group) => group.name),
+      ]);
+      const matchedConceptGroups = conceptGroups.filter((group) => group.terms.some((term) => metadataHaystack.includes(term)));
+      const focusedGroups = conceptGroups.filter((group) => group.name !== "guideline");
+      const matchedFocusedGroups = matchedConceptGroups.filter((group) => group.name !== "guideline");
+      const directThreshold = Math.max(2, Math.ceil(Math.max(rawQueryTokens.length, conceptGroups.length) * 0.4));
+      const requestedAtrialFibrillation = focusedGroups.some((group) => group.name === "atrial_fibrillation");
+      const authoritativeGuidelineMatch = (metadata.provider === "guideline_mcp" || metadata.provider === "archive")
+        && conceptGroups.some((group) => group.name === "guideline" && group.terms.some((term) => metadataHaystack.includes(term)))
+        && (!requestedAtrialFibrillation || matchedFocusedGroups.some((group) => group.name === "atrial_fibrillation"));
+      const hasFocusedDirectMatch = focusedGroups.length === 0
+        ? matchedConceptGroups.length > 0
+        : matchedFocusedGroups.length >= Math.min(2, focusedGroups.length)
+          && (!requestedAtrialFibrillation || matchedFocusedGroups.some((group) => group.name === "atrial_fibrillation"));
+      const genericDirectMatch = conceptGroups.length === 0 && matchedQueryTerms.length >= Math.max(2, Math.ceil(rawQueryTokens.length * 0.3));
+      const matchQuality = (authoritativeGuidelineMatch || hasFocusedDirectMatch || genericDirectMatch) && matchedQueryTerms.length >= directThreshold ? "direct" : "related";
       const snippet = content ? snippetFor(content, queryTokens) : undefined;
       candidates.push({
         slug: entry.name,
@@ -287,6 +336,8 @@ export async function searchSourceLibrary(input: { sourceLibraryDir?: string; qu
         ...(typeof metadata.source_url === "string" && metadata.source_url.trim() ? { sourceUrl: metadata.source_url.trim() } : {}),
         aliases,
         score,
+        matchQuality,
+        matchedQueryTerms,
         ...(typeof metadata.provider === "string" ? { provider: metadata.provider } : {}),
         ...(typeof metadata.source_status === "string" ? { sourceStatus: metadata.source_status } : {}),
         ...(typeof (metadata as { imported_from?: unknown }).imported_from === "string" ? { importedFrom: (metadata as { imported_from: string }).imported_from } : {}),
@@ -307,7 +358,9 @@ export async function searchSourceLibrary(input: { sourceLibraryDir?: string; qu
       continue;
     }
   }
-  const top = candidates.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title)).slice(0, input.limit ?? 10);
+  const wantsGuideline = /指南|guideline|recommendation/iu.test(input.query);
+  const authorityRank = (candidate: SourceLibraryCandidate): number => wantsGuideline && (candidate.provider === "guideline_mcp" || candidate.provider === "archive") ? 1 : 0;
+  const top = candidates.sort((a, b) => Number(b.matchQuality === "direct") - Number(a.matchQuality === "direct") || authorityRank(b) - authorityRank(a) || b.matchedQueryTerms.length - a.matchedQueryTerms.length || b.score - a.score || a.title.localeCompare(b.title)).slice(0, input.limit ?? 10);
   return await Promise.all(top.map(async (candidate) => {
     if (candidate.snippet) return candidate;
     try {
@@ -418,6 +471,8 @@ export async function upsertSourceLibraryFromArchive(input: {
         const improvedTitle = poorArchiveTitle(existingTitle) ? bestSourceTitle({ ...(input.archive.title ? { title: input.archive.title } : {}), content: input.archive.content, ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}), fallback: path.basename(input.archive.path, ".md") }) : existingTitle!;
         const updatedMetadata = {
           ...metadata,
+          document_id: input.archive.documentId,
+          source_id: input.archive.sourceId,
           title: improvedTitle,
           ...(discoveryQueries.length ? { discovery_queries: discoveryQueries } : {}),
           keywords: uniqueStrings([...existingKeywords, ...incomingKeywords]),
@@ -447,6 +502,8 @@ export async function upsertSourceLibraryFromArchive(input: {
   await writeFile(path.join(dir, "full.md"), `${input.archive.content.trim()}\n`, "utf8");
   await writeFile(path.join(dir, "metadata.json"), `${JSON.stringify({
     title,
+    document_id: input.archive.documentId,
+    source_id: input.archive.sourceId,
     ...(input.archive.sourceUrl ? { source_url: input.archive.sourceUrl } : {}),
     aliases: aliasesFor({ title, ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}), archivePath: input.archive.path }),
     ...sourceLibraryMetadataFields({ title, ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}), content: input.archive.content, provider: input.provider, ...(input.sourceStatus ? { sourceStatus: input.sourceStatus } : {}), ...(input.discoveryQuery ? { discoveryQuery: input.discoveryQuery } : {}) }),

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useSessionsStore } from '../stores'
 
@@ -28,5 +28,30 @@ describe('临床问题会话', () => {
     expect(sessions.active).toMatchObject({
       clinicalQuestion: '慢性肾病合并高钾血症如何长期管理？', researchSessionId: 'pi-session-b', status: 'active',
     })
+  })
+
+  it('修改消息阅读状态时同步更新会话时间', () => {
+    const sessions = useSessionsStore()
+    const before = sessions.active.updatedAt
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(Date.parse(before) + 1_000))
+    try {
+      sessions.patchMessage(sessions.active.messages[0]!.id, { showMarkdown: true })
+
+      expect(sessions.active.messages[0]!.showMarkdown).toBe(true)
+      expect(sessions.active.updatedAt).not.toBe(before)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('忽略不存在的消息而不改动会话时间', () => {
+    const sessions = useSessionsStore()
+    const before = sessions.active.updatedAt
+
+    sessions.patchMessage('missing-message', { showMarkdown: true })
+    sessions.patchMessageIn(sessions.active.id, 'missing-message', { showMarkdown: true })
+
+    expect(sessions.active.updatedAt).toBe(before)
   })
 })

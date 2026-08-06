@@ -127,6 +127,7 @@ export class ExtensionRunner {
     modelRegistry;
     errorListeners = new Set();
     getModel = () => undefined;
+    getScopedModels = () => [];
     isIdleFn = () => true;
     isProjectTrustedFn = () => true;
     getSignalFn = () => undefined;
@@ -172,6 +173,7 @@ export class ExtensionRunner {
         this.runtime.setThinkingLevel = actions.setThinkingLevel;
         // Context actions (required)
         this.getModel = contextActions.getModel;
+        this.getScopedModels = contextActions.getScopedModels;
         this.isIdleFn = contextActions.isIdle;
         this.isProjectTrustedFn = contextActions.isProjectTrusted;
         this.getSignalFn = contextActions.getSignal;
@@ -202,6 +204,25 @@ export class ExtensionRunner {
             }
         }
         this.runtime.pendingProviderRegistrations = [];
+        for (const { provider, extensionPath } of this.runtime.pendingNativeProviderRegistrations) {
+            try {
+                if (providerActions?.registerNativeProvider) {
+                    providerActions.registerNativeProvider(provider);
+                }
+                else {
+                    this.modelRegistry.registerProvider(provider);
+                }
+            }
+            catch (err) {
+                this.emitError({
+                    extensionPath,
+                    event: "register_provider",
+                    error: err instanceof Error ? err.message : String(err),
+                    stack: err instanceof Error ? err.stack : undefined,
+                });
+            }
+        }
+        this.runtime.pendingNativeProviderRegistrations = [];
         // From this point on, provider registration/unregistration takes effect immediately
         // without requiring a /reload.
         this.runtime.registerProvider = (name, config) => {
@@ -210,6 +231,13 @@ export class ExtensionRunner {
                 return;
             }
             this.modelRegistry.registerProvider(name, config);
+        };
+        this.runtime.registerNativeProvider = (provider) => {
+            if (providerActions?.registerNativeProvider) {
+                providerActions.registerNativeProvider(provider);
+                return;
+            }
+            this.modelRegistry.registerProvider(provider);
         };
         this.runtime.unregisterProvider = (name) => {
             if (providerActions?.unregisterProvider) {
@@ -428,6 +456,7 @@ export class ExtensionRunner {
     createContext() {
         const runner = this;
         const getModel = this.getModel;
+        const getScopedModels = this.getScopedModels;
         return {
             get ui() {
                 runner.assertActive();
@@ -456,6 +485,14 @@ export class ExtensionRunner {
             get model() {
                 runner.assertActive();
                 return getModel();
+            },
+            get scopedModels() {
+                runner.assertActive();
+                return getScopedModels();
+            },
+            get thinkingLevel() {
+                runner.assertActive();
+                return runner.runtime.getThinkingLevel();
             },
             isIdle: () => {
                 runner.assertActive();
@@ -631,6 +668,10 @@ export class ExtensionRunner {
                         currentEvent.isError = handlerResult.isError;
                         modified = true;
                     }
+                    if (handlerResult.usage !== undefined) {
+                        currentEvent.usage = handlerResult.usage;
+                        modified = true;
+                    }
                 }
                 catch (err) {
                     const message = err instanceof Error ? err.message : String(err);
@@ -651,6 +692,7 @@ export class ExtensionRunner {
             content: currentEvent.content,
             details: currentEvent.details,
             isError: currentEvent.isError,
+            usage: currentEvent.usage,
         };
     }
     async emitToolCall(event) {

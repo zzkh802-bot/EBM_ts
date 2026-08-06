@@ -19,9 +19,9 @@ Evidence source of truth is Markdown.
 - Do not paste redundant raw JSON at the end of the evidence file.
 - JSON/index files are allowed as generated companions for UI/tests, but the agent-facing evidence record is Markdown.
 
-### Source normalization and line stability
+### Source normalization and quote stability
 
-Network readers can return pathological Markdown, including very long full text compressed into a single line. This breaks line-offset evidence.
+Network readers can return pathological Markdown, including very long full text compressed into a single line. This harms reading and makes copied evidence text unstable.
 
 Therefore every read/search/document tool must normalize text **before** both:
 
@@ -42,7 +42,11 @@ Normalization goals:
 
 Read-like network tools archive the complete normalized source before model exposure. Each source uses a semantic directory containing canonical `full.md` and a generated `toc.md`; the TOC is navigation metadata, not a duplicate source. Their immediate model-visible result is navigation data plus a bounded exact preview, not the complete long document: semantic evidence path, Pi-readable full/TOC paths, total one-based line range, up to 20 Markdown heading locations, a 5KB preview, and a copyable `read(path, offset, limit)` continuation hint with an exact overlapping next offset. Every truncation must preserve a reachable path and gap-free continuation; a bounded response without a continuation mechanism is invalid. If a heading map is partial, disclose its count and point to the complete `toc.md`.
 
-Pi's built-in `read` remains unchanged. Evidence windows use the same one-based line numbers as Pi `read`, so the model can pass an observed offset/limit directly to `evidence_add`.
+Pi's built-in `read` remains unchanged and line numbers remain useful for navigating long files. They are not evidence identifiers. Every archived read source receives two identities: `document_id` identifies the logical document across chunks, while `source_id` identifies one exact archived document/chunk revision and therefore includes its content digest. Evidence records retain both identities and the readable source path.
+
+Citation-capable reads return opaque `source_span_id` values bound to `source_id`, exact character coordinates, and a quote digest. Passing a span ID to `evidence_add` archives the already-selected continuous source text without requiring the model to copy or relocalize it. The same span contract applies to guideline MCP, PubMed abstracts/reads, public `web_read`, and local-library-backed reads; provider adapters must not invent separate evidence interfaces. A copied `quote` with `source_id` remains available when no returned span is sufficient. The evidence tool first requires a unique exact match, then permits only presentation normalization such as line wrapping, Unicode spacing, zero-width characters, and paired Markdown emphasis markers. The canonical archived quote, including its original Markdown, is always stored. Changed numbers, drug names, wording, clinical punctuation, OCR substitutions, translations, reconstructed table prose, and discontinuous ellipses are never auto-accepted.
+
+Quote-location failure is a recoverable tool result rather than an exception loop: deterministic canonical candidates are returned as `source_span_id` values, and one explicit retry can select the intended occurrence without copying. A span is rejected if the archived source revision changes. Candidates remain non-evidence until registration succeeds. Trajectory analysis reports evidence first-attempt failure rates by acquisition source, input mode, and failure reason so retry behavior can be changed from measured failures rather than by relaxing evidence integrity.
 
 Normalize external transport artifacts before both archive and preview: decode numeric/common HTML entities, normalize Unicode spacing, remove zero-width/invalid control characters, and preserve inline PubMed XML text order. Transport envelopes such as guideline MCP JSON are not source content and must be unwrapped and rendered into semantic Markdown sections before archive. A `.md` suffix must never be used merely to rename raw JSON.
 
@@ -153,6 +157,12 @@ Real network integration tests are allowed. Keep fast unit tests, but add explic
 ### Startup
 
 Use Pi native TUI directly as the main local development interface. Provide a simple documented startup command/script so testing is consistent.
+
+### Web runtime bridge
+
+The Node web server uses Pi's native JSONL RPC mode rather than launching one-shot JSON-mode processes. One RPC process remains affined to each active Pi session so later turns reuse native session state; both clinician research and patient intake set thinking level through RPC before every prompt. The server admits at most eight live session processes, single-flights concurrent restoration of the same persisted session, evicts the least recently used idle process before admitting another, and asks callers to retry when every slot is active. Cancellation and request timeouts use the RPC `abort` command, while server shutdown disposes all retained processes. Child-process diagnostics are not mirrored or returned verbatim because provider stderr may contain credentials. A clinician turn returns only a formal report created or updated during that turn, never the previous turn's latest file.
+
+Clinician RPC runs additionally have a provider/model-stream inactivity watchdog, separate from the total request timeout. Starting a provider request and subsequent model activity reset it; tool execution pauses it because network/document tools own their own timeouts. The print/TUI launcher enables the same behavior through a project extension. `EBM_STREAM_STALL_TIMEOUT_MS` configures the inactivity window and defaults to 90 seconds. A stall aborts the current run and is recorded separately from provider HTTP failures. Full-source review has a per-run advisory budget injected by the shared research hook: focused retrieval and evidence registration are free, while full guideline/PubMed/Web reads and local `sources/read` inspection consume budget. `EBM_SOURCE_REVIEW_BUDGET` configures the budget and defaults to eight. Exhaustion is a stop-and-disclose instruction rather than a hard clinical keyword gate.
 
 ## Consequences
 

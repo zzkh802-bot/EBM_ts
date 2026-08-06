@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { cleanExternalText, normalizeMarkdown } from "./markdown.js";
+import { preprocessExternalContent, type ExternalContentFormat } from "./markdown.js";
+import { registerArchivedSource, sourceIdentity } from "./sourceIdentity.js";
 
 export type SourceArchiveResource = {
   path: string;
@@ -14,8 +15,11 @@ export type SourceArchiveInput = {
   kind: "search" | "read" | "upload";
   layout?: "directory" | "file";
   sourceUrl?: string;
+  sourceInstitution?: string;
   title?: string;
+  archiveName?: string;
   content: string;
+  contentFormat?: ExternalContentFormat;
   resources?: SourceArchiveResource[];
 };
 
@@ -29,7 +33,10 @@ export type SourceArchiveRecord = {
   lines: number;
   bodyLineStart: number;
   content: string;
+  documentId: string;
+  sourceId: string;
   sourceUrl?: string;
+  sourceInstitution?: string;
   title?: string;
 };
 
@@ -57,9 +64,9 @@ function urlSemanticName(sourceUrl?: string): string {
   }
 }
 
-export function stableArchiveName(input: Pick<SourceArchiveInput, "kind" | "sourceUrl" | "title" | "content">): string {
+export function stableArchiveName(input: Pick<SourceArchiveInput, "kind" | "sourceUrl" | "title" | "archiveName" | "content">): string {
   const firstReadableLine = input.content.split("\n").map((line) => line.replace(/^#+\s*/, "").trim()).find(Boolean) ?? "";
-  const stem = semanticSlug(input.title || urlSemanticName(input.sourceUrl) || firstReadableLine || `${input.kind}-source`);
+  const stem = semanticSlug(input.archiveName || input.title || urlSemanticName(input.sourceUrl) || firstReadableLine || `${input.kind}-source`);
   return `${stem || `${input.kind}-source`}.md`;
 }
 
@@ -69,6 +76,7 @@ function frontmatter(input: SourceArchiveInput, sha256: string): string {
     `kind: ${input.kind}`,
     `sha256: ${sha256}`,
     ...(input.sourceUrl ? [`source_url: ${JSON.stringify(input.sourceUrl)}`] : []),
+    ...(input.sourceInstitution ? [`source_institution: ${JSON.stringify(input.sourceInstitution)}`] : []),
     ...(input.title ? [`title: ${JSON.stringify(input.title)}`] : []),
     "---",
   ].join("\n")}\n\n`;
@@ -216,7 +224,7 @@ async function archiveReadDirectory(input: SourceArchiveInput, archived: string,
 }
 
 export async function archiveSource(input: SourceArchiveInput): Promise<SourceArchiveRecord> {
-  const content = normalizeMarkdown(cleanExternalText(input.content));
+  const content = preprocessExternalContent(input.content, input.contentFormat ? { format: input.contentFormat } : {});
   const normalizedInput = { ...input, content };
   const sha256 = createHash("sha256").update(content).digest("hex");
   const baseName = stableArchiveName(normalizedInput).replace(/\.md$/, "");
@@ -228,14 +236,23 @@ export async function archiveSource(input: SourceArchiveInput): Promise<SourceAr
     : input.layout === "file"
       ? await archiveReadFile(normalizedInput, archived, baseName)
       : await archiveReadDirectory(normalizedInput, archived, baseName, bodyLineStart);
+  const identity = sourceIdentity({
+    sha256,
+    ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
+    ...(input.sourceInstitution ? { sourceInstitution: input.sourceInstitution } : {}),
+    ...(input.title ? { title: input.title } : {}),
+  });
+  registerArchivedSource(input.sessionDir, location.path, identity);
   return {
     ...location,
+    ...identity,
     sha256,
     chars: content.length,
     lines: content.split("\n").length,
     bodyLineStart,
     content,
     ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}),
+    ...(input.sourceInstitution ? { sourceInstitution: input.sourceInstitution } : {}),
     ...(input.title ? { title: input.title } : {}),
   };
 }

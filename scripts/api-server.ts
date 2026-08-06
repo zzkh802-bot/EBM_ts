@@ -1,5 +1,5 @@
 import path from "node:path";
-import { AccountConnectionStore, createAgentApiServer, createPiCliExecutor, loadRuntimeConfig } from "../src/server/agentApi.js";
+import { AccountConnectionStore, createAgentApiServer, createPiRpcExecutor, loadRuntimeConfig } from "../src/server/agentApi.js";
 import { createPiPatientIntakeExecutor } from "../src/server/patientIntake.js";
 
 const rootDir = path.resolve(import.meta.dirname, "..");
@@ -7,9 +7,11 @@ const port = parsePort(process.env.DP_XUNYI_TS_PORT, 8787);
 const host = process.env.DP_XUNYI_TS_HOST?.trim() || "127.0.0.1";
 const corsOrigin = process.env.DP_XUNYI_TS_CORS_ORIGIN?.trim() || "*";
 
+const executor = createPiRpcExecutor({ rootDir });
+const patientIntakeExecutor = createPiPatientIntakeExecutor({ rootDir });
 const { server } = createAgentApiServer({
-  executor: createPiCliExecutor({ rootDir }),
-  patientIntakeExecutor: createPiPatientIntakeExecutor({ rootDir }),
+  executor,
+  patientIntakeExecutor,
   corsOrigin,
   runtimeConfig: () => loadRuntimeConfig(rootDir),
   accountConnections: new AccountConnectionStore(rootDir),
@@ -22,7 +24,10 @@ server.listen(port, host, () => {
 });
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.on(signal, () => server.close(() => process.exit(0)));
+  process.on(signal, () => server.close(async () => {
+    await Promise.all([executor.dispose(), patientIntakeExecutor.dispose()]);
+    process.exit(0);
+  }));
 }
 
 function parsePort(value: string | undefined, fallback: number): number {

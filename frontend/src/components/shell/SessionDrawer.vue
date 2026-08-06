@@ -1,19 +1,22 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useSessionsStore, useUiStore } from '../../stores'
+import { useAgentRunStore, useSessionsStore, useUiStore } from '../../stores'
 
 const sessions = useSessionsStore()
+const run = useAgentRunStore()
 const ui = useUiStore()
 const router = useRouter()
 const query = ref('')
 
 const filtered = computed(() => {
   const text = query.value.trim().toLowerCase()
-  const matching = sessions.sessions.filter((session) => !text
-    || session.title.toLowerCase().includes(text)
-    || session.clinicalQuestion.toLowerCase().includes(text)
-    || session.messages.some((message) => message.content.toLowerCase().includes(text)))
+  const matching = sessions.sessions.filter((session) =>
+    session.messages.some((message) => message.role === 'user')
+    && (!text
+      || session.title.toLowerCase().includes(text)
+      || session.clinicalQuestion.toLowerCase().includes(text)
+      || session.messages.some((message) => message.content.toLowerCase().includes(text))))
   return [...matching].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
 })
 
@@ -24,9 +27,12 @@ const openSession = (id: string) => {
 }
 
 const createSession = () => {
-  sessions.create()
   ui.sessionDrawerOpen = false
-  router.push('/clinician/evidence')
+  router.push('/clinician')
+}
+
+const clearSessions = () => {
+  if (!run.busy) sessions.clear()
 }
 
 const formatSessionTime = (value: string) => {
@@ -77,7 +83,7 @@ const statusLabel = (status: 'draft' | 'active' | 'complete') => ({ draft: '待�
     <section class="history-panel" aria-label="研究记录">
       <div class="history-head">
         <span>长期追踪</span>
-        <button class="history-clear" type="button" title="清空本机保存的全部问题" @click="sessions.clear()">清空本机记录</button>
+        <button class="history-clear" type="button" title="清空本机保存的全部问题" :disabled="run.busy" @click="clearSessions">清空本机记录</button>
       </div>
       <div class="history-list">
         <button

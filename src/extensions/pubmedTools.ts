@@ -14,16 +14,20 @@ function compactAbstractText(value: string): string {
   return value.replace(/\s+/g, " ").trim().slice(0, 500);
 }
 
-function abstractWindow(archive: { content: string; bodyLineStart: number }): { offset: number; limit: number; preview: string } {
+function abstractPreview(archive: { content: string; bodyLineStart: number }): { text: string; startLine: number; endLine: number } {
   const sourceLines = archive.content.split("\n");
   const headingIndex = sourceLines.findIndex((line) => line.trim() === "## Abstract");
   let firstIndex = headingIndex >= 0 ? headingIndex + 1 : 0;
   while (firstIndex < sourceLines.length && !sourceLines[firstIndex]!.trim()) firstIndex += 1;
-  let lastIndex = sourceLines.length - 1;
+  const nextHeadingIndex = sourceLines.findIndex((line, index) => index > firstIndex && /^##\s+/.test(line.trim()));
+  let lastIndex = (nextHeadingIndex >= 0 ? nextHeadingIndex : sourceLines.length) - 1;
   while (lastIndex >= firstIndex && !sourceLines[lastIndex]!.trim()) lastIndex -= 1;
-  const offset = archive.bodyLineStart + firstIndex;
-  const limit = Math.max(1, lastIndex - firstIndex + 1);
-  return { offset, limit, preview: compactAbstractText(sourceLines.slice(firstIndex, lastIndex + 1).join(" ")) };
+  const selected = sourceLines.slice(firstIndex, lastIndex + 1);
+  return {
+    text: compactAbstractText(selected.join(" ")),
+    startLine: archive.bodyLineStart + firstIndex,
+    endLine: archive.bodyLineStart + lastIndex,
+  };
 }
 
 function pmidFromAbstract(content: string): string {
@@ -55,13 +59,14 @@ export function renderAbstractNavigation(
   const lines = ["PubMed abstract results:", ""];
   archives.forEach((archive, index) => {
     const readablePath = ["data", "sessions", sessionDirectoryName, archive.path].join("/");
-    const { offset, limit, preview } = abstractWindow(archive);
+    const preview = abstractPreview(archive);
     lines.push(
       `${index + 1}. ${archive.title ?? archive.path}`,
       `   PMID: ${pmidFromAbstract(archive.content)}`,
-      `   Abstract preview: ${preview}`,
+      `   Abstract lines: ${preview.startLine}-${preview.endLine}`,
+      `   Abstract preview: ${preview.text}`,
       `   Readable abstract path: ${readablePath}`,
-      `   Exact abstract lines: ${offset}-${offset + limit - 1}`,
+      "   Evidence use: call pubmed_read first, then choose read_id with start_text/end_text (source_path optional), or use the displayed source path with line_start/line_end. Layout/XML/entity/punctuation noise is normalized, but wording and numbers must remain unchanged.",
       "",
     );
   });
@@ -125,7 +130,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
           pmids: result.pmids,
           relatedPmids: result.relatedPmids,
           abstractCount: result.abstractCount,
-          abstractArchives: result.abstractArchives.map(archiveDetails),
+          abstractArchives: result.abstractArchives.map((archive) => archiveDetails(archive)),
           sourceLibrary: sourceLibraryWrites,
           warnings: result.warnings,
           archive: archiveDetails(result.archive),
@@ -173,7 +178,7 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
         details: {
           seedPmid: result.seedPmid,
           relatedPmids: result.relatedPmids,
-          abstractArchives: result.abstractArchives.map(archiveDetails),
+          abstractArchives: result.abstractArchives.map((archive) => archiveDetails(archive)),
           sourceLibrary: sourceLibraryWrites,
           archive: archiveDetails(result.archive),
           warnings: result.warnings,

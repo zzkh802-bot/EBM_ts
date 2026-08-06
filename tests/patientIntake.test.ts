@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { createPiPatientIntakeExecutor, PatientWorkspace, PATIENT_FREE_CHAT_TURN_LIMIT, PATIENT_VISIT_REPORT_HEADINGS, type PatientIntakeExecutor, type PatientIntakeInput, validatePatientIntakeInput, validatePatientVisitReport } from "../src/server/patientIntake.js";
+import { createPiPatientIntakeExecutor, PatientWorkspace, PATIENT_FREE_CHAT_TURN_LIMIT, PATIENT_VISIT_REPORT_HEADINGS, type PatientIntakeExecutor, type PatientIntakeInput, type PatientRpcClientOptions, validatePatientIntakeInput, validatePatientVisitReport } from "../src/server/patientIntake.js";
 
 const profile = {
   id: "profile-1", revision: "revision-1", name: "我", sex: "female" as const, age: 34,
@@ -95,14 +95,33 @@ describe("患者工作区", () => {
     await mkdir(skillDirectory, { recursive: true });
     await writeFile(path.join(rootDir, ".pi", "models.json"), "{}\n");
     await writeFile(path.join(skillDirectory, "SKILL.md"), "PATIENT_SKILL_BODY\n");
-    await writeFile(path.join(cliDirectory, "cli.js"), [
-      "const args = process.argv.slice(2);",
-      "const skill = args[args.indexOf('--append-system-prompt') + 1] || '';",
-      "const providerExtension = args[args.indexOf('--extension') + 1] || '';",
-      "console.log(JSON.stringify({ type: 'session', id: 'pi-fake' }));",
-      "console.log(JSON.stringify({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: skill.includes('PATIENT_SKILL_BODY') && providerExtension.endsWith('ebm-providers.ts') ? 'skill-and-provider-loaded' : 'runtime-missing' }] } }));",
-    ].join("\n"));
-    const result = await createPiPatientIntakeExecutor({ rootDir })(request(), new AbortController().signal);
+    await writeFile(path.join(cliDirectory, "cli.js"), "");
+    let options: PatientRpcClientOptions | undefined;
+    const runtime = createPiPatientIntakeExecutor({
+      rootDir,
+      clientFactory: (value) => {
+        options = value;
+        return {
+          start: async () => undefined,
+          stop: async () => undefined,
+          getState: async () => ({ sessionId: "pi-fake", thinkingLevel: "medium", isStreaming: false }),
+          setThinkingLevel: async () => undefined,
+          prompt: async () => undefined,
+          waitForIdle: async () => undefined,
+          abort: async () => undefined,
+          getLastAssistantText: async () => {
+            const skill = options?.args[options.args.indexOf("--append-system-prompt") + 1] || "";
+            const extension = options?.args[options.args.indexOf("--extension") + 1] || "";
+            return skill.includes("PATIENT_SKILL_BODY") && extension.endsWith("ebm-providers.ts")
+              ? "skill-and-provider-loaded"
+              : "runtime-missing";
+          },
+        };
+      },
+    });
+    const result = await runtime(request(), new AbortController().signal);
     expect(result).toMatchObject({ sessionId: "pi-fake", reply: "skill-and-provider-loaded" });
+    expect(options?.args).not.toContain("json");
+    await runtime.dispose();
   });
 });

@@ -5,6 +5,18 @@ import { describe, expect, it } from "vitest";
 import { appendResearchFrameScratchpad, initResearchFrame, readResearchFrame, researchFrameValidationError, updateResearchFrame } from "../src/tools/researchFrame.js";
 
 const frameHeadings = [
+  "病例 / 场景事实",
+  "需要回答的临床决策",
+  "循证医学子问题",
+  "主张画布",
+  "证据综合笔记",
+  "当前判断草稿",
+  "来源与证据缺口",
+  "报告逻辑计划",
+  "引用映射草稿",
+];
+
+const legacyFrameHeadings = [
   "Case / scenario facts",
   "Clinical decision to answer",
   "EBM sub-questions",
@@ -18,9 +30,9 @@ const frameHeadings = [
 
 function validFrame(extraScratchpad = "Belief state."): string {
   return [
-    "# Research Frame",
+    "# 研究框架",
     "",
-    ...frameHeadings.flatMap((heading) => [`## ${heading}`, heading === "Working belief scratchpad" ? extraScratchpad : "Free prose.", ""]),
+    ...legacyFrameHeadings.flatMap((heading) => [`## ${heading}`, heading === "Working belief scratchpad" ? extraScratchpad : "Free prose.", ""]),
   ].join("\n");
 }
 
@@ -39,7 +51,7 @@ describe("research frame", () => {
     expect(first.path).toBe("notes/research_frame.md");
     expect(second.content).toBe(first.content);
     for (const heading of frameHeadings) expect(first.content).toContain(`## ${heading}`);
-    expect(first.content).toContain("POMDP-like research state");
+    expect(first.content).toContain("类似 POMDP 的研究状态");
     expect(first.content).toContain("Does BP 165/95 mmHg block alteplase");
   });
 
@@ -51,7 +63,7 @@ describe("research frame", () => {
     })));
     const [first] = frames;
 
-    expect(first?.content).toContain("# Research Frame");
+    expect(first?.content).toContain("# 研究框架");
     expect(frames.every((frame) => frame.content === first?.content)).toBe(true);
     await expect(readFile(path.join(sessionDir, "notes", "research_frame.md"), "utf8")).resolves.toBe(first?.content);
   });
@@ -68,7 +80,7 @@ describe("research frame", () => {
     await initResearchFrame({ sessionDir, userQuestion: "Question" });
     const updated = await appendResearchFrameScratchpad(sessionDir, "Observation: RAG chunk supports C1. Next action: evidence_add.");
 
-    expect(updated.content).toContain("## Working belief scratchpad");
+    expect(updated.content).toContain("## 当前判断草稿");
     expect(updated.content).toContain("Scratchpad update");
     expect(updated.content).toContain("RAG chunk supports C1");
     expect(researchFrameValidationError(updated.content)).toBe("");

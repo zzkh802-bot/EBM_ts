@@ -28,8 +28,7 @@ describe("basic EBM vertical flow", () => {
       claim: "The intervention reduced the primary outcome.",
       relation: "supports",
       sourcePath: search.archive.path,
-      offset: search.archive.bodyLineStart,
-      limit: 1,
+      quote: "The intervention reduced the primary outcome.",
     })).rejects.toThrow(/discovery artifacts/);
 
     const source = await archiveSource({
@@ -39,17 +38,13 @@ describe("basic EBM vertical flow", () => {
       title: "Randomized trial",
       content: "# Randomized trial\n\nThe intervention reduced the primary outcome.",
     });
-    const bodyLines = source.content.split("\n");
-    const quoteIndex = bodyLines.indexOf("The intervention reduced the primary outcome.");
-    expect(quoteIndex).toBeGreaterThanOrEqual(0);
     const evidence = await addEvidence({
       sessionDir,
       question: "Does the intervention reduce the primary outcome?",
       claim: "The intervention reduced the primary outcome.",
       relation: "supports",
       sourcePath: source.path,
-      offset: source.bodyLineStart + quoteIndex,
-      limit: 1,
+      quote: "The intervention reduced the primary outcome.",
     });
     const report = await writeReport({
       sessionDir,

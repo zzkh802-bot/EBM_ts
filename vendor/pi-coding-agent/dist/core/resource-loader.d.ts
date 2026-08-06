@@ -47,7 +47,13 @@ export interface ResourceLoader {
         }>;
     };
     getSystemPrompt(): string | undefined;
+    getSystemPromptSource(): {
+        path: string;
+    } | undefined;
     getAppendSystemPrompt(): string[];
+    getAppendSystemPromptSources(): Array<{
+        path: string;
+    }>;
     extendResources(paths: ResourceExtensionPaths): void;
     reload(options?: ResourceLoaderReloadOptions): Promise<void>;
 }
@@ -145,11 +151,14 @@ export declare class DefaultResourceLoader implements ResourceLoader {
     private themeDiagnostics;
     private agentsFiles;
     private systemPrompt?;
+    private systemPromptSourcePath?;
     private appendSystemPrompt;
+    private appendSystemPromptSourcePaths;
     private lastSkillPaths;
     private extensionSkillSourceInfos;
     private extensionPromptSourceInfos;
     private extensionThemeSourceInfos;
+    private resourceMetadataByPath;
     private lastPromptPaths;
     private lastThemePaths;
     private loaded;
@@ -174,7 +183,13 @@ export declare class DefaultResourceLoader implements ResourceLoader {
         }>;
     };
     getSystemPrompt(): string | undefined;
+    getSystemPromptSource(): {
+        path: string;
+    } | undefined;
     getAppendSystemPrompt(): string[];
+    getAppendSystemPromptSources(): Array<{
+        path: string;
+    }>;
     extendResources(paths: ResourceExtensionPaths): void;
     loadProjectTrustExtensions(): Promise<LoadExtensionsResult>;
     reload(options?: ResourceLoaderReloadOptions): Promise<void>;

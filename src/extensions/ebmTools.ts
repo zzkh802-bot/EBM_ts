@@ -8,7 +8,7 @@ import {
   withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { addEvidence, listEvidence, readEvidence } from "../tools/evidence.js";
+import { addEvidenceFromAnchors, listEvidence, readEvidence } from "../tools/evidence.js";
 import { registerCompactionArtifacts } from "./compactionArtifacts.js";
 import { registerContextPruner } from "./contextPruner.js";
 import { registerEbmIdentity } from "./ebmIdentity.js";
@@ -17,7 +17,9 @@ import { registerPubMedTools } from "./pubmedTools.js";
 import { registerReportTools } from "./reportTools.js";
 import { registerResearchRoundHint } from "./researchRoundHint.js";
 import { registerResearchFrameTools } from "./researchFrameTools.js";
+import { registerReadRegistry } from "./readRegistry.js";
 import { piReadableSessionPath, piSessionDirectory, registerSessionWorkspace } from "./sessionPath.js";
+import { registerStreamStallWatchdog } from "./streamStallWatchdog.js";
 import { registerTrajectoryRecorder } from "./trajectoryRecorder.js";
 import { registerWebTools } from "./webTools.js";
 
@@ -33,23 +35,27 @@ function evidenceSourcePath(value: string, sessionId: string, sessionDir: string
 export function registerEbmTools(pi: ExtensionAPI): void {
   const retrievalPolicy = process.env.EBM_RETRIEVAL_POLICY?.trim() || "all";
   registerSessionWorkspace(pi);
+  registerReadRegistry(pi);
   registerEbmIdentity(pi);
   registerResearchRoundHint(pi);
+  registerStreamStallWatchdog(pi);
 
   pi.registerTool({
     name: "evidence_add",
     label: "Add Evidence",
-    description: "Archive an exact line slice from a session source as a traceable Markdown evidence record.",
-    promptSnippet: "Archive exact source lines as claim-linked EBM evidence",
+    description: "Archive claim-linked evidence using either a read receipt with text boundaries or a source path with a line range.",
+    promptSnippet: "Archive claim-linked evidence with a read receipt or source line range",
     promptGuidelines: [
-      "Use evidence_add only after reading the exact archived source window; pass the returned readable archive path as source_path with the exact offset and limit.",
+      "Use evidence_add only after reading the archived source. Choose exactly one locator mode: (1) read_id plus start_text and end_text copied from that read; source_path is optional because the receipt carries it, but may be supplied for cross-checking; or (2) source_path plus line_start and line_end, with text anchors optional.",
+      "start_text and end_text are short boundary snippets, not paraphrases or character offsets. Copy them from the read view; layout, XML/entity, punctuation, and transport-symbol noise may be normalized for matching, but numbers, units, drug names, wording, and OCR characters are never repaired. The two anchors must identify one continuous passage; never join discontinuous passages with ellipses.",
+      "If the tool returns canonical source candidates after a mismatch, copy the candidate text and retry evidence_add. Do not scan the session with bash merely to reconstruct a quote.",
       "Classify provenance honestly. Search snippets and unverified mirrors are discovery-only and cannot support a final report. Use expert_consensus for consensus/position documents rather than calling them guidelines.",
       "For secondary sources, attribute claims to that source; never rewrite a paraphrase as the target guideline's direct recommendation.",
       "Evidence can be preliminary: use confidence=low or moderate for early candidate evidence instead of delaying all evidence_add calls until the end.",
     ],
     parameters: Type.Object({
       question: Type.String({ description: "Complete internal evidence question" }),
-      claim: Type.String({ description: "Claim interpreted from this exact source slice" }),
+      claim: Type.String({ description: "Claim interpreted from this exact source quote" }),
       relation: StringEnum(["supports", "partially_supports", "refutes"] as const),
       provenance: Type.Optional(StringEnum([
         "primary_full_text",
@@ -65,24 +71,33 @@ export function registerEbmTools(pi: ExtensionAPI): void {
         "other",
       ] as const)),
       confidence: Type.Optional(StringEnum(["low", "moderate", "high"] as const)),
-      source_path: Type.String({ description: "Use the returned readable archive path, or a session-relative sources/read/... path" }),
-      offset: Type.Integer({ minimum: 1, description: "One-based source line number, matching Pi read" }),
-      limit: Type.Integer({ minimum: 1, maximum: 200, description: "Number of consecutive exact source lines" }),
+      source_path: Type.Optional(Type.String({ description: "Archive path for the source; required in line-range mode, optional when read_id is provided" })),
+      read_id: Type.Optional(Type.String({ pattern: "^r[0-9]+$", description: "Read receipt ID returned by read for the same source" })),
+      line_start: Type.Optional(Type.Integer({ minimum: 1, description: "1-based fallback source line range start; use with line_end when read_id is unavailable" })),
+      line_end: Type.Optional(Type.Integer({ minimum: 1, description: "1-based fallback source line range end; use with line_start when read_id is unavailable" })),
+      start_text: Type.Optional(Type.String({ minLength: 2, description: "Boundary text at the beginning; required with read_id, optional in line-range mode" })),
+      end_text: Type.Optional(Type.String({ minLength: 2, description: "Boundary text at the end; required with read_id, optional in line-range mode" })),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const sessionId = ctx.sessionManager.getSessionId();
       const sessionDir = piSessionDirectory(ctx.cwd, sessionId);
       const indexPath = path.join(sessionDir, "evidence", "EVIDENCE.md");
-      const node = await withFileMutationQueue(indexPath, () => addEvidence({
+      const base = {
         sessionDir,
         question: params.question,
         claim: params.claim,
         relation: params.relation,
         ...(params.provenance ? { provenance: params.provenance } : {}),
         ...(params.confidence ? { confidence: params.confidence } : {}),
-        sourcePath: evidenceSourcePath(params.source_path, sessionId, sessionDir),
-        offset: params.offset,
-        limit: params.limit,
+      };
+      const node = await withFileMutationQueue(indexPath, () => addEvidenceFromAnchors({
+        ...base,
+        ...(params.source_path ? { sourcePath: evidenceSourcePath(params.source_path, sessionId, sessionDir) } : {}),
+        ...(params.read_id ? { readId: params.read_id } : {}),
+        ...(params.line_start === undefined ? {} : { lineStart: params.line_start }),
+        ...(params.line_end === undefined ? {} : { lineEnd: params.line_end }),
+        ...(params.start_text === undefined ? {} : { startText: params.start_text }),
+        ...(params.end_text === undefined ? {} : { endText: params.end_text }),
       }));
       const evidencePath = path.posix.join("evidence", `${node.id}.md`);
       pi.events.emit("ebm:evidence_added", { sessionId, evidenceId: node.id, path: evidencePath });
@@ -132,7 +147,8 @@ export function registerEbmTools(pi: ExtensionAPI): void {
         `Confidence: ${node.confidence}`,
         `Citation eligible: ${node.citationEligible}`,
         `Verification: ${record.verification.ok ? "ok" : record.verification.errors.join("; ")}`,
-        `Source lines: ${sourceReadablePath}:${node.lineStart}-${node.lineEnd}`,
+        `Source: ${sourceReadablePath}`,
+        `Source match: ${node.matchMode ?? "legacy_line_record"}`,
         "",
         "Quote:",
         node.quote,

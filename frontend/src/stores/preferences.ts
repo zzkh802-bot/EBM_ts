@@ -14,7 +14,9 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const thinkingLevel = ref<ThinkingLevel>(thinkingLevels.includes(stored.thinkingLevel as ThinkingLevel)
     ? stored.thinkingLevel as ThinkingLevel
     : 'high')
-  const searchEnabled = ref(typeof stored.searchEnabled === 'boolean' ? stored.searchEnabled : true)
+  // Evidence retrieval is part of the clinician workflow and is no longer a
+  // user-toggleable mode. Keep the field for wire/storage compatibility.
+  const searchEnabled = ref(true)
   const storedRuntime = safeRead<{ provider?: string; model?: string }>(STORAGE_KEYS.runtime, {})
   const provider = ref(storedRuntime.provider || '')
   const model = ref(storedRuntime.model || '')

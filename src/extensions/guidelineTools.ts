@@ -34,8 +34,8 @@ function renderSearchCards(title: string, items: GuidelineSearchItem[]): string 
   return lines.join("\n");
 }
 
-function compactLines(lines: string[]): string {
-  return lines.join("\n").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+function numberLines(lines: Array<{ line: number; text: string }>): string {
+  return lines.map((line) => `${String(line.line).padStart(5, " ")}│${line.text}`).join("\n");
 }
 
 function informativeHeading(text: string): boolean {
@@ -64,14 +64,14 @@ export function renderGuidelineReadText(
     /\babstract\b/i,
   ].map((pattern) => lines.findIndex((line) => pattern.test(line))).find((index) => index >= 0) ?? -1;
   const startIndex = Math.max(0, targetIndex >= 0 ? targetIndex : 0);
-  const previewLines: string[] = [];
-  for (const line of lines.slice(startIndex)) {
+  const previewLines: Array<{ line: number; text: string }> = [];
+  for (const [offset, line] of lines.slice(startIndex).entries()) {
     if (previewLines.length && /^(?:#{1,6}\s+|Keywords\b|Date received\b|Correspondence\b|References\b)/i.test(line.trim())) break;
-    if (!/^\s*\d+\s*$/.test(line)) previewLines.push(line);
+    if (!/^\s*\d+\s*$/.test(line)) previewLines.push({ line: record.bodyLineStart + startIndex + offset, text: line });
     if (previewLines.length >= 12) break;
   }
-  const previewStart = record.bodyLineStart + startIndex;
-  const previewEnd = previewStart + previewLines.length - 1;
+  const previewStart = previewLines[0]?.line ?? record.bodyLineStart + startIndex;
+  const previewEnd = previewLines.at(-1)?.line ?? previewStart;
   const readableTocPath = record.tocPath ? readablePath.replace(/full\.md$/, "toc.md") : undefined;
   return [
     ...(document ? [
@@ -85,12 +85,12 @@ export function renderGuidelineReadText(
     `Readable guideline path: ${readablePath}`,
     ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
     `Archive lines: 1-${totalLines} (${totalLines} total lines; 1-based).`,
-    `For evidence_add, use this readable guideline path with exact offset/limit.`,
+    "After read, choose one evidence_add locator: the returned read_id with start_text/end_text (source_path optional), or source_path with line_start/line_end (text anchors optional). Layout/XML/entity/punctuation noise is normalized; clinical numbers and wording are not repaired.",
     ...(headings.length ? ["", "Best-effort navigation index (generated from cleaned Markdown; verify against full text):", ...headings] : []),
     "",
     `Informative preview lines ${previewStart}-${previewEnd}:`,
     "",
-    compactLines(previewLines),
+    numberLines(previewLines),
   ].join("\n");
 }
 
@@ -107,21 +107,12 @@ export function renderRetrieveCards(title: string, items: GuidelineRetrieveItem[
     if (item.chunkType) lines.push(`   chunk_type: ${item.chunkType}`);
     const sourcePath = item.sourcePath ? readablePath(item.sourcePath) : undefined;
     if (sourcePath) lines.push(`   readable chunk path: ${sourcePath}`);
-    if (item.lineStart !== undefined && item.lineEnd !== undefined) {
-      lines.push(`   exact chunk lines: ${item.lineStart}-${item.lineEnd}`);
-      if (sourcePath) {
-        lines.push(
-          "   evidence_add location (copy these values; 1-based):",
-          `     source_path: ${sourcePath}`,
-          `     offset: ${item.lineStart}`,
-          `     limit: ${item.lineEnd - item.lineStart + 1}`,
-        );
-      }
+    if (item.candidateMaterial) {
+      lines.push("   candidate material (identical to archived body):", "", item.candidateMaterial);
     }
-    if (item.candidateMaterial) lines.push("   candidate material (identical to archived body):", "", item.candidateMaterial);
     lines.push("");
   });
-  lines.push("These are candidate materials, not evidence yet. If a continuous passage directly supports a claim, call evidence_add with the exact source_path, offset, and limit shown above. You may narrow the range, but never extend it or replace limit with an arbitrary value.");
+  lines.push("These are candidate materials, not evidence yet. Read the relevant source path, then choose read_id plus start_text/end_text (source_path optional), or source_path plus line_start/line_end. Layout/XML/entity/punctuation noise is normalized; if candidates are returned after a mismatch, copy them and retry instead of scanning with bash.");
   return lines.join("\n");
 }
 
@@ -137,9 +128,9 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
   pi.registerTool({
     name: "guideline_mcp_search",
     label: "Search Guideline Library",
-    description: "Search the internal guideline MCP sequentially and archive the returned document-level results.",
+    description: "Search the internal guideline MCP and archive document-level candidates. This does not return citation-ready evidence passages.",
     promptSnippet: "Search the internal guideline index for document IDs",
-    promptGuidelines: ["Search first, then use guideline_mcp_read on the best doc_id before creating evidence."],
+    promptGuidelines: ["This returns document candidates only, not evidence. If source_library_search already found a direct local source, use that first. Otherwise select a document, then use guideline_mcp_read for context or guideline_mcp_retrieve for focused evidence passages before creating evidence."],
     parameters: Type.Object({
       query: Type.String({ minLength: 2, description: "Prefer a short high-information English query" }),
       topk: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
@@ -170,9 +161,9 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
   pi.registerTool({
     name: "guideline_mcp_retrieve",
     label: "Retrieve Guideline Chunks",
-    description: "Run internal guideline RAG retrieval and archive each returned chunk as a citation-capable source with exact lines.",
+    description: "Run internal guideline RAG retrieval and archive each returned chunk as a citation-capable quote source.",
     promptSnippet: "Retrieve traceable guideline chunks that can directly support evidence when relevant",
-    promptGuidelines: ["RAG chunks may directly support evidence when the returned readable chunk path and exact lines match the claim; use guideline_mcp_read only when broader context is needed."],
+    promptGuidelines: ["RAG chunks may directly support evidence. Read the returned source path, then use read_id plus exact start_text/end_text with evidence_add; if read_id is unavailable, use the returned line range. Never join separate spans or insert ellipses. Use guideline_mcp_read when broader context is needed."],
     parameters: Type.Object({
       query: Type.String({ minLength: 2, description: "Focused clinical retrieval query" }),
       topk: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
@@ -198,7 +189,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
       });
       return {
         content: [{ type: "text", text: renderRetrieveCards(`Guideline RAG retrieval candidates (${result.items.length} returned):`, result.items, (sourcePath) => piReadableSessionPath(ctx.cwd, sessionId, sourcePath)) }],
-        details: { archive: archiveDetails(result.archive), itemCount: result.items.length, chunkArchives: result.items.flatMap((item) => item.sourcePath ? [{ path: item.sourcePath, lineStart: item.lineStart, lineEnd: item.lineEnd }] : []), truncated: false },
+        details: { archive: archiveDetails(result.archive), itemCount: result.items.length, chunkArchives: result.items.flatMap((item) => item.sourcePath ? [{ path: item.sourcePath, sourceId: item.sourceId, documentId: item.documentId, lineStart: item.lineStart, lineEnd: item.lineEnd }] : []), truncated: false },
       };
     },
   });

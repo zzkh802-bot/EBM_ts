@@ -130,18 +130,18 @@ xinqiong/deepseek-v4-flash
 | --- | --- |
 | `web_search` | Tavily discovery; archives normalized result sets |
 | `web_read` | Recognized PDFs: MinerU Premium VLM URL → secure local download + Premium upload → Jina/Firecrawl; other pages: Jina → Firecrawl |
-| `pubmed_search` | Top PubMed records with title, PMID, 500-character abstract preview, evidence source path, and exact abstract lines |
+| `pubmed_search` | Top PubMed records with title, PMID, 500-character abstract preview, and a citation-capable abstract source path |
 | `pubmed_similar` | Top similar PubMed records from one PMID, with title, PMID, and 500-character abstract preview for retrieval expansion |
 | `pubmed_read` | PMC full text first, then bounded OpenAlex OA PDF download + MinerU upload, with explicit abstract-only fallback |
 | `guideline_mcp_search` | compact Top-5 internal guideline document candidates with title, doc_id, metadata, and abstract/excerpt preview |
-| `guideline_mcp_retrieve` | compact Top-5 internal guideline RAG chunks, each archived with readable chunk path and exact lines for direct evidence when sufficient |
+| `guideline_mcp_retrieve` | compact internal guideline RAG chunks, each archived with a readable chunk path and canonical candidate material |
 | `guideline_mcp_read` | read and archive one selected guideline |
-| `evidence_add` | archive an exact source line window with explicit evidence provenance |
+| `evidence_add` | locate and archive a continuous verbatim source quote with explicit evidence provenance |
 | `evidence_list` | list concise evidence metadata |
 | `evidence_read` | read and reverify evidence against its source |
 | `report_write` | write a report only after verifying all referenced evidence |
 
-Read-like network tools retain each complete normalized source as `sources/read/<semantic-name>/full.md` with a generated `toc.md`. Read tools return only a compact 5KB preview, a one-based heading map, readable paths, total lines, and a Pi `read(path, offset, limit)` continuation hint. Web search is discovery-only and returns Top-K candidate URLs with provider summaries instead of archive previews. PubMed additionally returns exact per-abstract read windows. Pi `read` and `evidence_add` use the same one-based source lines. Structured provider envelopes are rendered as semantic Markdown before archive rather than copied as JSON into `.md` files.
+Read-like network tools retain each complete normalized source as `sources/read/<semantic-name>/full.md` with a generated `toc.md`. Read tools return only a compact 5KB preview, a one-based heading map, readable paths, total lines, and a Pi `read(path, offset, limit)` continuation hint. Web search is discovery-only and returns Top-K candidate URLs with provider summaries instead of archive previews. Line numbers remain navigation aids for Pi `read`; evidence registration instead copies a minimal continuous verbatim quote, which `evidence_add` locates and verifies against the canonical archive. Structured provider envelopes are rendered as semantic Markdown before archive rather than copied as JSON into `.md` files.
 
 ## Product boundary
 

@@ -66,7 +66,7 @@ function compactTimestamp(): string {
   return compactBeijingTimestamp().replace(/\.\d{3}\+0800$/, "+0800");
 }
 
-export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on">): void {
+export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on" | "events">): void {
   let writer: TrajectoryWriter | undefined;
   let runId: string | undefined;
   let runCounter = 0;
@@ -94,6 +94,17 @@ export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on">): void {
     ...(turnIndex === undefined ? {} : { turnIndex }),
     preserveLongStrings,
   });
+
+  if (typeof pi.events?.on === "function") {
+    pi.events.on("ebm:stream_stalled", (data) => {
+      void writer?.record({
+        event: "stream_stalled",
+        data,
+        ...(runId ? { runId } : {}),
+        ...(turnIndex === undefined ? {} : { turnIndex }),
+      });
+    });
+  }
 
   pi.on("session_start", async (event, ctx) => {
     writer = undefined;

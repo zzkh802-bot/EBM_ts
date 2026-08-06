@@ -100,6 +100,9 @@ export class AgentSessionRuntime {
         return { cancelled: result?.cancel === true };
     }
     async teardownCurrent(reason, targetSessionFile) {
+        // Settle any active response first so the aborted turn (including tool
+        // results) is persisted to the outgoing session before it is replaced.
+        await this.session.abort();
         await emitSessionShutdownEvent(this.session.extensionRunner, {
             type: "session_shutdown",
             reason,

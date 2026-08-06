@@ -304,7 +304,7 @@ export declare class InteractiveMode {
     private toggleToolOutputExpansion;
     private setToolsExpanded;
     private toggleThinkingBlockVisibility;
-    private openExternalEditor;
+    private handleOpenExternalEditor;
     clearEditor(): void;
     showError(errorMessage: string): void;
     showWarning(warningMessage: string): void;
@@ -336,6 +336,7 @@ export declare class InteractiveMode {
     private handleModelCommand;
     private findExactModelMatch;
     private getModelCandidates;
+    /** Update the footer's available provider count from the current snapshot without refreshing catalogs. */
     private updateAvailableProviderCount;
     private maybeWarnAboutAnthropicSubscriptionAuth;
     private maybeSaveImplicitProjectTrustAfterReload;

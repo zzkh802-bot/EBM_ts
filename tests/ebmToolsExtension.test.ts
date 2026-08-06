@@ -4,23 +4,68 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { registerEbmTools } from "../src/extensions/ebmTools.js";
+import { archiveSource } from "../src/tools/archive.js";
 import { renderGuidelineReadText, renderRetrieveCards } from "../src/extensions/guidelineTools.js";
 import { renderAbstractNavigation } from "../src/extensions/pubmedTools.js";
 import { initializePiSessionDirectory, piReadableSessionPath } from "../src/extensions/sessionPath.js";
 
 describe("EBM Pi extension tools", () => {
   afterEach(() => vi.unstubAllEnvs());
-  it("returns evidence-ready PubMed abstract paths with exact readable windows", () => {
+  it("provides a non-blocking clinical preflight immediately before report tools", () => {
+    const tools = new Map<string, { promptGuidelines?: string[] }>();
+    vi.stubEnv("GUIDELINE_MCP_URL", "");
+    registerEbmTools({
+      registerTool: (tool: { name: string; promptGuidelines?: string[] }) => tools.set(tool.name, tool),
+      on: () => undefined,
+      events: { emit: () => undefined },
+    } as never);
+
+    const writeGuidance = tools.get("report_write")?.promptGuidelines?.join("\n") ?? "";
+    const finalizeGuidance = tools.get("report_finalize")?.promptGuidelines?.join("\n") ?? "";
+    expect(writeGuidance).toContain("non-blocking clinical preflight");
+    expect(writeGuidance).toContain("keep unspecified facts unknown");
+    expect(writeGuidance).toContain("recalculate any stated clinical score");
+    expect(finalizeGuidance).toContain("same non-blocking clinical preflight");
+  });
+
+  it("exposes read-id or line-range anchor locators", () => {
+    const tools = new Map<string, { parameters?: { properties?: Record<string, { pattern?: string }>; required?: string[] }; promptGuidelines?: string[] }>();
+    vi.stubEnv("GUIDELINE_MCP_URL", "");
+    registerEbmTools({
+      registerTool: (tool: { name: string; parameters?: { properties?: Record<string, { pattern?: string }>; required?: string[] }; promptGuidelines?: string[] }) => tools.set(tool.name, tool),
+      on: () => undefined,
+      events: { emit: () => undefined },
+    } as never);
+
+    const schema = tools.get("evidence_add")?.parameters;
+    expect(schema?.properties).toHaveProperty("source_path");
+    expect(schema?.properties).toHaveProperty("read_id");
+    expect(schema?.properties).toHaveProperty("line_start");
+    expect(schema?.properties).toHaveProperty("line_end");
+    expect(schema?.properties).toHaveProperty("start_text");
+    expect(schema?.properties).toHaveProperty("end_text");
+    expect(schema?.properties).not.toHaveProperty("quote");
+    expect(schema?.properties).not.toHaveProperty("source_span_id");
+    expect(schema?.required ?? []).not.toContain("source_path");
+    expect(schema?.required ?? []).not.toContain("start_text");
+    expect(schema?.required ?? []).not.toContain("end_text");
+    expect(tools.get("evidence_add")?.promptGuidelines?.join("\n")).toContain("Choose exactly one locator mode");
+    expect(schema?.properties).not.toHaveProperty("source_id");
+  });
+
+  it("returns evidence-ready PubMed abstract paths with a canonical quote instruction", () => {
     const output = renderAbstractNavigation("session-1", [{
       path: "sources/read/trial/full.md",
       title: "Trial",
       bodyLineStart: 8,
-      content: "# Trial\n\n## Abstract\n\nResult line one.\nResult line two.\n",
-    }]);
+      content: "# Trial\n\n## Abstract\n\nResult line one.\nResult line two.\n\n## PubMed context\n\nNavigation/context only.\nDOI: 10.1000/test\n",
+    }] as never);
     expect(output).toContain("PMID: unknown");
     expect(output).toContain("Abstract preview: Result line one. Result line two.");
     expect(output).toContain("Readable abstract path: data/sessions/session-1/sources/read/trial/full.md");
-    expect(output).toContain("Exact abstract lines: 12-13");
+    expect(output).toContain("choose read_id with start_text/end_text (source_path optional)");
+    expect(output).not.toContain("Navigation/context only");
+    expect(output).not.toContain("10.1000/test");
     expect(output).not.toContain("Evidence source_path:");
     expect(output).not.toContain("Source map");
     expect(output).not.toContain("Read any archive window");
@@ -59,7 +104,23 @@ describe("EBM Pi extension tools", () => {
     expect(text).not.toContain("Joanna M Wardlaw");
   });
 
-  it("renders copy-ready evidence_add locations for retrieved candidate material", () => {
+  it("labels guideline search as document discovery rather than evidence", () => {
+    const tools = new Map<string, { description?: string; promptGuidelines?: string[] }>();
+    vi.stubEnv("GUIDELINE_MCP_URL", "https://guideline.example.test");
+    registerEbmTools({
+      registerTool: (tool: { name: string; description?: string; promptGuidelines?: string[] }) => tools.set(tool.name, tool),
+      on: () => undefined,
+      events: { emit: () => undefined },
+    } as never);
+    const search = tools.get("guideline_mcp_search");
+    const retrieve = tools.get("guideline_mcp_retrieve");
+    expect(search?.description).toContain("document-level candidates");
+    expect(search?.description).toContain("does not return citation-ready evidence");
+    expect(search?.promptGuidelines?.join(" ")).toContain("document candidates only");
+    expect(retrieve?.description).toContain("citation-capable quote source");
+  });
+
+  it("renders copy-ready verbatim material without asking the model to calculate line ranges", () => {
     const text = renderRetrieveCards("Candidates", [{
       title: "Hypertension guideline",
       sourcePath: "sources/read/hypertension.md",
@@ -68,13 +129,12 @@ describe("EBM Pi extension tools", () => {
       candidateMaterial: "Recommendation text.",
     }], (sourcePath) => `data/sessions/s1/${sourcePath}`);
 
-    expect(text).toContain("evidence_add location (copy these values; 1-based):");
-    expect(text).toContain("source_path: data/sessions/s1/sources/read/hypertension.md");
-    expect(text).toContain("offset: 21");
-    expect(text).toContain("limit: 4");
+    expect(text).toContain("readable chunk path: data/sessions/s1/sources/read/hypertension.md");
     expect(text).toContain("candidate material (identical to archived body):");
     expect(text).toContain("candidate materials, not evidence yet");
-    expect(text).toContain("never extend it or replace limit with an arbitrary value");
+    expect(text).toContain("choose read_id plus start_text/end_text (source_path optional)");
+    expect(text).not.toContain("offset:");
+    expect(text).not.toContain("limit:");
   });
 
   it("loads the project extension through Pi's resource loader", async () => {
@@ -131,8 +191,10 @@ describe("EBM Pi extension tools", () => {
       claim: "It works.",
       relation: "supports",
       source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
-      offset: 2,
-      limit: 1,
+      line_start: 1,
+      line_end: 2,
+      start_text: "exact",
+      end_text: "evidence",
     }, undefined, undefined, ctx);
 
     const report = await tools.get("report_write")!.execute("call-2", {
@@ -142,9 +204,64 @@ describe("EBM Pi extension tools", () => {
     }, undefined, undefined, ctx);
 
     const workspace = `data/sessions/${path.basename(sessionDir)}`;
-    expect(report.content[0].text).toContain(`Session workspace: ${workspace}`);
-    expect(report.content[0].text).toContain(`Verified report written: ${workspace}/reports/mortality-report.md`);
+    expect(report.content[0].text).toContain(`会话工作区：${workspace}`);
+    expect(report.content[0].text).toContain(`已写入并核验正式报告：${workspace}/reports/mortality-report.md`);
     expect(report.details).toMatchObject({ readablePath: `${workspace}/reports/mortality-report.md`, sessionWorkspace: workspace });
+  });
+
+  it("registers evidence with a required source path and exact anchors", async () => {
+    const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
+    vi.stubEnv("GUIDELINE_MCP_URL", "");
+    registerEbmTools({
+      registerTool: (tool: { name: string; execute: (...args: any[]) => Promise<any> }) => tools.set(tool.name, tool),
+      on: () => undefined,
+      events: { emit: () => undefined },
+    } as never);
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "ebm-pi-tools-"));
+    const sessionId = "session-1";
+    const sessionDir = await initializePiSessionDirectory(cwd, sessionId, { sessionName: "Source identity", firstPrompt: "Does it work?" });
+    const archive = await archiveSource({ sessionDir, kind: "read", title: "Stable study", sourceUrl: "https://example.test/study", content: "A stable exact finding." });
+    const ctx = { cwd, sessionManager: { getSessionId: () => sessionId } };
+
+    const evidence = await tools.get("evidence_add")!.execute("call-source-id", {
+      question: "Does it work?",
+      claim: "The finding is stable.",
+      relation: "supports",
+      source_path: archive.path,
+      line_start: archive.bodyLineStart,
+      line_end: archive.bodyLineStart + archive.lines - 1,
+      start_text: "A stable exact",
+      end_text: "finding.",
+    }, undefined, undefined, ctx);
+
+    expect(evidence.details.node).toMatchObject({ sourceId: archive.sourceId, documentId: archive.documentId, sourcePath: archive.path });
+  });
+
+  it("rejects anchors outside the declared line range", async () => {
+    const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
+    vi.stubEnv("GUIDELINE_MCP_URL", "");
+    registerEbmTools({
+      registerTool: (tool: { name: string; execute: (...args: any[]) => Promise<any> }) => tools.set(tool.name, tool),
+      on: () => undefined,
+      events: { emit: () => undefined },
+    } as never);
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "ebm-pi-tools-"));
+    const sessionId = "session-1";
+    const sessionDir = await initializePiSessionDirectory(cwd, sessionId, { sessionName: "Quote recovery", firstPrompt: "What is the bleeding risk?" });
+    await mkdir(path.join(sessionDir, "sources", "read"), { recursive: true });
+    await writeFile(path.join(sessionDir, "sources", "read", "study.md"), "严重出血年绝对增加率不超过 0.3%，低于卒中风险降低幅度。", "utf8");
+    const ctx = { cwd, sessionManager: { getSessionId: () => sessionId } };
+
+    await expect(tools.get("evidence_add")!.execute("call-1", {
+      question: "What is the bleeding tradeoff?",
+      claim: "The bleeding increase is smaller than the stroke reduction.",
+      relation: "supports",
+      source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
+      line_start: 2,
+      line_end: 2,
+      start_text: "严重出血年",
+      end_text: "卒中风险降低幅度。",
+    }, undefined, undefined, ctx)).rejects.toThrow(/line_start/);
   });
 
   it("saves a failed report draft and finalizes it after local edit", async () => {
@@ -167,16 +284,20 @@ describe("EBM Pi extension tools", () => {
       claim: "Mortality improved.",
       relation: "supports",
       source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
-      offset: 1,
-      limit: 1,
+      line_start: 1,
+      line_end: 1,
+      start_text: "mortality",
+      end_text: "improved",
     }, undefined, undefined, ctx);
     const ev2 = await tools.get("evidence_add")!.execute("call-2", {
       question: "Does it work?",
       claim: "Adverse events improved.",
       relation: "supports",
       source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
-      offset: 2,
-      limit: 1,
+      line_start: 2,
+      line_end: 2,
+      start_text: "adverse",
+      end_text: "improved",
     }, undefined, undefined, ctx);
 
     const failed = await tools.get("report_write")!.execute("call-3", {
@@ -187,13 +308,13 @@ describe("EBM Pi extension tools", () => {
         { number: 1, citation: "Study citation.", evidence_id: ev2.details.evidenceId },
       ],
     }, undefined, undefined, ctx);
-    expect(failed.content[0].text).toContain("Report verification failed");
+    expect(failed.content[0].text).toContain("报告核验失败");
     expect(failed.details.verified).toBe(false);
     expect(failed.details.draft.path).toBe("reports/drafts/draft-finalize-report.draft.md");
 
     const draftAbs = path.join(sessionDir, failed.details.draft.path);
     const draft = await readFile(draftAbs, "utf8");
-    expect(draft).toContain("Draft preview only");
+    expect(draft).toContain("这里只是草稿预览");
     await writeFile(draftAbs, draft.replace("Treatment works but citation is missing.", "Treatment works for mortality and adverse events [1]."), "utf8");
 
     const finalized = await tools.get("report_finalize")!.execute("call-4", {
@@ -205,9 +326,9 @@ describe("EBM Pi extension tools", () => {
       ],
     }, undefined, undefined, ctx);
 
-    expect(finalized.content[0].text).toContain("Final report written");
+    expect(finalized.content[0].text).toContain("正式报告：");
     const finalMd = await readFile(path.join(sessionDir, finalized.details.path), "utf8");
-    expect(finalMd).not.toContain("Draft preview only");
+    expect(finalMd).not.toContain("这里只是草稿预览");
     expect(finalMd.match(/^1\. \[1\]/gm)).toHaveLength(1);
     const metadata = JSON.parse(await readFile(path.join(sessionDir, `${finalized.details.path}.metadata.json`), "utf8")) as { references: Array<{ evidence_ids: string[] }> };
     expect(metadata.references[0]!.evidence_ids).toEqual([ev1.details.evidenceId, ev2.details.evidenceId].sort());
@@ -235,6 +356,7 @@ describe("EBM Pi extension tools", () => {
       "pubmed_read",
       "pubmed_search",
       "pubmed_similar",
+      "read_list",
       "report_finalize",
       "report_write",
       "research_frame_init",
@@ -258,8 +380,10 @@ describe("EBM Pi extension tools", () => {
       claim: "It works.",
       relation: "supports",
       source_path: piReadableSessionPath(cwd, sessionId, "sources/read/study.md"),
-      offset: 2,
-      limit: 1,
+      line_start: 1,
+      line_end: 2,
+      start_text: "exact",
+      end_text: "evidence",
     }, undefined, undefined, ctx);
 
     expect(result.content[0].text).toContain("Evidence archived");

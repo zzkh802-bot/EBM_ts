@@ -1,13 +1,23 @@
 import { once } from "node:events";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildAgentPrompt, createAgentApiServer, type AgentExecutor, type AgentRunInput, type RuntimeConfig } from "../src/server/agentApi.js";
+import { buildAgentPrompt, createAgentApiServer, type AgentExecutor, type AgentRunInput, type AgentRunResponse, type RuntimeConfig } from "../src/server/agentApi.js";
 import { buildPatientIntakePrompt, type PatientIntakeInput } from "../src/server/patientIntake.js";
+import { archiveSource } from "../src/tools/archive.js";
+import { addEvidence } from "../src/tools/evidence.js";
+import { writeReport } from "../src/tools/report.js";
 
-async function startApi(executor: AgentExecutor, runtimeConfig?: RuntimeConfig) {
-  const api = createAgentApiServer({ executor, ...(runtimeConfig ? { runtimeConfig } : {}) });
+type TestRunResponse = Omit<AgentRunResponse, "agent_trace" | "progress_updates" | "tools" | "summary"> & {
+  agent_trace: Array<{ kind: string; label?: string }>;
+  progress_updates: Array<Record<string, unknown>>;
+  tools: Array<Record<string, unknown>>;
+  summary: Record<string, unknown>;
+};
+
+async function startApi(executor: AgentExecutor, runtimeConfig?: RuntimeConfig, rootDir?: string, staticDir?: string) {
+  const api = createAgentApiServer({ executor, ...(runtimeConfig ? { runtimeConfig } : {}), ...(rootDir ? { rootDir } : {}), ...(staticDir ? { staticDir } : {}) });
   api.server.listen(0, "127.0.0.1");
   await once(api.server, "listening");
   const address = api.server.address();
@@ -47,15 +57,138 @@ describe("循医研究服务 API", () => {
       expect(prompt).toContain("不得只在聊天消息中输出摘要")
       expect(prompt).toContain("clinical-report-writing skill")
       expect(prompt).toContain("调用 report_write 前自检")
+      expect(prompt).toContain("只有研究目标、临床判断或面向医生的阶段发生实质变化时才说明进展")
+      expect(prompt).toContain("原文定位、登记证据和可自动恢复的工具重试")
       expect(prompt).not.toContain("完整呈现 PICO")
       expect(prompt).not.toContain("保留 PICO")
       expect(prompt).not.toContain("临床场景概述、循证问题、证据基础与证据状态")
       expect(prompt).not.toContain("必须使用独立的二级或三级标题")
     }
+    expect(publicPrompt).toContain("read、bash 等本地工具仍可用于读取和定位本会话已归档内容")
+    expect(publicPrompt).toContain("不使用 PubMed、公共网页或本地来源库检索")
     expect(low).not.toContain("最少必要")
     expect(maximum).not.toContain("指南推荐等级")
     expect(publicPrompt).toContain("面向临床人员")
-    expect(publicPrompt).toContain("本轮仅使用指南库")
+    expect(publicPrompt).toContain("本轮外部临床知识检索仅使用指南库")
+    expect(low).toContain("每个新的临床子问题先调用 source_library_search")
+    expect(low).toContain("所有可见的工具调用前说明")
+    expect(low).toContain("thinking_level=off")
+  });
+
+  it("keeps the evidence toolchain available when a legacy client sends search_enabled=false", () => {
+    const prompt = buildAgentPrompt(promptInput({ searchEnabled: false }));
+    expect(prompt).toContain("source_library_search")
+    expect(prompt).toContain("可按需使用已配置的检索工具")
+    expect(prompt).not.toContain("只使用当前会话中的既有材料")
+  });
+
+  it("returns verified source excerpts for a numbered report citation without exposing evidence IDs", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-citation-api-"));
+    const sessionId = "citation-session";
+    const workspaceName = "citation-workspace";
+    const workspace = path.join(rootDir, "data", "sessions", workspaceName);
+    await mkdir(path.join(rootDir, "data", "sessions", ".metadata", "workspaces"), { recursive: true });
+    await mkdir(workspace, { recursive: true });
+    await mkdir(path.join(workspace, ".metadata"), { recursive: true });
+    await writeFile(path.join(workspace, ".metadata", "session.json"), JSON.stringify({ sessionId, directory: workspaceName }), "utf8");
+    await writeFile(
+      path.join(rootDir, "data", "sessions", ".metadata", "workspaces", `${sessionId}.json`),
+      JSON.stringify({ directory: workspaceName }),
+      "utf8",
+    );
+    const source = await archiveSource({
+      sessionDir: workspace,
+      kind: "read",
+      title: "Randomized trial",
+      sourceUrl: "https://pubmed.ncbi.nlm.nih.gov/12345678/",
+      content: "# Trial\n\nThe intervention reduced recurrence without increasing severe bleeding.",
+    });
+    const evidence = await addEvidence({
+      sessionDir: workspace,
+      question: "Does treatment reduce recurrence?",
+      claim: "Treatment reduced recurrence.",
+      relation: "supports",
+      provenance: "primary_abstract",
+      confidence: "high",
+      sourcePath: source.path,
+      quote: "The intervention reduced recurrence without increasing severe bleeding.",
+    });
+    const mcpSource = await archiveSource({
+      sessionDir: workspace,
+      kind: "read",
+      title: "Chinese clinical guideline",
+      sourceUrl: "mcp://guideline/cma_2026_example",
+      sourceInstitution: "Chinese Medical Association",
+      content: "# Guideline\n\nThe guideline recommends treatment for eligible patients.",
+    });
+    const mcpEvidence = await addEvidence({
+      sessionDir: workspace,
+      question: "Does the guideline recommend treatment?",
+      claim: "The guideline recommends treatment.",
+      relation: "supports",
+      provenance: "guideline_official",
+      confidence: "high",
+      sourcePath: mcpSource.path,
+      quote: "The guideline recommends treatment for eligible patients.",
+    });
+    const report = await writeReport({
+      sessionDir: workspace,
+      title: "Citation details",
+      content: "# Conclusion\n\nTreatment reduced recurrence [1]. The guideline recommends treatment [2].",
+      references: [
+        { number: 1, citation: "Randomized trial. PMID 12345678.", evidenceId: evidence.id },
+        { number: 2, citation: "Chinese clinical guideline.", evidenceId: mcpEvidence.id },
+      ],
+    });
+    const executor: AgentExecutor = async () => ({ message: "unused" });
+    const { api, baseUrl } = await startApi(executor, undefined, rootDir);
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/research-sessions/${sessionId}/citations?report_path=${encodeURIComponent(report.path)}&number=1`);
+      const payload = await response.json() as Record<string, unknown>;
+
+      expect(response.status).toBe(200);
+      expect(payload).toMatchObject({
+        number: 1,
+        citation: "Randomized trial. PMID 12345678.",
+        evidence: [{
+          claim: "Treatment reduced recurrence.",
+          quote: "The intervention reduced recurrence without increasing severe bleeding.",
+          verified: true,
+          source: {
+            title: "Randomized trial",
+            url: "https://pubmed.ncbi.nlm.nih.gov/12345678/",
+          },
+        }],
+      });
+      expect(JSON.stringify(payload)).not.toContain(evidence.id);
+
+      const mcpResponse = await fetch(`${baseUrl}/api/v1/research-sessions/${sessionId}/citations?report_path=${encodeURIComponent(report.path)}&number=2`);
+      const mcpPayload = await mcpResponse.json() as { evidence: Array<{ source: Record<string, string> }> };
+      expect(mcpResponse.status).toBe(200);
+      expect(mcpPayload.evidence[0]!.source).toMatchObject({
+        title: "Chinese clinical guideline",
+        institution: "Chinese Medical Association",
+        url: "",
+      });
+
+      const outside = await mkdtemp(path.join(os.tmpdir(), "ebm-citation-outside-"));
+      const secret = path.join(outside, "secret.md");
+      await writeFile(secret, "must not be served", "utf8");
+      await symlink(secret, path.join(workspace, "reports", "leaked.md"));
+      const escapedFileResponse = await fetch(
+        `${baseUrl}/api/v1/research-sessions/${sessionId}/files?path=${encodeURIComponent("reports/leaked.md")}`,
+      );
+      expect(escapedFileResponse.status).toBe(404);
+
+      await writeFile(path.join(workspace, source.path), "# Trial\n\nThe archived source was changed after report generation.", "utf8");
+      const invalidResponse = await fetch(`${baseUrl}/api/v1/research-sessions/${sessionId}/citations?report_path=${encodeURIComponent(report.path)}&number=1`);
+      const invalidPayload = await invalidResponse.json() as { error: { code: string } };
+      expect(invalidResponse.status).toBe(409);
+      expect(invalidPayload.error.code).toBe("citation_evidence_unavailable");
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
   });
 
   it("creates an async run and exposes the completed normalized response", async () => {
@@ -82,10 +215,10 @@ describe("循医研究服务 API", () => {
       expect(accepted.status).toBe("queued");
 
       const result = await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "succeeded",
       );
-      expect(result).toMatchObject({ status: "succeeded", session_id: "pi-session-1", message: "这是可追溯的循证回答。" });
+      expect(result).toMatchObject({ status: "succeeded", stage: "idle", session_id: "pi-session-1", message: "这是可追溯的循证回答。" });
       expect(result.report_markdown).toContain("完整循证报告");
       expect(result.summary.request_timeout_seconds).toBe(600);
       expect(result.summary.retrieval_policy).toBe("all");
@@ -95,6 +228,70 @@ describe("循医研究服务 API", () => {
       expect(result.agent_trace.some((event: { kind: string }) => event.kind === "tool.completed")).toBe(true);
       expect(result.progress_updates).toEqual([expect.objectContaining({ text: "正在核对最新治疗建议。" })]);
       expect(result.tools).toEqual([{ id: "tool-1", name: "pubmed_search", status: "completed", result: "已找到候选文献。" }]);
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
+  });
+
+  it("classifies malformed route encoding as a client error", async () => {
+    const { api, baseUrl } = await startApi(async () => ({ message: "unused" }));
+    try {
+      const response = await fetch(`${baseUrl}/api/v1/agent-runs/%`);
+      const payload = await response.json() as Record<string, unknown>;
+      expect(response.status).toBe(400);
+      expect(payload).toMatchObject({
+        ok: false,
+        error: { code: "invalid_path_encoding" },
+      });
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
+  });
+
+  it("does not serve static files through symlinks outside the configured directory", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-static-api-"));
+    const staticDir = path.join(rootDir, "public");
+    const outside = await mkdtemp(path.join(os.tmpdir(), "ebm-static-outside-"));
+    await mkdir(staticDir, { recursive: true });
+    await writeFile(path.join(staticDir, "index.html"), "<main>safe</main>", "utf8");
+    const secret = path.join(outside, "secret.txt");
+    await writeFile(secret, "must not be served", "utf8");
+    await symlink(secret, path.join(staticDir, "leaked.txt"));
+
+    const { api } = await startApi(async () => ({ message: "unused" }), undefined, rootDir, staticDir);
+    const address = api.server.address();
+    if (!address || typeof address === "string") throw new Error("Expected a TCP test server");
+    try {
+      const safe = await fetch(`http://127.0.0.1:${address.port}/`);
+      expect(safe.status).toBe(200);
+      const escaped = await fetch(`http://127.0.0.1:${address.port}/leaked.txt`);
+      expect(escaped.status).toBe(404);
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
+  });
+
+  it("redacts credential-shaped diagnostics before returning an executor failure", async () => {
+    const executor: AgentExecutor = async () => {
+      throw new Error("provider failed: Authorization: Bearer RPC_TEST_SENTINEL");
+    };
+    const { api, baseUrl } = await startApi(executor);
+    try {
+      const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: "这是一个用于错误边界测试的临床问题。" }),
+      });
+      const accepted = await created.json() as { run_id: string };
+      const result = await eventually(
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
+        (value) => value.status === "failed",
+      );
+      expect(JSON.stringify(result)).not.toContain("RPC_TEST_SENTINEL");
+      expect(result.error?.message).toContain("[redacted]");
     } finally {
       api.server.close();
       await once(api.server, "close");
@@ -115,7 +312,7 @@ describe("循医研究服务 API", () => {
       });
       const accepted = await created.json() as { run_id: string };
       const result = await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "succeeded",
       );
       expect(receivedInput?.audienceMode).toBe("public");
@@ -200,7 +397,7 @@ describe("循医研究服务 API", () => {
       });
       const accepted = await created.json() as { run_id: string };
       const result = await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "succeeded",
       );
       expect(receivedInput?.thinkingLevel).toBe(thinkingLevel);
@@ -237,7 +434,7 @@ describe("循医研究服务 API", () => {
       });
       const accepted = await created.json() as { run_id: string };
       await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "succeeded",
       );
       expect(receivedInput).toMatchObject({ provider: "xinqiong", model: "deepseek-v4-flash" });
@@ -264,7 +461,7 @@ describe("循医研究服务 API", () => {
       });
       const accepted = await created.json() as { run_id: string };
       const result = await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "succeeded",
       );
       expect(receivedInput?.sessionId).toBe("pi-session-follow-up");
@@ -290,7 +487,7 @@ describe("循医研究服务 API", () => {
       });
       const accepted = await created.json() as { run_id: string };
       const result = await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "succeeded",
       );
       expect(receivedInput?.retrievalPolicy).toBe("mcp_only");
@@ -334,7 +531,7 @@ describe("循医研究服务 API", () => {
       const cancelled = await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}/cancel`, { method: "POST" });
       expect(cancelled.status).toBe(202);
       const result = await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<any>,
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "cancelled",
       );
       expect(result.message).toContain("中断");

@@ -42,6 +42,23 @@ const toolLabels: Record<string, string> = {
   read: '读取研究材料',
 }
 
+const shellActionLabel = (value: unknown) => {
+  const command = typeof value === 'object' && value !== null && 'command' in value && typeof value.command === 'string'
+    ? value.command
+    : ''
+  const normalized = command.toLowerCase()
+  if (/\b(rg|grep|egrep|fgrep)\b/.test(normalized)) return '查找文件内容'
+  if (/\b(sed|head|tail|awk|cut)\b/.test(normalized)) return '读取文件片段'
+  if (/\b(ls|find|tree|du|pwd)\b/.test(normalized)) return '查看文件目录'
+  if (/\b(env|printenv|set)\b/.test(normalized)) return '检查运行环境'
+  return '执行本地辅助命令'
+}
+
+const shellCommandDetail = (value: unknown) => {
+  if (typeof value !== 'object' || value === null || !('command' in value) || typeof value.command !== 'string') return ''
+  return value.command.replace(/\s+/g, ' ').trim().slice(0, 240)
+}
+
 const parseTime = (value?: string) => {
   const timestamp = value ? Date.parse(value) : Number.NaN
   return Number.isFinite(timestamp) ? timestamp : undefined
@@ -49,6 +66,7 @@ const parseTime = (value?: string) => {
 
 const formatDuration = (milliseconds?: number) => {
   if (milliseconds === undefined || !Number.isFinite(milliseconds) || milliseconds < 0) return '—'
+  if (milliseconds < 1_000) return '<1 秒'
   const seconds = Math.max(0, Math.floor(milliseconds / 1_000))
   if (seconds < 60) return `${seconds} 秒`
   const minutes = Math.floor(seconds / 60)
@@ -59,6 +77,11 @@ const startedAt = computed(() => parseTime(props.startedAt))
 const finishedAt = computed(() => parseTime(props.completedAt))
 const elapsed = computed(() => formatDuration((finishedAt.value ?? currentTime.value) - (startedAt.value ?? currentTime.value)))
 const progressUpdates = computed(() => (props.progressUpdates || []).filter((update) => update.text.trim()))
+const progressActivity = computed(() => progressUpdates.value.map((update, index, updates) => {
+  const started = parseTime(update.timestamp)
+  const ended = parseTime(updates[index + 1]?.timestamp) ?? finishedAt.value ?? currentTime.value
+  return { ...update, duration: formatDuration(started === undefined ? undefined : ended - started) }
+}))
 const errors = computed(() => props.trace.filter((item) =>
   ['run.cancelled', 'run.failed', 'model.error', 'research_frame.error'].includes(item.kind || ''),
 ))
@@ -66,15 +89,12 @@ const toolActivity = computed(() => (props.tools || [])
   .filter((tool) => tool.presentation !== 'preparation')
   .map((tool, index) => {
     const name = typeof tool.name === 'string' ? tool.name : 'tool'
-    const started = parseTime(typeof tool.started_at === 'string' ? tool.started_at : undefined)
-    const completed = parseTime(typeof tool.completed_at === 'string' ? tool.completed_at : undefined)
     const status = typeof tool.status === 'string' ? tool.status : 'completed'
-    const endedAt = completed ?? (status === 'running' ? currentTime.value : undefined)
     return {
       id: typeof tool.id === 'string' ? tool.id : `${name}-${index}`,
-      label: toolLabels[name] || name.replaceAll('_', ' '),
+      label: name === 'bash' ? shellActionLabel(tool.arguments) : toolLabels[name] || name.replaceAll('_', ' '),
+      detail: name === 'bash' ? shellCommandDetail(tool.arguments) : '',
       status,
-      duration: formatDuration(started === undefined || endedAt === undefined ? undefined : endedAt - started),
     }
   }))
 const activeTool = computed(() => toolActivity.value.find((tool) => tool.status === 'running'))
@@ -87,36 +107,35 @@ const fallbackCopy = computed(() => {
   return props.pending ? '正在梳理临床问题并准备下一步研究。' : '已形成可回看的研究记录。'
 })
 const hasActivity = computed(() => Boolean(props.pending || errors.value.length || progressUpdates.value.length || toolActivity.value.length))
-const offsetFromStart = (timestamp: string) => formatDuration((parseTime(timestamp) ?? currentTime.value) - (startedAt.value ?? currentTime.value))
 </script>
 
 <template>
   <section v-if="hasActivity" class="research-progress" :class="{ error: errors.length, complete: completed }" aria-label="研究进展">
     <div class="research-progress-head">
       <span>{{ title }}</span>
-      <small>{{ elapsed }}</small>
+      <small>总计 {{ elapsed }}</small>
     </div>
 
     <p class="research-progress-current">{{ latestUpdate || fallbackCopy }}</p>
 
-    <ol v-if="progressUpdates.length" class="research-progress-notes" aria-label="模型研究进展">
-      <li v-for="update in progressUpdates" :key="`${update.timestamp}-${update.text}`">
+    <ol v-if="progressActivity.length" class="research-progress-notes" aria-label="模型研究进展">
+      <li v-for="update in progressActivity" :key="`${update.timestamp}-${update.text}`">
         <i aria-hidden="true" />
         <span>{{ update.text }}</span>
-        <small>{{ offsetFromStart(update.timestamp) }}</small>
+        <small :title="`本阶段用时 ${update.duration}`">{{ update.duration }}</small>
       </li>
     </ol>
 
     <details v-if="toolActivity.length" class="research-progress-tools">
       <summary>
         <span>{{ activeTool ? `正在${activeTool.label}` : `研究操作 · ${toolActivity.length} 项` }}</span>
-        <small>{{ activeTool?.duration || '查看详情' }}</small>
+        <small>查看详情</small>
       </summary>
       <ol>
         <li v-for="tool in toolActivity" :key="tool.id" :class="tool.status">
           <i aria-hidden="true" />
-          <span>{{ tool.label }}</span>
-          <small>{{ tool.duration }}</small>
+          <span :title="tool.detail || tool.label">{{ tool.label }}</span>
+          <small>{{ tool.status === 'running' ? '进行中' : tool.status === 'error' ? '失败' : '完成' }}</small>
         </li>
       </ol>
     </details>

@@ -120,6 +120,10 @@ export declare class RpcClient {
         level: ThinkingLevel;
     } | null>;
     /**
+     * Get list of available thinking levels for the current model.
+     */
+    getAvailableThinkingLevels(): Promise<ThinkingLevel[]>;
+    /**
      * Set steering mode.
      */
     setSteeringMode(mode: "all" | "one-at-a-time"): Promise<void>;

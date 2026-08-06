@@ -22,6 +22,7 @@ if [[ -z "${DEEPSEEK_API_KEY:-}" ]]; then
 fi
 
 export PI_SKIP_VERSION_CHECK="${PI_SKIP_VERSION_CHECK:-1}"
+export EBM_STREAM_STALL_TIMEOUT_MS="${EBM_STREAM_STALL_TIMEOUT_MS:-90000}"
 # Keep this demo's Pi runtime state separate from the user's global ~/.pi/agent.
 # EBM_PI_AGENT_DIR is an explicit escape hatch for developers who need another sandbox.
 export PI_CODING_AGENT_DIR="${EBM_PI_AGENT_DIR:-$ROOT/data/pi-agent}"

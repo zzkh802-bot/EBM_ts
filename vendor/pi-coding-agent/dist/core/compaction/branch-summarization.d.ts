@@ -5,11 +5,13 @@
  * a summary of the branch being left so context isn't lost.
  */
 import type { AgentMessage, StreamFn } from "@earendil-works/pi-agent-core";
-import type { Model } from "@earendil-works/pi-ai/compat";
+import type { RetryCallbacks, RetryPolicy } from "@earendil-works/pi-ai";
+import type { Model, Usage } from "@earendil-works/pi-ai/compat";
 import type { ReadonlySessionManager, SessionEntry } from "../session-manager.ts";
 import { type FileOperations } from "./utils.ts";
 export interface BranchSummaryResult {
     summary?: string;
+    usage?: Usage;
     readFiles?: string[];
     modifiedFiles?: string[];
     aborted?: boolean;
@@ -54,6 +56,10 @@ export interface GenerateBranchSummaryOptions {
     reserveTokens?: number;
     /** Optional session stream function. Used to preserve SDK request behavior without mutating agent state. */
     streamFn?: StreamFn;
+    /** Retry policy for transient summarization errors. Reuses coding-agent's `settings.retry`. */
+    retry?: RetryPolicy;
+    /** Optional callbacks for retry reporting (e.g. TUI retry indicators). */
+    callbacks?: RetryCallbacks;
 }
 /**
  * Collect entries that should be summarized when navigating from one position to another.

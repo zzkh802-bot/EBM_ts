@@ -1,20 +1,27 @@
 import { randomUUID } from "node:crypto";
-import { spawn } from "node:child_process";
-import { access, copyFile, mkdir, readFile, readdir, stat } from "node:fs/promises";
+import { readFile, realpath, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { initResearchFrame } from "../tools/researchFrame.js";
-import { piSessionDirectory } from "../extensions/sessionPath.js";
+import { initializePiSessionDirectory, piSessionDirectory } from "../session/sessionPath.js";
 import { PatientIntakeError, type PatientIntakeExecutor, PatientWorkspace, validatePatientIntakeInput } from "./patientIntake.js";
+import { PiRpcSessionPool } from "./piRpcPool.js";
+import { buildPiRpcClientOptions, createDefaultPiRpcClient, preparePiRuntime, type PiRpcClientLike, type PiRpcClientOptions } from "./piRuntime.js";
+import { loadProjectEnv } from "./projectEnv.js";
+import { readCitationDetail } from "./citationService.js";
+import { listWorkspaceFiles, readWorkspaceFile, sessionWorkspace, WorkspaceServiceError } from "./workspaceService.js";
+import { readFinalReportRevisions } from "./reportPublication.js";
 
 const CONTRACT_VERSION = "xunyi-research/v1";
 const PATIENT_CONTRACT_VERSION = "xunyi-patient/v1";
 const MAX_REQUEST_BYTES = 1_048_576;
 const MAX_TRACE_EVENTS = 240;
 const MAX_TOOL_EVENTS = 160;
+const DEFAULT_STREAM_STALL_TIMEOUT_MS = 90_000;
 
 export type AgentRunStatus = "queued" | "running" | "cancelling" | "succeeded" | "failed" | "cancelled";
+export type ResearchStage = "idle" | "planning" | "retrieving" | "tooling" | "generating" | "network_wait";
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 export type AudienceMode = "clinician" | "public";
 export type RetrievalPolicy = "all" | "mcp_only";
@@ -67,6 +74,7 @@ type AccountConnection = {
   provider: "openai-codex" | "anthropic";
   status: AccountConnectionStatus;
   message: string;
+  createdAt: number;
   authorization?: { url?: string; instructions?: string; device_code?: string; verification_url?: string };
   prompt?: { type: "text" | "select" | "manual_code"; message: string; placeholder?: string; options?: Array<{ id: string; label: string; description?: string }> };
   resolvePrompt?: (value: string) => void;
@@ -94,10 +102,15 @@ export type AgentExecutionHooks = {
 
 export type AgentExecutor = (input: AgentRunInput, hooks: AgentExecutionHooks) => Promise<AgentExecutionResult>;
 
+export type { PiRpcClientOptions, PiRpcClientLike } from "./piRuntime.js";
+
+export type PiRpcExecutor = AgentExecutor & { dispose(): Promise<void> };
+
 export type AgentRunResponse = {
   contract_version: string;
   run_id: string;
   status: AgentRunStatus;
+  stage: ResearchStage;
   created_at: string;
   started_at?: string;
   completed_at?: string;
@@ -118,6 +131,7 @@ type InternalRun = {
   id: string;
   input: AgentRunInput;
   status: AgentRunStatus;
+  stage: ResearchStage;
   createdAt: string;
   startedAt?: string;
   completedAt?: string;
@@ -143,6 +157,7 @@ export class AgentRunStore {
       id: randomUUID(),
       input,
       status: "queued",
+      stage: "planning",
       createdAt: new Date().toISOString(),
       message: "任务已创建，等待循证研究服务运行。",
       agentTrace: [trace("run.queued", "任务已创建", "等待研究引擎启动")],
@@ -177,6 +192,7 @@ export class AgentRunStore {
       return;
     }
     run.status = "running";
+    run.stage = "retrieving";
     run.startedAt = new Date().toISOString();
     run.message = "循证研究服务正在检索和生成回答。";
     this.addTrace(run, trace("run.started", "任务已启动", `推理强度：${run.input.thinkingLevel}`));
@@ -201,6 +217,7 @@ export class AgentRunStore {
       for (const update of result.progressUpdates ?? []) this.addProgress(run, update);
       for (const tool of result.tools ?? []) this.addTool(run, tool);
       run.status = "succeeded";
+      run.stage = "idle";
       run.completedAt = new Date().toISOString();
       run.message = result.message.trim() || "Agent 已完成，但没有生成可展示的文本。";
       this.addTrace(run, trace("run.completed", "任务完成", "已收到最终回答"));
@@ -210,6 +227,7 @@ export class AgentRunStore {
         return;
       }
       run.status = "failed";
+      run.stage = "idle";
       run.completedAt = new Date().toISOString();
       run.message = "循证研究服务未能完成本次任务。";
       run.error = { code: "agent_execution_failed", message: errorMessage(error) };
@@ -219,17 +237,22 @@ export class AgentRunStore {
 
   private markCancelled(run: InternalRun): void {
     run.status = "cancelled";
+    run.stage = "idle";
     run.completedAt = new Date().toISOString();
     run.message = "任务已中断。";
     this.addTrace(run, trace("run.cancelled", "任务已中断", "研究引擎已收到取消信号"));
   }
 
   private addTrace(run: InternalRun, event: AgentTraceEvent): void {
+    if (event.kind === "tool.started") run.stage = event.label.includes("report") ? "generating" : "tooling";
+    if (event.kind === "model.error" || event.kind === "run.cancelling" || event.kind === "runtime.stream_stalled" || event.kind === "runtime.request_timed_out") run.stage = "network_wait";
     run.agentTrace.push(event);
     if (run.agentTrace.length > MAX_TRACE_EVENTS) run.agentTrace.splice(0, run.agentTrace.length - MAX_TRACE_EVENTS);
   }
 
   private addTool(run: InternalRun, event: Record<string, unknown>): void {
+    const name = typeof event.name === "string" ? event.name : "";
+    if (event.status === "running") run.stage = name === "report_write" || name === "report_finalize" ? "generating" : "tooling";
     const id = typeof event.id === "string" ? event.id : undefined;
     const existing = id ? run.tools.findIndex((item) => item.id === id) : -1;
     if (existing >= 0) run.tools[existing] = { ...run.tools[existing], ...event };
@@ -251,6 +274,7 @@ export class AgentRunStore {
       contract_version: CONTRACT_VERSION,
       run_id: run.id,
       status: run.status,
+      stage: run.stage,
       created_at: run.createdAt,
       ...(run.startedAt ? { started_at: run.startedAt } : {}),
       ...(run.completedAt ? { completed_at: run.completedAt } : {}),
@@ -316,7 +340,7 @@ export function createAgentApiServer(options: AgentApiServerOptions): { server: 
 }
 
 export async function loadRuntimeConfig(rootDir: string): Promise<RuntimeConfig> {
-  const env = { ...(await projectEnv(rootDir)), ...process.env };
+  const env = { ...(await loadProjectEnv(rootDir)), ...process.env };
   const accountAuth = await subscriptionAuthStatus(rootDir);
   const models: RuntimeModel[] = [
     {
@@ -352,15 +376,22 @@ export async function loadRuntimeConfig(rootDir: string): Promise<RuntimeConfig>
 }
 
 export class AccountConnectionStore {
+  private static readonly maxRetainedConnections = 32;
+  private static readonly completedRetentionMs = 15 * 60 * 1_000;
   private readonly connections = new Map<string, AccountConnection>();
 
   constructor(private readonly rootDir: string) {}
 
   async start(provider: string): Promise<AccountConnection> {
+    this.pruneConnections();
     if (provider !== "openai-codex" && provider !== "anthropic") {
       throw new ApiError(422, "unsupported_connection", "该服务暂不支持账户连接。");
     }
-    await preparePiAgentDirectory(this.rootDir);
+    await preparePiRuntime(this.rootDir, {
+      runtimeDirectory: "data/pi-agent",
+      sessionDirectory: "data/pi-sessions",
+      workspaceDirectory: "data/sessions",
+    });
     const runtime = await ModelRuntime.create({
       authPath: path.join(this.rootDir, "data", "pi-agent", "auth.json"),
       modelsPath: path.join(this.rootDir, "data", "pi-agent", "models.json"),
@@ -369,7 +400,7 @@ export class AccountConnectionStore {
       throw new ApiError(422, "subscription_login_unavailable", "当前运行时未提供该账户的订阅登录。");
     }
     const connection: AccountConnection = {
-      id: randomUUID(), provider, status: "waiting", message: "正在准备账户授权。", controller: new AbortController(),
+      id: randomUUID(), provider, status: "waiting", message: "正在准备账户授权。", createdAt: Date.now(), controller: new AbortController(),
     };
     this.connections.set(connection.id, connection);
     void runtime.login(provider, "oauth", {
@@ -390,10 +421,12 @@ export class AccountConnectionStore {
   }
 
   get(id: string): AccountConnection | undefined {
+    this.pruneConnections();
     return this.connections.get(id);
   }
 
   respond(id: string, value: unknown): AccountConnection {
+    this.pruneConnections();
     const connection = this.connections.get(id);
     if (!connection) throw new ApiError(404, "connection_not_found", "未找到该账户连接。");
     if (!connection.resolvePrompt || !connection.prompt) throw new ApiError(409, "connection_not_waiting", "当前连接不需要输入。");
@@ -406,6 +439,7 @@ export class AccountConnectionStore {
   }
 
   cancel(id: string): AccountConnection {
+    this.pruneConnections();
     const connection = this.connections.get(id);
     if (!connection) throw new ApiError(404, "connection_not_found", "未找到该账户连接。");
     if (connection.status === "waiting") {
@@ -414,6 +448,20 @@ export class AccountConnectionStore {
       connection.controller.abort();
     }
     return connection;
+  }
+
+  private pruneConnections(): void {
+    const now = Date.now();
+    for (const [id, connection] of this.connections) {
+      if (connection.status !== "waiting" && now - connection.createdAt >= AccountConnectionStore.completedRetentionMs) {
+        this.connections.delete(id);
+      }
+    }
+    const completed = [...this.connections.entries()]
+      .filter(([, connection]) => connection.status !== "waiting")
+      .sort(([, left], [, right]) => left.createdAt - right.createdAt);
+    const excess = this.connections.size - AccountConnectionStore.maxRetainedConnections;
+    for (const [id] of completed.slice(0, Math.max(0, excess))) this.connections.delete(id);
   }
 
   private handleNotification(connection: AccountConnection, event: { type: string; [key: string]: unknown }): void {
@@ -455,8 +503,8 @@ export class AccountConnectionStore {
   }
 }
 
-function publicConnection(connection: AccountConnection): Omit<AccountConnection, "controller" | "resolvePrompt"> {
-  const { controller: _controller, resolvePrompt: _resolvePrompt, ...visible } = connection;
+function publicConnection(connection: AccountConnection): Omit<AccountConnection, "controller" | "resolvePrompt" | "createdAt"> {
+  const { controller: _controller, resolvePrompt: _resolvePrompt, createdAt: _createdAt, ...visible } = connection;
   return visible;
 }
 
@@ -473,31 +521,61 @@ async function subscriptionAuthStatus(rootDir: string): Promise<{ openaiCodex: b
   }
 }
 
-export function createPiCliExecutor(input: { rootDir: string }): AgentExecutor {
-  return async (request, hooks) => {
+export function createPiRpcExecutor(input: {
+  rootDir: string;
+  clientFactory?: (options: PiRpcClientOptions) => PiRpcClientLike;
+  streamStallTimeoutMs?: number;
+}): PiRpcExecutor {
+  const rootDir = path.resolve(input.rootDir);
+  const pool = new PiRpcSessionPool<PiRpcClientLike>();
+  const factory = input.clientFactory ?? createDefaultPiRpcClient;
+  const configuredStreamStallTimeoutMs = input.streamStallTimeoutMs ?? Number(process.env.EBM_STREAM_STALL_TIMEOUT_MS);
+  const streamStallTimeoutMs = Number.isFinite(configuredStreamStallTimeoutMs) && configuredStreamStallTimeoutMs > 0
+    ? configuredStreamStallTimeoutMs
+    : DEFAULT_STREAM_STALL_TIMEOUT_MS;
+
+  const execute = async (request: AgentRunInput, hooks: AgentExecutionHooks): Promise<AgentExecutionResult> => {
     if (hooks.signal.aborted) throw abortError();
-    const rootDir = path.resolve(input.rootDir);
-    const piEntrypoint = path.join(rootDir, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
-    await access(piEntrypoint);
-    await preparePiAgentDirectory(rootDir);
-    let timedOut = false;
-    const localController = new AbortController();
-    const onExternalAbort = () => localController.abort(hooks.signal.reason);
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      localController.abort(new Error(`Agent request timed out after ${request.requestTimeoutSeconds}s`));
-    }, request.requestTimeoutSeconds * 1000);
-    hooks.signal.addEventListener("abort", onExternalAbort, { once: true });
-    try {
-      return await runPiCli({ rootDir, piEntrypoint, request, hooks, signal: localController.signal });
-    } catch (error) {
-      if (timedOut && !hooks.signal.aborted) throw new Error(`Agent request timed out after ${request.requestTimeoutSeconds}s`);
-      throw error;
-    } finally {
-      clearTimeout(timeout);
-      hooks.signal.removeEventListener("abort", onExternalAbort);
-    }
+    const runtimeKey = [request.provider, request.model, request.retrievalPolicy, request.maxIterations].join("\0");
+    return pool.run({
+      ...(request.sessionId ? { requestedSessionId: request.sessionId } : {}),
+      runtimeKey,
+      createClient: async () => {
+        const args = [
+          "--approve",
+          "--session-dir", path.join(rootDir, "data", "pi-sessions"),
+          "--no-extensions",
+          "--extension", path.join(rootDir, ".pi", "extensions", "ebm-providers.ts"),
+          "--extension", path.join(rootDir, ".pi", "extensions", "ebm-tools.ts"),
+          "--no-skills",
+          "--skill", path.join(rootDir, ".pi", "skills", "ebm-research", "SKILL.md"),
+          "--skill", path.join(rootDir, ".pi", "skills", "clinical-report-writing", "SKILL.md"),
+        ];
+        if (request.sessionId) args.push("--session", request.sessionId);
+        else args.push("--name", sessionWorkspaceLabel(request.question));
+        return factory(await buildPiRpcClientOptions(rootDir, {
+          runtimeDirectory: "data/pi-agent",
+          sessionDirectory: "data/pi-sessions",
+          workspaceDirectory: "data/sessions",
+          provider: request.provider,
+          model: request.model,
+          args,
+          extraEnv: {
+            PI_SKIP_VERSION_CHECK: "1",
+            PI_CODING_AGENT_DIR: path.join(rootDir, "data", "pi-agent"),
+            EBM_RETRIEVAL_POLICY: request.retrievalPolicy,
+            EBM_MAX_ITERATIONS: String(request.maxIterations),
+            EBM_STREAM_STALL_TIMEOUT_MS: "0",
+          },
+        }));
+      },
+      execute: (client, sessionId) => runPiRpc({ rootDir, request, hooks, client, sessionId, streamStallTimeoutMs }),
+    });
   };
+
+  const executor = execute as PiRpcExecutor;
+  executor.dispose = () => pool.dispose();
+  return executor;
 }
 
 async function handleRequest(request: IncomingMessage, response: ServerResponse, store: AgentRunStore, corsOrigin: string, runtimeConfig: () => Promise<RuntimeConfig>, accountConnections?: AccountConnectionStore, patientIntakeExecutor?: PatientIntakeExecutor, patientWorkspace = new PatientWorkspace(process.cwd()), staticDir?: string, rootDir = process.cwd()): Promise<void> {
@@ -516,7 +594,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
         ok: true,
         service: "xunyi-research-service",
         contract_version: CONTRACT_VERSION,
-        endpoints: ["GET /api/v1/runtime-config", "POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel", "POST /api/v1/patient-intake/messages", "POST /api/v1/patient-intake/summary", "GET /api/v1/research-sessions/{session_id}/files"],
+        endpoints: ["GET /api/v1/runtime-config", "POST /api/v1/agent-runs", "GET /api/v1/agent-runs/{run_id}", "POST /api/v1/agent-runs/{run_id}/cancel", "POST /api/v1/patient-intake/messages", "POST /api/v1/patient-intake/summary", "GET /api/v1/research-sessions/{session_id}/files", "GET /api/v1/research-sessions/{session_id}/citations"],
       });
       return;
     }
@@ -543,7 +621,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     }
     const workspaceMatch = /^\/api\/v1\/research-sessions\/([^/]+)\/files$/.exec(pathname);
     if (workspaceMatch && request.method === "GET") {
-      const sessionId = decodeURIComponent(workspaceMatch[1] ?? "");
+      const sessionId = decodePathSegment(workspaceMatch[1] ?? "");
       const requestedPath = url.searchParams.get("path");
       if (requestedPath) {
         sendJson(response, 200, await readWorkspaceFile(rootDir, sessionId, requestedPath));
@@ -551,6 +629,15 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
         const workspace = await sessionWorkspace(rootDir, sessionId);
         sendJson(response, 200, { session_id: sessionId, files: await listWorkspaceFiles(workspace) });
       }
+      return;
+    }
+    const citationMatch = /^\/api\/v1\/research-sessions\/([^/]+)\/citations$/.exec(pathname);
+    if (citationMatch && request.method === "GET") {
+      const sessionId = decodePathSegment(citationMatch[1] ?? "");
+      const reportPath = url.searchParams.get("report_path") ?? "";
+      const number = Number(url.searchParams.get("number"));
+      if (!Number.isInteger(number) || number < 1) throw new ApiError(422, "invalid_citation_number", "引用编号必须是正整数。 ");
+      sendJson(response, 200, await readCitationDetail(rootDir, sessionId, reportPath, number));
       return;
     }
     if (accountConnections && request.method === "POST" && pathname === "/api/v1/account-connections") {
@@ -561,7 +648,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     }
     const connectionMatch = /^\/api\/v1\/account-connections\/([^/]+)(?:\/(input|cancel))?$/.exec(pathname);
     if (accountConnections && connectionMatch) {
-      const id = decodeURIComponent(connectionMatch[1] ?? "");
+      const id = decodePathSegment(connectionMatch[1] ?? "");
       if (request.method === "GET" && !connectionMatch[2]) {
         const connection = accountConnections.get(id);
         if (!connection) throw new ApiError(404, "connection_not_found", "未找到该账户连接。");
@@ -590,7 +677,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     }
     const match = /^\/api\/v1\/agent-runs\/([^/]+)(?:\/(cancel))?$/.exec(pathname);
     if (match) {
-      const runId = decodeURIComponent(match[1] ?? "");
+      const runId = decodePathSegment(match[1] ?? "");
       if (request.method === "GET" && !match[2]) {
         const run = store.get(runId);
         if (!run) throw new ApiError(404, "run_not_found", "未找到该 Agent 任务。");
@@ -617,9 +704,20 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       ? error
       : error instanceof PatientIntakeError
         ? new ApiError(error.status, error.code, error.message)
+        : error instanceof WorkspaceServiceError
+          ? new ApiError(error.status, error.code, error.message)
         : new ApiError(500, "internal_error", errorMessage(error));
     const responseContract = pathname.startsWith("/api/v1/patient-intake/") ? PATIENT_CONTRACT_VERSION : CONTRACT_VERSION;
     sendJson(response, apiError.status, { ok: false, contract_version: responseContract, error: { code: apiError.code, message: apiError.message } });
+  }
+}
+
+function decodePathSegment(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch (error) {
+    if (error instanceof URIError) throw new ApiError(400, "invalid_path_encoding", "路径参数编码无效。");
+    throw error;
   }
 }
 
@@ -628,8 +726,15 @@ async function serveStatic(response: ServerResponse, staticDir: string, pathname
   const target = path.resolve(staticDir, requested);
   const insideStaticDir = target === staticDir || target.startsWith(`${staticDir}${path.sep}`);
   if (!insideStaticDir) return false;
-  const file = await readableFile(target) ? target : path.extname(requested) ? undefined : path.join(staticDir, "index.html");
-  if (!file || !await readableFile(file)) return false;
+  let staticRoot: string;
+  try {
+    staticRoot = await realpath(staticDir);
+  } catch {
+    return false;
+  }
+  const file = await safeStaticFile(staticRoot, target)
+    ?? (path.extname(requested) ? undefined : await safeStaticFile(staticRoot, path.join(staticDir, "index.html")));
+  if (!file) return false;
   const extension = path.extname(file);
   const contentType = ({
     ".css": "text/css; charset=utf-8",
@@ -645,11 +750,14 @@ async function serveStatic(response: ServerResponse, staticDir: string, pathname
   return true;
 }
 
-async function readableFile(file: string): Promise<boolean> {
+async function safeStaticFile(staticRoot: string, candidate: string): Promise<string | undefined> {
   try {
-    return (await stat(file)).isFile();
+    const resolved = await realpath(candidate);
+    const relative = path.relative(staticRoot, resolved);
+    if (relative && (relative.startsWith("..") || path.isAbsolute(relative))) return undefined;
+    return (await stat(resolved)).isFile() ? resolved : undefined;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
@@ -679,7 +787,10 @@ function validateAgentRunInput(value: unknown, runtimeConfig: RuntimeConfig): Ag
     ...(sessionId ? { sessionId } : {}),
     audienceMode,
     thinkingLevel,
-    searchEnabled: optionalBoolean(value.search_enabled, "search_enabled", true),
+    // Clinician research always keeps the evidence toolchain available. The
+    // former "current-session-only" mode caused the agent to fall back to
+    // ad-hoc filesystem inspection when it needed more evidence.
+    searchEnabled: true,
     retrievalPolicy,
     maxIterations,
     requestTimeoutSeconds,
@@ -706,144 +817,8 @@ async function readJsonBody(request: IncomingMessage): Promise<unknown> {
   }
 }
 
-async function preparePiAgentDirectory(rootDir: string): Promise<void> {
-  const agentDir = path.join(rootDir, "data", "pi-agent");
-  await mkdir(agentDir, { recursive: true });
-  await copyFile(path.join(rootDir, ".pi", "models.json"), path.join(agentDir, "models.json"));
-  await mkdir(path.join(rootDir, "data", "pi-sessions"), { recursive: true });
-  await mkdir(path.join(rootDir, "data", "sessions"), { recursive: true });
-}
-
-type WorkspaceFile = {
-  path: string;
-  kind: "report" | "research_frame" | "evidence" | "source";
-  size: number;
-  modified_at: string;
-};
-
-function safeSessionId(sessionId: string): string {
-  if (!sessionId || path.basename(sessionId) !== sessionId) throw new ApiError(422, "invalid_session_id", "无效的研究会话标识。 ");
-  return sessionId;
-}
-
-async function sessionWorkspace(rootDir: string, sessionId: string): Promise<string> {
-  const safeId = safeSessionId(sessionId);
-  const sessionsRoot = path.join(rootDir, "data", "sessions");
-  let mapping: { directory?: unknown };
-  try {
-    mapping = JSON.parse(await readFile(path.join(sessionsRoot, ".metadata", "workspaces", `${safeId}.json`), "utf8")) as { directory?: unknown };
-  } catch {
-    throw new ApiError(404, "workspace_not_found", "未找到该研究会话的工作区。 ");
-  }
-  if (typeof mapping.directory !== "string" || !mapping.directory || path.basename(mapping.directory) !== mapping.directory) {
-    throw new ApiError(404, "workspace_not_found", "未找到该研究会话的工作区。 ");
-  }
-  return path.join(sessionsRoot, mapping.directory);
-}
-
-function workspaceFileKind(relativePath: string): WorkspaceFile["kind"] {
-  if (relativePath === "notes/research_frame.md") return "research_frame";
-  if (relativePath.startsWith("reports/")) return "report";
-  if (relativePath.startsWith("evidence/")) return "evidence";
-  return "source";
-}
-
-function visibleWorkspacePath(relativePath: string): boolean {
-  return relativePath === "notes/research_frame.md"
-    || relativePath === "evidence/EVIDENCE.md"
-    || /^reports\/(?!drafts\/).+\.md$/.test(relativePath)
-    || /^evidence\/ev_[a-f0-9]{16}\.md$/.test(relativePath)
-    || /^sources\/(?:read|search)\/.+\/(?:full|toc)\.md$/.test(relativePath);
-}
-
-async function listWorkspaceFiles(workspace: string): Promise<WorkspaceFile[]> {
-  const files: WorkspaceFile[] = [];
-  const walk = async (relative = ""): Promise<void> => {
-    const directory = path.join(workspace, relative);
-    let entries;
-    try {
-      entries = await readdir(directory, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const child = path.posix.join(relative, entry.name);
-      if (entry.isDirectory()) await walk(child);
-      else if (entry.isFile() && visibleWorkspacePath(child)) {
-        const details = await stat(path.join(workspace, child));
-        files.push({ path: child, kind: workspaceFileKind(child), size: details.size, modified_at: details.mtime.toISOString() });
-      }
-    }
-  };
-  await Promise.all(["notes", "reports", "evidence", "sources"].map((directory) => walk(directory)));
-  return files.sort((left, right) => right.modified_at.localeCompare(left.modified_at));
-}
-
-async function readWorkspaceFile(rootDir: string, sessionId: string, relativePath: string): Promise<WorkspaceFile & { session_id: string; content: string }> {
-  if (!visibleWorkspacePath(relativePath)) throw new ApiError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
-  const workspace = await sessionWorkspace(rootDir, sessionId);
-  const absolutePath = path.resolve(workspace, relativePath);
-  if (!absolutePath.startsWith(`${workspace}${path.sep}`)) throw new ApiError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
-  let details;
-  try {
-    details = await stat(absolutePath);
-  } catch {
-    throw new ApiError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
-  }
-  if (!details.isFile()) throw new ApiError(404, "workspace_file_not_found", "未找到可展示的研究文件。 ");
-  return { session_id: sessionId, path: relativePath, kind: workspaceFileKind(relativePath), size: details.size, modified_at: details.mtime.toISOString(), content: await readFile(absolutePath, "utf8") };
-}
-
-async function readLatestFinalReport(rootDir: string, sessionId: string): Promise<{ path: string; markdown: string } | undefined> {
-  try {
-    const workspace = await sessionWorkspace(rootDir, sessionId);
-    const reportsDir = path.join(workspace, "reports");
-    const entries = (await readdir(reportsDir, { withFileTypes: true }))
-      .filter((entry) => entry.isFile() && entry.name.endsWith(".md"));
-    const candidates = await Promise.all(entries.map(async (entry) => {
-      const file = path.join(reportsDir, entry.name);
-      return { file, modified: (await stat(file)).mtimeMs };
-    }));
-    const latest = candidates.sort((left, right) => right.modified - left.modified)[0];
-    return latest ? { path: path.posix.join("reports", path.basename(latest.file)), markdown: (await readFile(latest.file, "utf8")).trim() } : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-async function runPiCli(input: { rootDir: string; piEntrypoint: string; request: AgentRunInput; hooks: AgentExecutionHooks; signal: AbortSignal }): Promise<AgentExecutionResult> {
-  const { rootDir, piEntrypoint, request, hooks, signal } = input;
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    ...(await projectEnv(rootDir)),
-    PI_SKIP_VERSION_CHECK: "1",
-    PI_CODING_AGENT_DIR: path.join(rootDir, "data", "pi-agent"),
-    EBM_RETRIEVAL_POLICY: request.retrievalPolicy,
-    EBM_MAX_ITERATIONS: String(request.maxIterations),
-  };
-  const args = [
-    piEntrypoint,
-    "--mode", "json",
-    "--approve",
-    "--model", `${request.provider}/${request.model}`,
-    "--thinking", request.thinkingLevel,
-    "--session-dir", path.join(rootDir, "data", "pi-sessions"),
-    "--no-extensions",
-    "--extension", path.join(rootDir, ".pi", "extensions", "ebm-providers.ts"),
-    "--extension", path.join(rootDir, ".pi", "extensions", "ebm-tools.ts"),
-    "--no-skills",
-    "--skill", path.join(rootDir, ".pi", "skills", "ebm-research", "SKILL.md"),
-    "--skill", path.join(rootDir, ".pi", "skills", "clinical-report-writing", "SKILL.md"),
-  ];
-  if (request.retrievalPolicy === "mcp_only") args.push("--exclude-tools", "bash");
-  if (request.sessionId) args.push("--session", request.sessionId);
-  else args.push("--name", sessionWorkspaceLabel(request.question));
-  args.push(buildAgentPrompt(request));
-
-  const child = spawn(process.execPath, args, { cwd: rootDir, env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
-  let stdoutBuffer = "";
-  let stderr = "";
-  let sessionId: string | undefined;
+async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks: AgentExecutionHooks; client: PiRpcClientLike; sessionId: string; streamStallTimeoutMs: number }): Promise<AgentExecutionResult> {
+  const { rootDir, request, hooks, client, sessionId, streamStallTimeoutMs } = input;
   let latestAnswer = "";
   const tools: Array<Record<string, unknown>> = [];
   const traceEvents: AgentTraceEvent[] = [];
@@ -862,30 +837,52 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
     if (tools.length > MAX_TOOL_EVENTS) tools.splice(0, tools.length - MAX_TOOL_EVENTS);
     hooks.onTool(event);
   };
-  const consume = (line: string) => {
-    if (!line.trim()) return;
-    let event: unknown;
-    try {
-      event = JSON.parse(line) as unknown;
-    } catch {
-      addTrace(trace("runtime.output", "运行输出无法解析", line.slice(0, 500)));
+  let activeToolExecutions = 0;
+  let streamStallTimer: ReturnType<typeof setTimeout> | undefined;
+  let terminalError: Error | undefined;
+  let rejectTermination: (error: Error) => void = () => undefined;
+  const termination = new Promise<never>((_resolve, reject) => { rejectTermination = reject; });
+  const clearStreamStallTimer = () => {
+    if (streamStallTimer) clearTimeout(streamStallTimer);
+    streamStallTimer = undefined;
+  };
+  const terminate = (error: Error) => {
+    if (terminalError) return;
+    terminalError = error;
+    clearStreamStallTimer();
+    void client.abort().catch(() => undefined);
+    rejectTermination(error);
+  };
+  const armStreamStallTimer = () => {
+    clearStreamStallTimer();
+    if (activeToolExecutions > 0 || terminalError) return;
+    streamStallTimer = setTimeout(() => {
+      addTrace(trace("runtime.stream_stalled", "模型流长时间无响应", `连续 ${Math.round(streamStallTimeoutMs / 1000)} 秒未收到模型活动，已中止本轮请求。`));
+      terminate(new Error(`Model stream stalled for ${streamStallTimeoutMs}ms`));
+    }, streamStallTimeoutMs);
+  };
+  const observeRuntimeActivity = (event: Record<string, unknown>) => {
+    if (event.type === "tool_execution_start") {
+      activeToolExecutions += 1;
+      clearStreamStallTimer();
       return;
     }
+    if (event.type === "tool_execution_end") {
+      activeToolExecutions = Math.max(0, activeToolExecutions - 1);
+      armStreamStallTimer();
+      return;
+    }
+    if (event.type === "agent_end" || event.type === "agent_settled") {
+      clearStreamStallTimer();
+      return;
+    }
+    if (event.type === "agent_start" || event.type === "message_start" || event.type === "message_update" || event.type === "message_end" || event.type === "turn_start" || event.type === "turn_end") {
+      armStreamStallTimer();
+    }
+  };
+  const consume = (event: unknown) => {
     if (!isRecord(event)) return;
-    if (event.type === "session" && typeof event.id === "string") {
-      sessionId = event.id;
-      hooks.setSessionId(sessionId);
-      addTrace(trace("runtime.session", "研究会话已创建", sessionId));
-      void initResearchFrame({
-        sessionDir: piSessionDirectory(rootDir, sessionId),
-        userQuestion: request.question,
-      }).then(() => {
-        addTrace(trace("research_frame.ready", "研究框架已就绪", "可在本题文档中查看并随研究进展更新。"));
-      }).catch((error) => {
-        addTrace(trace("research_frame.error", "研究框架暂不可用", errorMessage(error)));
-      });
-      return;
-    }
+    observeRuntimeActivity(event);
     if (event.type === "tool_execution_start") {
       const name = typeof event.toolName === "string" ? event.toolName : "tool";
       const id = typeof event.toolCallId === "string" ? event.toolCallId : undefined;
@@ -938,47 +935,61 @@ async function runPiCli(input: { rootDir: string; piEntrypoint: string; request:
     }
   };
 
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk: string) => {
-    stdoutBuffer += chunk;
-    const lines = stdoutBuffer.split(/\r?\n/);
-    stdoutBuffer = lines.pop() ?? "";
-    for (const line of lines) consume(line);
+  hooks.setSessionId(sessionId);
+  addTrace(trace("runtime.session", request.sessionId ? "研究会话已恢复" : "研究会话已创建", sessionId));
+  await initializePiSessionDirectory(rootDir, sessionId, {
+    sessionName: sessionWorkspaceLabel(request.question),
+    firstPrompt: request.question,
   });
-  child.stderr.setEncoding("utf8");
-  child.stderr.on("data", (chunk: string) => {
-    stderr = `${stderr}${chunk}`.slice(-4_000);
-  });
-
-  const forcedKill = { value: undefined as NodeJS.Timeout | undefined };
-  const abort = () => {
-    child.kill("SIGTERM");
-    forcedKill.value = setTimeout(() => child.kill("SIGKILL"), 5_000);
-  };
-  signal.addEventListener("abort", abort, { once: true });
   try {
-    const exitCode = await new Promise<number>((resolve, reject) => {
-      child.once("error", reject);
-      child.once("close", (code) => resolve(code ?? 1));
-    });
-    if (stdoutBuffer.trim()) consume(stdoutBuffer);
-    if (signal.aborted) throw abortError();
-    if (exitCode !== 0) throw new Error(`研究引擎异常退出（代码 ${exitCode}）。`);
-    const message = latestAnswer.trim();
+    await initResearchFrame({ sessionDir: piSessionDirectory(rootDir, sessionId), userQuestion: request.question });
+    addTrace(trace("research_frame.ready", "研究框架已就绪", "可在本题文档中查看并随研究进展更新。"));
+  } catch (error) {
+    addTrace(trace("research_frame.error", "研究框架暂不可用", errorMessage(error)));
+  }
+
+  await client.setThinkingLevel(request.thinkingLevel);
+  const state = await client.getState();
+  if (state.thinkingLevel !== request.thinkingLevel) {
+    addTrace(trace("runtime.thinking", "推理强度已由运行时调整", `${request.thinkingLevel} → ${state.thinkingLevel}`));
+  }
+  const unsubscribe = client.onEvent(consume);
+  const timeout = setTimeout(() => {
+    addTrace(trace("runtime.request_timed_out", "研究请求达到总时限", `总运行时间超过 ${request.requestTimeoutSeconds} 秒，已中止本轮请求。`));
+    terminate(new Error(`Agent request timed out after ${request.requestTimeoutSeconds}s`));
+  }, request.requestTimeoutSeconds * 1000);
+  const abort = () => terminate(abortError());
+  hooks.signal.addEventListener("abort", abort, { once: true });
+  try {
+    const reportsBefore = new Map((await readFinalReportRevisions(rootDir, sessionId)).map((report) => [report.path, report.revision]));
+    armStreamStallTimer();
+    const operation = (async () => {
+      const settled = client.waitForIdle((request.requestTimeoutSeconds + 5) * 1000);
+      await client.prompt(buildAgentPrompt(request));
+      await settled;
+    })();
+    await Promise.race([operation, termination]);
+    if (hooks.signal.aborted) throw abortError();
+    const message = ((await client.getLastAssistantText()) || latestAnswer).trim();
     if (!message) {
       const modelError = traceEvents.findLast((event) => event.kind === "model.error")?.detail;
       throw new Error(modelError || "研究引擎完成后未返回可展示的回答。");
     }
-    const report = sessionId ? await readLatestFinalReport(rootDir, sessionId) : undefined;
+    const report = (await readFinalReportRevisions(rootDir, sessionId))
+      .filter((candidate) => reportsBefore.get(candidate.path) !== candidate.revision)
+      .sort((left, right) => right.modified - left.modified)[0];
+    if (!report) throw new Error("研究引擎已返回回答，但本轮正式报告未生成或未更新。");
     return {
-      ...(sessionId ? { sessionId } : {}),
+      sessionId,
       message,
-      ...(report ? { reportMarkdown: report.markdown, reportPath: report.path } : {}),
-      ...(stderr ? { stderr } : {}),
+      reportMarkdown: report.markdown,
+      reportPath: report.path,
     };
   } finally {
-    signal.removeEventListener("abort", abort);
-    if (forcedKill.value) clearTimeout(forcedKill.value);
+    clearTimeout(timeout);
+    clearStreamStallTimer();
+    hooks.signal.removeEventListener("abort", abort);
+    unsubscribe();
   }
 }
 
@@ -1020,37 +1031,18 @@ function modelErrorSummary(value: string): string {
   return `${status ? `模型服务返回 ${status}：` : "模型服务错误："}${message}`.slice(0, 500);
 }
 
-async function projectEnv(rootDir: string): Promise<Record<string, string>> {
-  try {
-    const raw = await readFile(path.join(rootDir, ".env"), "utf8");
-    const values: Record<string, string> = {};
-    for (const line of raw.split(/\r?\n/)) {
-      const match = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line);
-      if (!match) continue;
-      const key = match[1] ?? "";
-      const rawValue = match[2] ?? "";
-      values[key] = rawValue.replace(/^(?:"([\s\S]*)"|'([\s\S]*)')$/, "$1$2");
-    }
-    return values;
-  } catch {
-    return {};
-  }
-}
-
 export function buildAgentPrompt(input: AgentRunInput): string {
   const audienceInstruction = "使用面向临床人员的中文；按临床决策需要呈现证据等级、效应量和适用边界。";
   const retrievalInstruction = input.retrievalPolicy === "mcp_only"
-    ? "本轮仅使用指南库：只使用 guideline_mcp_search、guideline_mcp_retrieve、guideline_mcp_read 及证据/报告工具；禁止 PubMed、公共网页和本地来源库检索。若指南证据不足，明确报告证据缺口，不得改用其他检索来源。最终面向用户的报告不得出现 MCP、RAG、工具调用、内部文件路径或内部 evidence ID。"
-    : input.searchEnabled
-      ? "可按需使用已配置的检索工具。"
-      : "用户要求不进行外部检索；只使用当前会话中的既有材料。";
+    ? "本轮外部临床知识检索仅使用指南库：使用 guideline_mcp_search、guideline_mcp_retrieve、guideline_mcp_read，不使用 PubMed、公共网页或本地来源库检索。Pi 的 read、bash 等本地工具仍可用于读取和定位本会话已归档内容，但不得借此增加其他外部检索来源。若指南证据不足，明确报告证据缺口。最终面向用户的报告不得出现 MCP、RAG、工具调用、内部文件路径或内部 evidence ID。"
+    : "可按需使用已配置的检索工具。检索顺序：每个新的临床子问题先调用 source_library_search；若返回直接相关的历史来源，优先用其 source_url 调用 web_read 复用本地归档，再用 guideline_mcp_search/retrieve/read 补充或核验。只有本地库无直接相关来源、需要最新版本，或需要解决指南冲突时，才转向 MCP/PubMed/web。不要把 guideline_mcp_search 的文档候选当作证据片段；只有读取文档或 retrieve 返回的片段后才能登记证据。不要通过目录扫描寻找证据。";
   return [
-    "你是循医的循证研究服务。请输出中文、可追溯且不过度断言的循证回答。",
+    "你是循医的循证研究服务。请输出中文、可追溯且不过度断言的循证回答。所有可见的工具调用前说明、阶段进展和中间计划都必须使用简短中文；thinking_level=off 时不要输出英文计划，直接调用工具。",
     audienceInstruction,
     "医生版正式报告必须遵循 clinical-report-writing skill：以临床总决策拆出最少的、能改变选择的循证子问题；每个分析小节先给出裁决，再解释证据如何支持或限制它，并回到当前病例的适用条件。报告标题与结构由该 skill 和实际临床决策决定，不得按文献逐篇罗列，不得把内部工具、文件路径或检索日志写给医生。",
     "调用 report_write 前自检：每个关键子问题都说明了待裁决主张、直接或间接证据、证据能与不能推出什么、对病例意味着什么；关键医学判断、阈值、疗效或安全性数字紧跟编号引用；正文引用与参考文献编号完全对应。",
     "本轮必须生成正式循证报告：在最终回复前调用 report_write；若 report_write 只保存了 draft，则修复后调用 report_finalize。不得只在聊天消息中输出摘要而跳过正式报告文件。最终聊天消息使用自然、简洁的中文答复，概括结论、重要边界和下一步，不复制完整报告；该摘要会与正式报告同时展示。",
-    "研究过程中，如下一步值得向医生说明，可在工具调用前用一句简短中文说明正在核对的临床事项。不要暴露工具参数、内部路径，也不要把未经核验的中间发现写成结论；无需为了展示而凑数量，也不要重复已经说明的进展。",
+    "研究过程中，可在工具调用前用一句简短中文说明对医生有意义的进展。只有研究目标、临床判断或面向医生的阶段发生实质变化时才说明进展，例如完成问题框定、找到会改变决策的关键证据、发现重要冲突或缺口、停止检索并进入写作。原文定位、登记证据和可自动恢复的工具重试属于内部操作，无需播报；同一阶段不要反复说明‘证据已足够’或下一项内部动作。不要暴露工具参数、内部路径，也不要把未经核验的中间发现写成结论；无需为了展示而凑数量。",
     retrievalInstruction,
     `本轮最大工具迭代预算为 ${input.maxIterations}（提示性约束）。`,
     "临床问题：",
@@ -1117,7 +1109,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return redactDiagnostic(error instanceof Error ? error.message : String(error));
+}
+
+function redactDiagnostic(value: string): string {
+  return value
+    .replace(/(\bAuthorization\s*:\s*(?:Bearer|Basic)\s+)[^\s,;]+/gi, "$1[redacted]")
+    .replace(/(\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password)\b\s*[:=]\s*)[^\s,;]+/gi, "$1[redacted]")
+    .replace(/([?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|signature)=)[^&#\s]+/gi, "$1[redacted]")
+    .replace(/\bhttps?:\/\/[^\s]*(?:webhook|\/hooks\/)[^\s]*/gi, "[redacted-url]")
+    .slice(0, 2_000);
 }
 
 function abortError(): Error {

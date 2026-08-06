@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { archiveToolText, readableArchivePath } from "../src/extensions/archiveOutput.js";
 import { archiveSource, stableArchiveName } from "../src/tools/archive.js";
+import { addEvidenceFromAnchors } from "../src/tools/evidence.js";
 
 describe("source archive", () => {
   it("uses semantic deterministic names and writes source metadata", async () => {
@@ -15,6 +16,52 @@ describe("source archive", () => {
     expect(saved).toContain("source_url: \"https://example.com\"");
     expect(saved).toContain("body");
     expect(record.sha256).toHaveLength(64);
+  });
+
+  it("assigns one document identity and distinct source identities to MCP chunks", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
+    const first = await archiveSource({
+      sessionDir, kind: "read", layout: "file", title: "Stroke guideline",
+      sourceUrl: "mcp://guideline/g1#chunk-1", content: "First recommendation.",
+    });
+    const second = await archiveSource({
+      sessionDir, kind: "read", layout: "file", title: "Stroke guideline",
+      sourceUrl: "mcp://guideline/g1#chunk-2", content: "Second recommendation.",
+    });
+
+    expect(first.documentId).toMatch(/^doc_[a-f0-9]{16}$/);
+    expect(first.sourceId).toMatch(/^src_[a-f0-9]{16}$/);
+    expect(second.documentId).toBe(first.documentId);
+    expect(second.sourceId).not.toBe(first.sourceId);
+    expect(archiveToolText(first).text).toContain("After read, use the returned read_id");
+    expect(archiveToolText(first).text).toContain("    8│First recommendation.");
+  });
+
+  it("keeps archive previews free of source-span IDs while supporting exact anchors", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
+    const record = await archiveSource({
+      sessionDir,
+      kind: "read",
+      title: "Web trial",
+      sourceUrl: "https://example.test/trial",
+      content: "The intervention reduced the primary outcome.",
+    });
+    const output = archiveToolText(record, readableArchivePath("session-1", record.path)).text;
+
+    expect(output).not.toContain("source_span_id");
+    expect(output).toContain("The intervention reduced the primary outcome.");
+    const evidence = await addEvidenceFromAnchors({
+      sessionDir,
+      question: "Does the intervention work?",
+      claim: "The intervention reduced the primary outcome.",
+      relation: "supports",
+      sourcePath: record.path,
+      lineStart: record.bodyLineStart,
+      lineEnd: record.bodyLineStart + record.lines - 1,
+      startText: "The intervention",
+      endText: "outcome.",
+    });
+    expect(evidence).toMatchObject({ sourceId: record.sourceId, documentId: record.documentId, quote: record.content });
   });
 
   it("preserves non-Latin semantics and never overwrites a different source revision", async () => {
@@ -102,7 +149,7 @@ describe("source archive", () => {
     expect(output.text).toContain("Preview truncated at 5000 bytes");
     expect(output.text).toContain("Continue without gaps");
     expect(output.text).toMatch(/Continue without gaps.*offset=\d+, limit=200/);
-    expect(output.text).toContain("For evidence_add, use this readable archive path with the exact 1-based offset/limit");
+    expect(output.text).toContain("After read, use the returned read_id");
   });
 
   it("normalizes content before hashing, archiving, and returning model-visible text", async () => {
@@ -117,5 +164,23 @@ describe("source archive", () => {
     expect(record.content.split("\n").length).toBeGreaterThan(1);
     expect(record.lines).toBe(record.content.split("\n").length);
     expect(saved.split("\n").slice(record.bodyLineStart - 1).join("\n")).toBe(record.content);
+  });
+
+  it("returns exactly the same cleaned markup that it persists as the citation body", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
+    const record = await archiveSource({
+      sessionDir,
+      kind: "read",
+      title: "HTML guideline",
+      contentFormat: "html",
+      content: '<section><h2>Recommendation</h2><p>Use treatment when BP &lt;185/110 mmHg.</p><table><tr><th>Group</th><th>Dose</th></tr><tr><td>Adult</td><td>5 mg</td></tr></table></section>',
+    });
+    const saved = await readFile(path.join(sessionDir, record.path), "utf8");
+    const archivedBody = saved.split("\n").slice(record.bodyLineStart - 1).join("\n");
+
+    expect(record.content).toBe(archivedBody);
+    expect(record.content).toContain("## Recommendation");
+    expect(record.content).toContain("| Adult");
+    expect(record.content).not.toContain("<section>");
   });
 });

@@ -68,6 +68,8 @@ describe("archived web tools", () => {
       discoveryQuery: "成人急性髓系白血病 大剂量阿糖胞苷 标准剂量多药联合 巩固治疗 DFS OS",
       archive: {
         path: "sources/read/jalsg/full.md",
+        documentId: "doc_jalsg",
+        sourceId: "src_jalsg",
         sha256: "sha-jalsg",
         chars: 1000,
         lines: 10,
@@ -82,6 +84,8 @@ describe("archived web tools", () => {
       provider: "pubmed",
       archive: {
         path: "sources/read/other/full.md",
+        documentId: "doc_other",
+        sourceId: "src_other",
         sha256: "sha-other",
         chars: 1000,
         lines: 10,
@@ -104,6 +108,8 @@ describe("archived web tools", () => {
       provider: "jina",
       archive: {
         path: "sources/read/1482027/full.md",
+        documentId: "doc_guideline",
+        sourceId: "src_guideline",
         sha256: "sha-guideline",
         chars: 1000,
         lines: 10,
@@ -118,6 +124,8 @@ describe("archived web tools", () => {
       provider: "pubmed",
       archive: {
         path: "sources/read/article/full.md",
+        documentId: "doc_article",
+        sourceId: "src_article",
         sha256: "sha-article",
         chars: 1000,
         lines: 10,
@@ -143,6 +151,8 @@ describe("archived web tools", () => {
         provider: "pubmed",
         archive: {
           path: `sources/read/${index}/full.md`,
+          documentId: `doc_${index}`,
+          sourceId: `src_${index}`,
           sha256: `sha-${index}`,
           chars: 1000,
           lines: 10,
@@ -196,6 +206,40 @@ describe("archived web tools", () => {
     const saved = await readFile(path.join(sessionDir, result.archive.path), "utf8");
     expect(saved.split("\n").slice(result.archive.bodyLineStart - 1).join("\n")).toBe(result.archive.content);
     expect(mock.calls[0]!.input).toBe("https://r.jinaai.cn/https://example.com/study");
+  });
+
+  it("rejects a Jina access-verification page instead of archiving it as evidence", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
+    const challenge = [
+      "Title: Just a moment...",
+      "Warning: This page maybe requiring CAPTCHA.",
+      "## Performing security verification",
+      "This page is displayed while the website verifies you are not a bot.",
+    ].join("\n\n");
+    const mock = mockFetch([new Response(challenge, { status: 200 })]);
+
+    const result = await readWeb({ sessionDir, url: "https://example.com/protected-study", fetcher: mock.fetcher });
+
+    expect(result).toMatchObject({ ok: false, error: { code: "all_readers_failed" } });
+    expect(await readdir(sessionDir)).toHaveLength(0);
+  });
+
+  it("falls back to Firecrawl when Jina returns an access-verification page", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
+    const challenge = "Title: Just a moment...\n\nWarning: CAPTCHA required.\n\nPerforming security verification.";
+    const mock = mockFetch([
+      new Response(challenge, { status: 200 }),
+      Response.json({ data: { markdown: "# Clinical guideline\n\nRecommendation text with enough source detail.", metadata: { title: "Clinical guideline" } } }),
+    ]);
+
+    const result = await readWeb({
+      sessionDir,
+      url: "https://example.com/protected-study",
+      fetcher: mock.fetcher,
+      firecrawlApiKey: "test-key",
+    });
+
+    expect(result).toMatchObject({ ok: true, provider: "firecrawl" });
   });
 
   it("uses MinerU before web readers for document URLs", async () => {

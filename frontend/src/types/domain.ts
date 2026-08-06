@@ -27,6 +27,7 @@ export interface ResearchProgressUpdate {
 }
 
 export type AgentRunStatus = 'queued' | 'running' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled'
+export type AgentStage = 'idle' | 'planning' | 'retrieving' | 'tooling' | 'generating' | 'network_wait'
 
 export interface AgentRunRequest {
   question: string
@@ -72,6 +73,7 @@ export interface AgentRunResponse {
   contract_version: string
   run_id: string
   status: AgentRunStatus
+  stage?: AgentStage
   created_at?: string
   started_at?: string
   completed_at?: string
@@ -193,11 +195,29 @@ export interface WorkspaceFileResponse extends WorkspaceFile {
   content: string
 }
 
+export interface CitationEvidenceExcerpt {
+  claim: string
+  quote: string
+  relation: 'supports' | 'partially_supports' | 'refutes'
+  provenance: string
+  confidence: 'low' | 'moderate' | 'high'
+  verified: true
+  source: {
+    title: string
+    institution?: string
+    url: string
+  }
+}
+
+export interface CitationDetailResponse {
+  number: number
+  citation: string
+  evidence: CitationEvidenceExcerpt[]
+}
+
 export interface WorkspaceAsset extends ClinicianDocument {
   id: string
   sessionId: string
   sessionTitle: string
   sessionUpdatedAt: string
 }
-
-export type AgentStage = 'idle' | 'planning' | 'retrieving' | 'tooling' | 'generating' | 'network_wait'

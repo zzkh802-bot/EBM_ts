@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -15,8 +15,7 @@ async function fixture() {
     claim: "Treatment reduced mortality.",
     relation: "supports",
     sourcePath: "sources/read/study.md",
-    offset: 2,
-    limit: 1,
+    quote: "reduced mortality",
   });
   return { sessionDir, evidence };
 }
@@ -81,8 +80,7 @@ describe("verified Markdown reports", () => {
       claim: "Second source supports treatment.",
       relation: "supports",
       sourcePath: "sources/read/study2.md",
-      offset: 1,
-      limit: 1,
+      quote: "second result",
     });
 
     const report = await writeReport({
@@ -111,8 +109,7 @@ describe("verified Markdown reports", () => {
       claim: "Second source supports treatment.",
       relation: "supports",
       sourcePath: "sources/read/study2.md",
-      offset: 1,
-      limit: 1,
+      quote: "second result",
     });
 
     const report = await writeReport({
@@ -142,8 +139,7 @@ describe("verified Markdown reports", () => {
       claim: "Second source supports treatment.",
       relation: "supports",
       sourcePath: "sources/read/study2.md",
-      offset: 1,
-      limit: 1,
+      quote: "second result",
     });
     await expect(writeReport({
       sessionDir,
@@ -178,7 +174,7 @@ describe("verified Markdown reports", () => {
     expect(draft.path).toMatch(/reports\/drafts\/draft-report\.draft\.md$/);
     const saved = await readFile(path.join(sessionDir, draft.path), "utf8");
     expect(saved).toContain("## 参考文献");
-    expect(saved).toContain("Draft preview only");
+    expect(saved).toContain("这里只是草稿预览");
     expect(saved).toContain("1. [1] Randomized trial of the intervention.");
     await expect(readFile(path.join(sessionDir, `${draft.path}.metadata.json`), "utf8")).rejects.toThrow();
   });
@@ -245,8 +241,7 @@ describe("verified Markdown reports", () => {
       claim: "Second source supports treatment.",
       relation: "supports",
       sourcePath: "sources/read/study2.md",
-      offset: 1,
-      limit: 1,
+      quote: "second result",
     });
     const report = await writeReport({
       sessionDir,
@@ -287,6 +282,38 @@ describe("verified Markdown reports", () => {
     expect(revised.path).toBe("reports/高血压治疗循证报告-2025-2.md");
   });
 
+  it("repairs a matching report whose metadata sidecar is missing", async () => {
+    const { sessionDir, evidence } = await fixture();
+    const input = {
+      sessionDir,
+      title: "Recoverable report",
+      content: `# Conclusion\n\nTreatment reduced mortality [Evidence ${evidence.id}](../evidence/${evidence.id}.md).`,
+    };
+    const first = await writeReport(input);
+    await rm(path.join(sessionDir, `${first.path}.metadata.json`));
+
+    const recovered = await writeReport(input);
+
+    expect(recovered.path).toBe(first.path);
+    await expect(readFile(path.join(sessionDir, `${first.path}.metadata.json`), "utf8")).resolves.toContain(first.sha256);
+  });
+
+  it("does not claim success when a matching report has a conflicting metadata sidecar", async () => {
+    const { sessionDir, evidence } = await fixture();
+    const input = {
+      sessionDir,
+      title: "Conflicting sidecar report",
+      content: `# Conclusion\n\nTreatment reduced mortality [Evidence ${evidence.id}](../evidence/${evidence.id}.md).`,
+    };
+    const first = await writeReport(input);
+    await writeFile(path.join(sessionDir, `${first.path}.metadata.json`), JSON.stringify({ sha256: "wrong" }), "utf8");
+
+    const next = await writeReport(input);
+
+    expect(next.path).toBe("reports/conflicting-sidecar-report-2.md");
+    await expect(readFile(path.join(sessionDir, `${next.path}.metadata.json`), "utf8")).resolves.toContain(next.sha256);
+  });
+
   it("rejects unknown or source-mismatched evidence references", async () => {
     const { sessionDir, evidence } = await fixture();
     await expect(writeReport({
@@ -313,8 +340,7 @@ describe("verified Markdown reports", () => {
       relation: "supports",
       provenance: "guideline_mirror_unverified",
       sourcePath: "mirror.md",
-      offset: 1,
-      limit: 1,
+      quote: "Unverified guideline recommendation.",
     });
     await expect(writeReport({
       sessionDir,
