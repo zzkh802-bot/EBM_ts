@@ -29,7 +29,7 @@ describe('研究记录抽屉', () => {
     expect(sessions.sessions.some((session) => session.id === inFlightSessionId)).toBe(true)
   })
 
-  it('并行研究时保持侧栏顺序稳定，避免更新时间刷新导致列表跳动', async () => {
+  it('按用户最后一次提问排序，不因模型进度更新时间刷新而跳动', async () => {
     const pinia = createPinia()
     setActivePinia(pinia)
     const router = createAppRouter(createMemoryHistory())

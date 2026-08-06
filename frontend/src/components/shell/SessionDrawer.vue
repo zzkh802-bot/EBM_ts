@@ -9,6 +9,11 @@ const ui = useUiStore()
 const router = useRouter()
 const query = ref('')
 
+const lastQueryAt = (session: (typeof sessions.sessions)[number]) =>
+  [...session.messages].reverse().find((message) => message.role === 'user')?.createdAt
+  || session.lastRunAt
+  || session.updatedAt
+
 const filtered = computed(() => {
   const text = query.value.trim().toLowerCase()
   const matching = sessions.sessions.filter((session) =>
@@ -17,13 +22,10 @@ const filtered = computed(() => {
       || session.title.toLowerCase().includes(text)
       || session.clinicalQuestion.toLowerCase().includes(text)
       || session.messages.some((message) => message.content.toLowerCase().includes(text))))
-  // Every progress/tool update touches updatedAt. Re-sorting while several
-  // sessions are running makes the drawer jump under the pointer and makes
-  // selecting a specific session unreliable. Keep the creation order stable
-  // during active runs; restore recency ordering once all runs settle.
-  return run.anyBusy
-    ? [...matching]
-    : [...matching].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+  // Progress/tool updates touch updatedAt, but the drawer should reflect the
+  // user's latest query—not whichever model happened to emit an event last.
+  // The last user-message timestamp remains stable while that query runs.
+  return [...matching].sort((left, right) => lastQueryAt(right).localeCompare(lastQueryAt(left)))
 })
 
 const openSession = (id: string) => {
