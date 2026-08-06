@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PiRpcSessionPool, type PoolablePiRpcClient } from "../src/server/piRpcPool.js";
+import { DEFAULT_MAX_CONCURRENT_SESSIONS, parseMaxConcurrentSessions, PiRpcSessionPool, type PoolablePiRpcClient } from "../src/server/piRpcPool.js";
 
 class FakeClient implements PoolablePiRpcClient {
   starts = 0;
@@ -22,6 +22,14 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 }
 
 describe("PiRpcSessionPool", () => {
+  it("uses eight sessions by default and accepts a bounded environment override", () => {
+    expect(DEFAULT_MAX_CONCURRENT_SESSIONS).toBe(8);
+    expect(parseMaxConcurrentSessions("32")).toBe(32);
+    expect(parseMaxConcurrentSessions("0")).toBe(8);
+    expect(parseMaxConcurrentSessions("not-a-number")).toBe(8);
+    expect(parseMaxConcurrentSessions("501")).toBe(8);
+  });
+
   it("starts only one process when the same persisted session is resumed concurrently", async () => {
     const pool = new PiRpcSessionPool<FakeClient>();
     const stateGate = deferred();

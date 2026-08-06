@@ -1,6 +1,7 @@
 import path from "node:path";
 import { AccountConnectionStore, createAgentApiServer, createPiRpcExecutor, loadRuntimeConfig } from "../src/server/agentApi.js";
 import { createPiPatientIntakeExecutor } from "../src/server/patientIntake.js";
+import { parseMaxConcurrentSessions } from "../src/server/piRpcPool.js";
 import { loadProjectEnv } from "../src/server/projectEnv.js";
 import { assertSafeBind } from "../src/server/runtimeSecurity.js";
 
@@ -13,9 +14,10 @@ const internalAccessKey = process.env.EBM_INTERNAL_ACCESS_KEY || projectEnv.EBM_
 assertSafeBind(host, internalAccessKey);
 const patientIntakeEnabled = (process.env.EBM_ENABLE_PATIENT_INTAKE || projectEnv.EBM_ENABLE_PATIENT_INTAKE) === "1";
 const accountConnectionsEnabled = (process.env.EBM_ENABLE_ACCOUNT_CONNECTIONS || projectEnv.EBM_ENABLE_ACCOUNT_CONNECTIONS) === "1";
+const maxConcurrentSessions = parseMaxConcurrentSessions(process.env.EBM_MAX_CONCURRENT_SESSIONS || projectEnv.EBM_MAX_CONCURRENT_SESSIONS);
 
-const executor = createPiRpcExecutor({ rootDir });
-const patientIntakeExecutor = patientIntakeEnabled ? createPiPatientIntakeExecutor({ rootDir }) : undefined;
+const executor = createPiRpcExecutor({ rootDir, maxConcurrentSessions });
+const patientIntakeExecutor = patientIntakeEnabled ? createPiPatientIntakeExecutor({ rootDir, maxConcurrentSessions }) : undefined;
 const { server } = createAgentApiServer({
   executor,
   ...(patientIntakeExecutor ? { patientIntakeExecutor } : {}),

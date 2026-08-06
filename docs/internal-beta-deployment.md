@@ -12,6 +12,8 @@ EBM_ENABLE_PATIENT_INTAKE=0
 EBM_ENABLE_ACCOUNT_CONNECTIONS=0
 # 关闭后不展示问卷，也不接受反馈写入；默认开启
 EBM_FEEDBACK_ENABLED=1
+# Pi session 并发上限，默认 8；可按服务器资源逐步提高
+# EBM_MAX_CONCURRENT_SESSIONS=8
 ```
 
 如果前端由不同域名提供，再设置反向代理的精确来源；不要使用 `*`：

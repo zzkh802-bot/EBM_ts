@@ -1,7 +1,7 @@
 import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { PiRpcSessionPool } from "./piRpcPool.js";
+import { parseMaxConcurrentSessions, PiRpcSessionPool } from "./piRpcPool.js";
 import { buildPiRpcClientOptions, createDefaultPiRpcClient, type PiRpcClientBase, type PiRpcClientOptions } from "./piRuntime.js";
 
 export type PatientIntakeIntent = "conversation" | "summary";
@@ -98,9 +98,10 @@ export class PatientIntakeError extends Error {
 export function createPiPatientIntakeExecutor(input: {
   rootDir: string;
   clientFactory?: (options: PatientRpcClientOptions) => PatientRpcClientLike;
+  maxConcurrentSessions?: number;
 }): PatientRpcExecutor {
   const rootDir = path.resolve(input.rootDir);
-  const pool = new PiRpcSessionPool<PatientRpcClientLike>();
+  const pool = new PiRpcSessionPool<PatientRpcClientLike>(parseMaxConcurrentSessions(input.maxConcurrentSessions));
   const factory = input.clientFactory ?? ((options: PatientRpcClientOptions) => createDefaultPiRpcClient(options));
   const run = async (request: PatientIntakeInput, signal: AbortSignal): Promise<PatientIntakeResult> => {
     if (signal.aborted) throw new Error("就诊准备已取消。");

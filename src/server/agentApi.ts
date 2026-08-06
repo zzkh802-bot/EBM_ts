@@ -6,7 +6,7 @@ import { ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { initResearchFrame } from "../tools/researchFrame.js";
 import { initializePiSessionDirectory, piSessionDirectory } from "../session/sessionPath.js";
 import { PatientIntakeError, type PatientIntakeExecutor, PatientWorkspace, validatePatientIntakeInput } from "./patientIntake.js";
-import { PiRpcSessionPool } from "./piRpcPool.js";
+import { parseMaxConcurrentSessions, PiRpcSessionPool } from "./piRpcPool.js";
 import { buildPiRpcClientOptions, createDefaultPiRpcClient, preparePiRuntime, type PiRpcClientLike, type PiRpcClientOptions } from "./piRuntime.js";
 import { loadProjectEnv } from "./projectEnv.js";
 import { readCitationDetail } from "./citationService.js";
@@ -553,9 +553,10 @@ export function createPiRpcExecutor(input: {
   rootDir: string;
   clientFactory?: (options: PiRpcClientOptions) => PiRpcClientLike;
   streamStallTimeoutMs?: number;
+  maxConcurrentSessions?: number;
 }): PiRpcExecutor {
   const rootDir = path.resolve(input.rootDir);
-  const pool = new PiRpcSessionPool<PiRpcClientLike>();
+  const pool = new PiRpcSessionPool<PiRpcClientLike>(parseMaxConcurrentSessions(input.maxConcurrentSessions));
   const factory = input.clientFactory ?? createDefaultPiRpcClient;
   const configuredStreamStallTimeoutMs = input.streamStallTimeoutMs ?? Number(process.env.EBM_STREAM_STALL_TIMEOUT_MS);
   const streamStallTimeoutMs = Number.isFinite(configuredStreamStallTimeoutMs) && configuredStreamStallTimeoutMs > 0
