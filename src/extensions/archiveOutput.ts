@@ -4,6 +4,13 @@ import type { SourceArchiveRecord } from "../tools/archive.js";
 const READ_PREVIEW_CHARS = 3_500;
 const MAP_MAX_ITEMS = 20;
 
+export type ArchiveToolTextResult = {
+  text: string;
+  truncated: boolean;
+  visibleStart: number;
+  visibleEnd: number;
+};
+
 function numberLines(content: string, startLine: number): string {
   return content.split("\n")
     .map((line, index) => `${String(startLine + index).padStart(5, " ")}│${line}`)
@@ -37,7 +44,7 @@ export function archiveToolText(
   record: SourceArchiveRecord,
   readablePath = record.path,
   options: { compactRead?: boolean; citationEligible?: boolean } = {},
-): { text: string; truncated: boolean } {
+): ArchiveToolTextResult {
   const compactRead = options.compactRead === true;
   const previewLimit = compactRead ? READ_PREVIEW_CHARS : DEFAULT_MAX_BYTES;
   const excerpt = compactRead
@@ -60,11 +67,11 @@ export function archiveToolText(
       ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
       ...(readableResources.length ? [`Archived referenced resources: ${readableResources.join(", ")}`] : []),
       `Archive lines: 1-${totalLines} (${totalLines} total lines; 1-based).`,
-      `Visible preview maps to lines ${visibleStart}-${visibleEnd}.`,
+      `Visible preview maps to absolute source lines ${visibleStart}-${visibleEnd}.`,
       `Read any archive window with read(path=${JSON.stringify(readablePath)}, offset=N, limit=M).`,
       ...(options.citationEligible === false
         ? ["This search snapshot is discovery history and cannot be passed to evidence_add; use an individually archived sources/read document."]
-        : ["After read, use the returned read_id with start_text/end_text (source_path is optional; line_start/line_end may optionally narrow inside that read), or use source_path with line_start/line_end (text anchors are optional). Layout/XML/entity/punctuation noise is normalized for matching, but clinical numbers and wording are not repaired."]),
+        : ["After read, use the returned read_id with start_text/end_text (source_path is optional; line_start/line_end are optional absolute-source-line narrowing hints—omit them if they came from another candidate/read), or use source_path with line_start/line_end (text anchors are optional). Layout/XML/entity/punctuation noise is normalized. If read_id anchors do not match, choose more distinctive boundaries or reread a narrower window; do not archive the whole read range as a fallback."]),
       ...(excerpt.truncated ? [`Continue without gaps (the last preview line is intentionally repeated): read(path=${JSON.stringify(readablePath)}, offset=${Math.max(record.bodyLineStart, visibleEnd)}, limit=200).`] : []),
       ...(readableTocPath ? [`Read the complete section index with read(path=${JSON.stringify(readableTocPath)}).`] : []),
       ...(map.items.length ? ["", `Source map${map.total > map.items.length ? ` (first ${map.items.length} of ${map.total}; complete index is in toc.md)` : ""}:`, ...map.items] : []),
@@ -78,5 +85,7 @@ export function archiveToolText(
       ] : []),
     ].join("\n"),
     truncated: excerpt.truncated,
+    visibleStart,
+    visibleEnd,
   };
 }

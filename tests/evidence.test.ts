@@ -192,7 +192,7 @@ describe("Markdown evidence ledger", () => {
       })).rejects.toThrow(/候选 1[\s\S]*were less than the absolute reductions in stroke/);
     });
 
-    it("rejects the historical CALGB abstract quote when it accidentally includes PubMed navigation context", async () => {
+    it("keeps a PubMed archive quote even when it includes navigation context", async () => {
       const dir = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
       const abstract = [
         "The Cancer and Leukemia Group B (CALGB) study 9222 tested the hypothesis that treatment intensification of acute myeloid leukemia (AML) in first remission with multiple chemotherapy agents is superior",
@@ -210,7 +210,7 @@ describe("Markdown evidence ledger", () => {
         provenance: "primary_abstract",
         sourcePath: "calgb.md",
         quote: `${abstract}\n\n${context}`,
-      })).rejects.toThrow(/PubMed context|primary_abstract evidence must stay inside/);
+      })).resolves.toMatchObject({ quote: `${abstract}\n\n${context}`, citationEligible: true });
 
       await expect(addEvidence({
         sessionDir: dir,
@@ -223,7 +223,7 @@ describe("Markdown evidence ledger", () => {
       })).resolves.toMatchObject({ quote: abstract, citationEligible: true });
     });
 
-    it("rejects the fragmented NOAC table passage archived by the historical atrial-fibrillation run", async () => {
+    it("keeps a fragmented table passage and leaves its clinical interpretation to the model", async () => {
       const dir = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
       const fragmented = [
         "减少", "减少", "减少", "减少", "减少",
@@ -244,7 +244,7 @@ describe("Markdown evidence ledger", () => {
         provenance: "guideline_official",
         sourcePath: "af-guideline.md",
         quote: fragmented,
-      })).rejects.toThrow(/fragmented PDF table/);
+      })).resolves.toMatchObject({ quote: fragmented, citationEligible: true });
     });
   });
 
@@ -337,7 +337,7 @@ describe("Markdown evidence ledger", () => {
     expect(read.verification).toEqual({ ok: true, errors: [] });
   });
 
-  it("marks discovery snippets and unverified guideline mirrors as citation-ineligible", async () => {
+  it("keeps unverified guideline mirrors citable with their provenance", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
     await writeFile(path.join(dir, "source.md"), "A search result claims a recommendation.", "utf8");
     const node = await addEvidence({
@@ -349,7 +349,7 @@ describe("Markdown evidence ledger", () => {
       sourcePath: "source.md",
       quote: "A search result claims a recommendation.",
     });
-    expect(node).toMatchObject({ provenance: "guideline_mirror_unverified", citationEligible: false });
+    expect(node).toMatchObject({ provenance: "guideline_mirror_unverified", citationEligible: true });
     expect((await readEvidence(dir, node.id)).node.provenance).toBe("guideline_mirror_unverified");
   });
 
@@ -400,7 +400,7 @@ describe("Markdown evidence ledger", () => {
       provenance: "primary_abstract",
       sourcePath: "sources/read/pubmed/full.md",
       quote: "## PubMed context\n\nNavigation/context only. Linked records below are not citation evidence unless separately read and archived.\n\nDOI: 10.1000/test",
-    })).rejects.toThrow(/PubMed context|Abstract.*7-7/);
+    })).resolves.toMatchObject({ citationEligible: true });
 
     await expect(addEvidence({
       sessionDir: dir,
@@ -413,7 +413,7 @@ describe("Markdown evidence ledger", () => {
     })).resolves.toMatchObject({ quote: "The trial reduced stroke by 30%.", citationEligible: true });
   });
 
-  it("rejects severely fragmented PDF tables but accepts nearby narrative evidence", async () => {
+  it("keeps severely fragmented PDF tables and accepts nearby narrative evidence", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
     const narrative = "在与华法林对照的试验中，NOAC 疗效不劣于或优于华法林，且颅内出血风险显著降低。";
     const brokenTable = [
@@ -429,7 +429,7 @@ describe("Markdown evidence ledger", () => {
       provenance: "guideline_official",
       sourcePath: "guideline.md",
       quote: brokenTable.join("\n"),
-    })).rejects.toThrow(/fragmented PDF table/);
+    })).resolves.toMatchObject({ quote: brokenTable.join("\n"), citationEligible: true });
 
     await expect(addEvidence({
       sessionDir: dir,

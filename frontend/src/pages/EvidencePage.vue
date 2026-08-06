@@ -522,7 +522,6 @@ const handlePrimaryAction = () => {
                 v-if="feedbackEnabled && !feedbackSeen && firstReportMessage?.id === message.id && message.reportMarkdown && message.runId && sessions.active.researchSessionId"
                 :session-id="sessions.active.researchSessionId"
                 :run-id="message.queryId || message.runId"
-                :show-preferred-tool="researchCount >= 3"
                 @closed="markFeedbackSeen"
               />
             </div>

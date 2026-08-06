@@ -14,7 +14,7 @@ import { listWorkspaceFiles, readWorkspaceDownload, readWorkspaceFile, sessionWo
 import { readFinalReportRevisions } from "./reportPublication.js";
 import { InternalAuthStore } from "./internalAuth.js";
 import { SessionOwnershipError, SessionOwnershipStore } from "./sessionOwnership.js";
-import { FeedbackValidationError, validatePreferredTool, writeFeedback } from "./feedback.js";
+import { FeedbackValidationError, writeFeedback } from "./feedback.js";
 import { AttachmentStore, AttachmentStoreError, MAX_ATTACHMENT_BYTES, type StoredAttachment } from "./attachmentStore.js";
 import { archiveUploadedAttachments } from "./attachmentProcessing.js";
 import { queryMetadataExists, writeQueryMetadata } from "../observability/queryMetadata.js";
@@ -755,7 +755,6 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       if (!isRecord(body)) throw new ApiError(422, "invalid_feedback", "反馈内容必须是 JSON 对象。 ");
       const workspace = await sessionWorkspace(rootDir, sessionId);
       const comment = body.comment === undefined ? undefined : optionalString(body.comment, "comment", 4_000);
-      const preferredTool = validatePreferredTool(body.preferred_tool);
       const runId = requiredString(body.run_id, "run_id", 100);
       const queryId = optionalString(body.query_id, "query_id", 100) ?? runId;
       if (!(await queryMetadataExists(workspace, sessionId, queryId))) throw new ApiError(404, "query_not_found", "未找到属于当前会话的用户问题。 ");
@@ -763,7 +762,6 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
         runId,
         queryId,
         rubrics: body.rubrics as Record<string, unknown>,
-        ...(preferredTool ? { preferredTool } : {}),
         ...(comment ? { comment } : {}),
       });
       sendJson(response, 201, { ok: true, session_id: sessionId, ...feedback });

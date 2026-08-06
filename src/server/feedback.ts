@@ -14,14 +14,10 @@ export const FEEDBACK_RUBRICS = [
   "time_worth",
 ] as const;
 export type FeedbackRubric = typeof FEEDBACK_RUBRICS[number];
-export const FEEDBACK_PREFERRED_TOOLS = ["xunyi", "doubao", "no_preference", "not_used"] as const;
-export type FeedbackPreferredTool = typeof FEEDBACK_PREFERRED_TOOLS[number];
-
 export type FeedbackInput = {
   runId: string;
   queryId: string;
   rubrics: Partial<Record<FeedbackRubric, number>>;
-  preferredTool?: FeedbackPreferredTool;
   comment?: string;
 };
 
@@ -43,7 +39,6 @@ export async function writeFeedback(_rootDir: string, sessionDir: string, userId
     run_id: input.runId,
     query_id: input.queryId,
     rubrics,
-    ...(input.preferredTool ? { preferred_tool: input.preferredTool } : {}),
     ...(comment ? { comment } : {}),
   };
   const feedbackDir = path.join(sessionDir, "feedback");
@@ -51,14 +46,6 @@ export async function writeFeedback(_rootDir: string, sessionDir: string, userId
   const feedbackPath = path.join(feedbackDir, "feedback.jsonl");
   await appendFile(feedbackPath, `${JSON.stringify(record)}\n`, { encoding: "utf8", mode: 0o600 });
   return { path: path.posix.join("feedback", "feedback.jsonl"), createdAt };
-}
-
-export function validatePreferredTool(value: unknown): FeedbackPreferredTool | undefined {
-  if (value === undefined || value === null || value === "") return undefined;
-  if (typeof value !== "string" || !(FEEDBACK_PREFERRED_TOOLS as readonly string[]).includes(value)) {
-    throw new FeedbackValidationError("preferred_tool 必须是循医、豆包、无偏好或未使用过豆包之一。 ");
-  }
-  return value as FeedbackPreferredTool;
 }
 
 function validateRubrics(value: unknown): Partial<Record<FeedbackRubric, number>> {

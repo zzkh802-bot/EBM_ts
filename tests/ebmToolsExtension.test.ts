@@ -11,7 +11,7 @@ import { initializePiSessionDirectory, piReadableSessionPath } from "../src/exte
 
 describe("EBM Pi extension tools", () => {
   afterEach(() => vi.unstubAllEnvs());
-  it("provides a non-blocking clinical preflight immediately before report tools", () => {
+  it("keeps report guidance concise and judgment-led", () => {
     const tools = new Map<string, { promptGuidelines?: string[] }>();
     vi.stubEnv("GUIDELINE_MCP_URL", "");
     registerEbmTools({
@@ -22,10 +22,10 @@ describe("EBM Pi extension tools", () => {
 
     const writeGuidance = tools.get("report_write")?.promptGuidelines?.join("\n") ?? "";
     const finalizeGuidance = tools.get("report_finalize")?.promptGuidelines?.join("\n") ?? "";
-    expect(writeGuidance).toContain("non-blocking clinical preflight");
-    expect(writeGuidance).toContain("keep unspecified facts unknown");
-    expect(writeGuidance).toContain("recalculate any stated clinical score");
-    expect(finalizeGuidance).toContain("same non-blocking clinical preflight");
+    expect(writeGuidance).toContain("保留未知事实");
+    expect(writeGuidance).toContain("不要为了满足关键词或固定模板扩展检索");
+    expect(writeGuidance).toContain("文章质量、摘要范围和 PDF 排版由模型结合上下文判断");
+    expect(finalizeGuidance).toContain("普通成功的 report_write 不需要再次调用它");
   });
 
   it("exposes read-id or line-range anchor locators", () => {
@@ -49,7 +49,8 @@ describe("EBM Pi extension tools", () => {
     expect(schema?.required ?? []).not.toContain("source_path");
     expect(schema?.required ?? []).not.toContain("start_text");
     expect(schema?.required ?? []).not.toContain("end_text");
-    expect(tools.get("evidence_add")?.promptGuidelines?.join("\n")).toContain("Choose exactly one locator mode");
+    expect(tools.get("evidence_add")?.promptGuidelines?.join("\n")).toContain("Choose one locator mode");
+    expect(tools.get("evidence_add")?.promptGuidelines?.join("\n")).toContain("do not accept a whole-read fallback");
     expect(schema?.properties).not.toHaveProperty("source_id");
   });
 
@@ -309,6 +310,7 @@ describe("EBM Pi extension tools", () => {
       ],
     }, undefined, undefined, ctx);
     expect(failed.content[0].text).toContain("报告核验失败");
+    expect(failed.isError).toBe(true);
     expect(failed.details.verified).toBe(false);
     expect(failed.details.draft.path).toBe("reports/drafts/draft-finalize-report.draft.md");
 

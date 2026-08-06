@@ -4,6 +4,7 @@ import { Type } from "typebox";
 import { readWeb, renderSearchCandidatesText, searchWeb, type WebToolError } from "../tools/web.js";
 import { searchSourceLibrary, upsertSourceLibraryFromArchive } from "../tools/sourceLibrary.js";
 import { archiveDetails, archiveToolText } from "./archiveOutput.js";
+import { formatReadReceipt, registerArchiveReadReceipt } from "./readRegistry.js";
 import { piReadableSessionPath, piSessionDirectory } from "./sessionPath.js";
 
 function toolError(error: WebToolError): Error {
@@ -67,7 +68,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
     label: "Read Web Source",
     description: "Read documents through MinerU Premium or web pages through Jina with Firecrawl fallback, then normalize and archive before exposure.",
     promptSnippet: "Read and archive a public web source for quote-verified citation",
-    promptGuidelines: ["After reading, choose read_id with start_text/end_text (source_path optional; line_start/line_end may optionally narrow inside that read), or source_path with line_start/line_end. Layout/XML/entity/punctuation noise is normalized, but never paraphrase, repair clinical text, or join discontinuous passages."],
+    promptGuidelines: ["After reading, choose read_id with start_text/end_text (source_path optional; line_start/line_end are optional absolute-source-line narrowing hints—omit them if they came from another candidate/read), or source_path with line_start/line_end. Layout/XML/entity/punctuation noise is normalized; if read_id anchors mismatch, choose more distinctive boundaries or reread a narrower window rather than archiving the whole read. Never paraphrase, repair clinical text, or join discontinuous passages."],
     parameters: Type.Object({
       url: Type.String({ description: "Public HTTP(S) URL" }),
       pdf_pages: Type.Optional(Type.String({ description: "Optional focused PDF page range such as 1-5. Use only when the relevant pages are known; max 25 pages." })),
@@ -92,14 +93,15 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
       });
       if (!result.ok) throw toolError(result.error);
       const output = archiveToolText(result.archive, piReadableSessionPath(ctx.cwd, sessionId, result.archive.path), { compactRead: true });
+      const receipt = await registerArchiveReadReceipt({ sessionDir: piSessionDirectory(ctx.cwd, sessionId), archive: result.archive, lineStart: output.visibleStart, lineEnd: output.visibleEnd });
       const library = result.provider === "library" ? { written: false } : await upsertSourceLibraryFromArchive({ sourceLibraryDir, archive: result.archive, provider: result.provider, sessionId });
       pi.events.emit("ebm:source_archived", { sessionId, provider: result.provider, path: result.archive.path, kind: "read", sourceLibraryPath: library.path, sourceLibraryWritten: library.written });
       const libraryTrustNote = result.provider === "library"
         ? "\n\nLocal library provenance: this source was read from the curated local archive using its source_url match. Treat it as an already archived citation-capable source; do not repeat PubMed/web search for the same source unless you need a newer version, a missing identifier, or conflict resolution."
         : "";
       return {
-        content: [{ type: "text", text: `${output.text}${libraryTrustNote}` }],
-        details: { provider: result.provider, archive: archiveDetails(result.archive), sourceLibrary: library, truncated: output.truncated },
+        content: [{ type: "text", text: `${output.text}${formatReadReceipt(receipt)}${libraryTrustNote}` }],
+        details: { provider: result.provider, archive: archiveDetails(result.archive), sourceLibrary: library, readId: receipt.id, sourcePath: result.archive.path, sourceLines: [receipt.lineStart, receipt.lineEnd], truncated: output.truncated },
       };
     },
   });

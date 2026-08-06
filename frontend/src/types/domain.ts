@@ -100,8 +100,6 @@ export type FeedbackRubric =
   | 'ebm_standard_compliance'
   | 'time_worth'
 export type FeedbackRubrics = Partial<Record<FeedbackRubric, number>>
-export type FeedbackPreferredTool = 'xunyi' | 'doubao' | 'no_preference' | 'not_used'
-
 export interface AgentRunResponse {
   contract_version: string
   run_id: string

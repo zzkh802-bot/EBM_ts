@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { nativePathAllowed } from "../src/extensions/securityGuard.js";
+import { bashCommandPathAllowed, nativePathAllowed } from "../src/extensions/securityGuard.js";
 import { initializePiSessionDirectory, piSessionDirectory } from "../src/session/sessionPath.js";
 
 describe("native file tool path guard", () => {
@@ -23,6 +23,9 @@ describe("native file tool path guard", () => {
       expect(nativePathAllowed(root, sessionId, path.join(root, ".pi", "SKILL.md"), "read")).toBe(true);
       expect(nativePathAllowed(root, sessionId, path.join(root, ".pi", "SKILL.md"), "write")).toBe(false);
       expect(piSessionDirectory(root, sessionId)).toBe(workspace);
+      expect(bashCommandPathAllowed(root, sessionId, `sed -n '1p' data/sessions/${path.basename(workspace)}/reports/drafts/report.draft.md`)).toBe(true);
+      expect(bashCommandPathAllowed(root, sessionId, "sed -n '1p' data/sessions/other-session/reports/report.md")).toBe(false);
+      expect(bashCommandPathAllowed(root, sessionId, `sed -n '1p' data/sessions/${path.basename(workspace)}-other/reports/report.md`)).toBe(false);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

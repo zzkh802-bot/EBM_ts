@@ -4,6 +4,7 @@ import { Type } from "typebox";
 import { readPubMed, searchPubMed, similarPubMed, type PubMedError } from "../tools/pubmed.js";
 import { upsertSourceLibraryFromArchive } from "../tools/sourceLibrary.js";
 import { archiveDetails, archiveToolText } from "./archiveOutput.js";
+import { formatReadReceipt, registerArchiveReadReceipt } from "./readRegistry.js";
 import { piReadableSessionPath, piSessionDirectory } from "./sessionPath.js";
 
 function toolError(error: PubMedError): Error {
@@ -66,7 +67,7 @@ export function renderAbstractNavigation(
       `   Abstract lines: ${preview.startLine}-${preview.endLine}`,
       `   Abstract preview: ${preview.text}`,
       `   Readable abstract path: ${readablePath}`,
-      "   Evidence use: call pubmed_read first, then choose read_id with start_text/end_text (source_path optional), optionally narrow with line_start/line_end inside that read, or use the displayed source path with line_start/line_end. Layout/XML/entity/punctuation noise is normalized, but wording and numbers must remain unchanged.",
+      "   Evidence use: call pubmed_read first, then choose read_id with start_text/end_text (source_path optional); line_start/line_end are optional absolute-source-line narrowing hints, so omit them if they came from another candidate/read. Or use the displayed source path with line_start/line_end. Layout/XML/entity/punctuation noise is normalized; if read_id anchors mismatch, choose more distinctive boundaries or reread a narrower window rather than archiving the whole read.",
       "",
     );
   });
@@ -210,12 +211,13 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
       });
       if (!result.ok) throw toolError(result.error);
       const output = archiveToolText(result.archive, piReadableSessionPath(ctx.cwd, sessionId, result.archive.path), { compactRead: true });
+      const receipt = await registerArchiveReadReceipt({ sessionDir, archive: result.archive, lineStart: output.visibleStart, lineEnd: output.visibleEnd });
       const sourceLibraryDir = process.env.SOURCE_LIBRARY_DIR || "data/source_library/guidelines";
       const library = await upsertSourceLibraryFromArchive({ sourceLibraryDir, archive: result.archive, provider: "pubmed", sessionId, sourceStatus: result.fullText ? result.fullTextSource : "abstract_only" });
       const warningText = result.warnings.length ? `\n\nWarnings:\n${result.warnings.map((warning) => `- ${warning}`).join("\n")}` : "";
       pi.events.emit("ebm:source_archived", { sessionId, provider: "pubmed", path: result.archive.path, kind: "read", pmid: result.pmid, sourceLibraryPath: library.path, sourceLibraryWritten: library.written });
       return {
-        content: [{ type: "text", text: `${output.text}${warningText}` }],
+        content: [{ type: "text", text: `${output.text}${formatReadReceipt(receipt)}${warningText}` }],
         details: {
           pmid: result.pmid,
           ...(result.pmcid ? { pmcid: result.pmcid } : {}),
@@ -224,6 +226,9 @@ export function registerPubMedTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
           warnings: result.warnings,
           archive: archiveDetails(result.archive),
           sourceLibrary: library,
+          readId: receipt.id,
+          sourcePath: result.archive.path,
+          sourceLines: [receipt.lineStart, receipt.lineEnd],
           truncated: output.truncated,
         },
       };

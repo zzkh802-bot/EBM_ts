@@ -11,7 +11,7 @@ describe('循证报告反馈问卷', () => {
       headers: { 'Content-Type': 'application/json' },
     }))
     vi.stubGlobal('fetch', fetchMock)
-    const wrapper = mount(FeedbackPanel, { props: { sessionId: 'session-1', runId: 'run-1', showPreferredTool: false } })
+    const wrapper = mount(FeedbackPanel, { props: { sessionId: 'session-1', runId: 'run-1' } })
 
     for (const scale of wrapper.findAll('.feedback-scale')) await scale.find('button:last-child').trigger('click')
     const submit = wrapper.get('.feedback-submit')
@@ -22,7 +22,6 @@ describe('循证报告反馈问卷', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
     expect(body).toMatchObject({ run_id: 'run-1', query_id: 'run-1' })
-    expect(body).not.toHaveProperty('preferred_tool')
     expect(wrapper.text()).toContain('已记录，谢谢')
   })
 })

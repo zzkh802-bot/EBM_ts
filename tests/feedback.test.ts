@@ -19,11 +19,10 @@ describe("内测反馈与附件归档", () => {
       runId: queryId,
       queryId,
       rubrics,
-      preferredTool: "doubao",
       comment: "引用清晰",
     });
     const content = await readFile(path.join(sessionDir, record.path), "utf8");
-    expect(JSON.parse(content)).toMatchObject({ rubrics, preferred_tool: "doubao", comment: "引用清晰" });
+    expect(JSON.parse(content)).toMatchObject({ rubrics, comment: "引用清晰" });
     await expect(writeFeedback(rootDir, sessionDir, "annotator", sessionId, {
       runId: queryId, queryId, rubrics: { requirement_understanding: 4.5 },
     })).rejects.toThrow("1 到 5 的整数");

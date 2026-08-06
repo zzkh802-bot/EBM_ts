@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { feedbackService } from '../../services/feedback'
-import type { FeedbackPreferredTool, FeedbackRubric } from '../../types/domain'
+import type { FeedbackRubric } from '../../types/domain'
 
-const props = defineProps<{ sessionId: string; runId: string; showPreferredTool?: boolean }>()
+const props = defineProps<{ sessionId: string; runId: string }>()
 const emit = defineEmits<{ closed: [] }>()
 const rubricDefinitions: Array<{ key: FeedbackRubric; label: string }> = [
   { key: 'requirement_understanding', label: '智能体正确理解了我的需求' },
@@ -17,22 +17,20 @@ const rubricDefinitions: Array<{ key: FeedbackRubric; label: string }> = [
   { key: 'time_worth', label: '综合结果和等待时间，这次使用值得' },
 ]
 const values = ref<Partial<Record<FeedbackRubric, number>>>({})
-const preferredTool = ref<FeedbackPreferredTool>()
 const comment = ref('')
 const submitted = ref(false)
 const dismissed = ref(false)
 const pending = ref(false)
 const error = ref('')
-const complete = computed(() => rubricDefinitions.every((item) => values.value[item.key] !== undefined) && (!props.showPreferredTool || Boolean(preferredTool.value)))
+const complete = computed(() => rubricDefinitions.every((item) => values.value[item.key] !== undefined))
 
 const choose = (key: FeedbackRubric, value: number) => { values.value[key] = value }
 const submit = async () => {
-  const selectedTool = preferredTool.value
-  if (!complete.value || (props.showPreferredTool && !selectedTool) || pending.value || submitted.value) return
+  if (!complete.value || pending.value || submitted.value) return
   pending.value = true
   error.value = ''
   try {
-    await feedbackService.submit(props.sessionId, props.runId, values.value, selectedTool, comment.value)
+    await feedbackService.submit(props.sessionId, props.runId, values.value, comment.value)
     submitted.value = true
     emit('closed')
   } catch (cause) {
@@ -68,17 +66,6 @@ const dismiss = () => {
       <summary>补充自然语言反馈（可选）</summary>
       <textarea v-model="comment" maxlength="4000" placeholder="如发现疑似编造、引用与结论不一致，或遗漏了必要的假设/边界，请指出具体位置；也可说明哪一段最有帮助。" />
     </details>
-    <div v-if="!submitted && showPreferredTool" class="feedback-choice">
-      <span>下次做同类问题，你更愿意用哪个？</span>
-      <div class="feedback-choice-list" role="group" aria-label="偏好的工具">
-        <button v-for="item in [
-          { value: 'xunyi', label: '循医' },
-          { value: 'doubao', label: '豆包' },
-          { value: 'no_preference', label: '无偏好' },
-          { value: 'not_used', label: '没用过豆包' },
-        ]" :key="item.value" type="button" :class="{ selected: preferredTool === item.value }" @click="preferredTool = item.value as FeedbackPreferredTool">{{ item.label }}</button>
-      </div>
-    </div>
     <p v-if="error" class="feedback-error">{{ error }}</p>
     <button v-if="!submitted" class="feedback-submit" type="button" :disabled="pending || !complete" @click="submit">{{ pending ? '记录中…' : '提交反馈' }}</button>
   </section>
@@ -99,10 +86,6 @@ const dismiss = () => {
 .feedback-scale button.selected { background: var(--jade, #317b6b); color: #fff; }
 .feedback-comment { margin-top: 11px; color: var(--ink-soft, #56636f); font-size: 12px; }
 .feedback-comment textarea { box-sizing: border-box; width: 100%; min-height: 68px; margin-top: 8px; padding: 8px; border: 1px solid rgba(23, 37, 53, .16); border-radius: 6px; background: #fff; resize: vertical; }
-.feedback-choice { display: grid; gap: 8px; margin-top: 13px; color: var(--ink-soft, #56636f); font-size: 12px; }
-.feedback-choice-list { display: flex; flex-wrap: wrap; gap: 5px; }
-.feedback-choice-list button { padding: 5px 8px; border: 1px solid rgba(49, 123, 107, .22); border-radius: 5px; background: rgba(255, 255, 255, .7); color: var(--ink-soft, #56636f); cursor: pointer; }
-.feedback-choice-list button.selected { background: var(--jade, #317b6b); color: #fff; }
 .feedback-submit { margin-top: 11px; padding: 7px 11px; border: 0; border-radius: 6px; background: var(--jade, #317b6b); color: #fff; cursor: pointer; font-size: 12px; }
 .feedback-submit:disabled { cursor: not-allowed; opacity: .5; }
 .feedback-error { margin: 8px 0 0; color: #a43d36; font-size: 12px; }
