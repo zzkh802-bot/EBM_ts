@@ -130,6 +130,41 @@ describe("verified Markdown reports", () => {
     expect(metadata.references).toEqual([{ number: 1, citation: "Randomized trial of the intervention.", evidence_ids: [evidence.id, evidence2.id].sort(), evidence_id: [evidence.id, evidence2.id].sort()[0] }]);
   });
 
+  it("compacts non-contiguous reference numbers and remaps body citations", async () => {
+    const { sessionDir, evidence } = await fixture();
+    const report = await writeReport({
+      sessionDir,
+      title: "Compacted citation report",
+      content: "# Conclusion\n\nThe result is supported [1], [3], [6], and [7].",
+      references: [
+        { number: 1, citation: "First source.", evidenceId: evidence.id },
+        { number: 3, citation: "Second source.", evidenceId: evidence.id },
+        { number: 6, citation: "Third source.", evidenceId: evidence.id },
+        { number: 7, citation: "Fourth source.", evidenceId: evidence.id },
+      ],
+    });
+
+    const saved = await readFile(path.join(sessionDir, report.path), "utf8");
+    expect(saved).toContain("The result is supported [1], [2], [3], and [4].");
+    expect(saved).toContain("1. [1] First source.");
+    expect(saved).toContain("2. [2] Second source.");
+    expect(saved).toContain("3. [3] Third source.");
+    expect(saved).toContain("4. [4] Fourth source.");
+    const metadata = JSON.parse(await readFile(path.join(sessionDir, `${report.path}.metadata.json`), "utf8")) as { references: Array<{ number: number }> };
+    expect(metadata.references.map((reference) => reference.number)).toEqual([1, 2, 3, 4]);
+    expect(report.normalization).toMatchObject({
+      contentChanged: true,
+      referencesRebuilt: true,
+      referenceNumbersCompacted: true,
+      referenceNumberMap: [
+        { from: 3, to: 2 },
+        { from: 6, to: 3 },
+        { from: 7, to: 4 },
+      ],
+      finalReferenceCount: 4,
+    });
+  });
+
   it("rejects duplicate reference numbers with conflicting citations", async () => {
     const { sessionDir, evidence } = await fixture();
     await writeFile(path.join(sessionDir, "sources", "read", "study2.md"), "second result", "utf8");

@@ -224,6 +224,15 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
     })
     if (reportMarkdown || data.report_path) expandedReportMessageIds.value.add(pendingId)
     sessions.completeResearchIn(localSessionId)
+    if (sessions.activeSessionId !== localSessionId || !router.currentRoute.value.path.startsWith('/clinician/evidence')) {
+      const completedSession = sessions.sessions.find((session) => session.id === localSessionId)
+      ui.notifyRunCompleted({
+        sessionId: localSessionId,
+        runId: data.run_id,
+        title: completedSession?.title || '临床问题',
+        question: completedSession?.clinicalQuestion || text,
+      })
+    }
   } catch (error) {
     attachmentError.value = error instanceof Error ? error.message : '附件上传失败'
     const stopped = error instanceof DOMException && error.name === 'AbortError'

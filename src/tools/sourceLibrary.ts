@@ -30,6 +30,23 @@ export type SourceLibraryCandidate = {
   snippet?: string;
 };
 
+/** Stable model-facing locator for a library entry that has no external source URL. */
+export function sourceLibraryLocator(slug: string): string {
+  return `mcp://source-library/${encodeURIComponent(slug)}`;
+}
+
+function sourceLibrarySlugFromLocator(url: string): string | undefined {
+  if (!url.startsWith("mcp://source-library/")) return undefined;
+  const encoded = url.slice("mcp://source-library/".length);
+  if (!encoded || encoded.includes("/")) return undefined;
+  try {
+    const slug = decodeURIComponent(encoded);
+    return slug && slug !== "." && slug !== ".." && !slug.includes("/") ? slug : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 type SourceLibraryMetadata = {
   title?: unknown;
   source_url?: unknown;
@@ -330,10 +347,13 @@ export async function searchSourceLibrary(input: { sourceLibraryDir?: string; qu
       const genericDirectMatch = conceptGroups.length === 0 && matchedQueryTerms.length >= Math.max(2, Math.ceil(rawQueryTokens.length * 0.3));
       const matchQuality = (authoritativeGuidelineMatch || hasFocusedDirectMatch || genericDirectMatch) && matchedQueryTerms.length >= directThreshold ? "direct" : "related";
       const snippet = content ? snippetFor(content, queryTokens) : undefined;
+      const sourceUrl = typeof metadata.source_url === "string" && metadata.source_url.trim()
+        ? metadata.source_url.trim()
+        : sourceLibraryLocator(entry.name);
       candidates.push({
         slug: entry.name,
         title,
-        ...(typeof metadata.source_url === "string" && metadata.source_url.trim() ? { sourceUrl: metadata.source_url.trim() } : {}),
+        sourceUrl,
         aliases,
         score,
         matchQuality,
@@ -522,6 +542,7 @@ export async function upsertSourceLibraryFromArchive(input: {
 
 export async function readFromSourceLibrary(input: { sessionDir: string; sourceLibraryDir?: string; url: string }): Promise<SourceArchiveRecord | undefined> {
   if (!input.sourceLibraryDir) return undefined;
+  const locatorSlug = sourceLibrarySlugFromLocator(input.url);
   let entries;
   try {
     entries = await readdir(input.sourceLibraryDir, { withFileTypes: true });
@@ -534,7 +555,7 @@ export async function readFromSourceLibrary(input: { sessionDir: string; sourceL
     try {
       const metadataPath = path.join(dir, "metadata.json");
       const metadata = JSON.parse(await readFile(metadataPath, "utf8")) as { source_url?: unknown; title?: unknown } & Record<string, unknown>;
-      if (metadata.source_url !== input.url) continue;
+      if (metadata.source_url !== input.url && entry.name !== locatorSlug) continue;
       const content = await readFile(path.join(dir, "full.md"), "utf8");
       if (!content.trim()) continue;
       await writeFile(metadataPath, `${JSON.stringify({

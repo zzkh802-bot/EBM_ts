@@ -12,7 +12,7 @@ export type NetworkAttempt = {
 };
 
 export type WebToolError = {
-  code: "unsafe_url" | "missing_api_key" | "all_readers_failed" | "search_failed" | "pdf_too_large";
+  code: "unsafe_url" | "source_library_not_found" | "missing_api_key" | "all_readers_failed" | "search_failed" | "pdf_too_large";
   message: string;
   attempts: NetworkAttempt[];
 };
@@ -98,6 +98,25 @@ export async function readWeb(input: {
   sourceLibraryDir?: string;
   resolveHost?: (host: string) => Promise<string[]>;
 } & FetchOptions): Promise<WebReadResult> {
+  const requestedUrl = input.url.trim();
+  if (/^mcp:\/\//iu.test(requestedUrl)) {
+    const libraryArchive = await readFromSourceLibrary({
+      sessionDir: input.sessionDir,
+      ...(input.sourceLibraryDir ? { sourceLibraryDir: input.sourceLibraryDir } : {}),
+      url: requestedUrl,
+    });
+    if (libraryArchive && !isAccessVerificationPage(libraryArchive.content)) {
+      return { ok: true, provider: "library", archive: libraryArchive };
+    }
+    return {
+      ok: false,
+      error: {
+        code: "source_library_not_found",
+        message: "mcp:// source_url 只能从当前配置的本地来源库物化；未找到匹配条目。请重新检索来源库或使用 guideline_mcp_read/retrieve。",
+        attempts: [],
+      },
+    };
+  }
   const safe = validateOutboundUrl(input.url);
   if (!safe.ok) {
     return { ok: false, error: { code: "unsafe_url", message: safe.reason, attempts: [] } };

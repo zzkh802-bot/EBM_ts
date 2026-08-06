@@ -182,4 +182,50 @@ describe("trajectory analysis", () => {
     expect(analysis.evidence_add_attempts.call_failure_rate).toBe(0.6);
     expect(analysis.evidence_add_attempts.first_attempt_failure_rate).toBe(0.75);
   });
+
+  it("resolves read_id-only evidence to the source that produced the read receipt", () => {
+    const records: TrajectoryRecord[] = [
+      record(1, "2026-01-01T00:00:00.000Z", "tool_end", {
+        tool_call_id: "search", tool_name: "pubmed_search", is_error: false,
+        result: { details: { abstractArchives: [{ path: "sources/read/pubmed/full.md", sourceId: "src_pubmed1234567890" }] } },
+      }, "run-1", 0),
+      record(2, "2026-01-01T00:00:01.000Z", "tool_end", {
+        tool_call_id: "read", tool_name: "read", is_error: false,
+        result: { details: { readId: "r01", sourcePath: "/home/xiemingjie/dev/EBM_ts/data/sessions/s1/sources/read/pubmed/full.md" } },
+      }, "run-1", 1),
+      record(3, "2026-01-01T00:00:02.000Z", "tool_start", {
+        tool_call_id: "evidence", tool_name: "evidence_add",
+        args: { read_id: "r01", question: "q", claim: "c" },
+      }, "run-1", 2),
+      record(4, "2026-01-01T00:00:03.000Z", "tool_end", {
+        tool_call_id: "evidence", tool_name: "evidence_add", is_error: false, result: {},
+      }, "run-1", 2),
+    ];
+
+    const analysis = analyzeTrajectory(records);
+    expect(analysis.evidence_add_attempts.by_source).toMatchObject({
+      pubmed: { calls: 1, errors: 0, first_attempts: 1 },
+    });
+    expect(analysis.evidence_add_attempts.by_source.unknown).toBeUndefined();
+  });
+
+  it("resolves read IDs returned for individual guideline retrieval chunks", () => {
+    const records: TrajectoryRecord[] = [
+      record(1, "2026-01-01T00:00:00.000Z", "tool_end", {
+        tool_call_id: "retrieve", tool_name: "guideline_mcp_retrieve", is_error: false,
+        result: { details: { chunkArchives: [{ path: "sources/read/chunk.md", sourceId: "src_guideline123456" , readId: "r01" }] } },
+      }, "run-1", 0),
+      record(2, "2026-01-01T00:00:01.000Z", "tool_start", {
+        tool_call_id: "evidence", tool_name: "evidence_add",
+        args: { read_id: "r01", question: "q", claim: "c" },
+      }, "run-1", 1),
+      record(3, "2026-01-01T00:00:02.000Z", "tool_end", {
+        tool_call_id: "evidence", tool_name: "evidence_add", is_error: false, result: {},
+      }, "run-1", 1),
+    ];
+
+    const analysis = analyzeTrajectory(records);
+    expect(analysis.evidence_add_attempts.by_source.guideline_mcp_retrieve).toMatchObject({ calls: 1, errors: 0 });
+    expect(analysis.evidence_add_attempts.by_source.unknown).toBeUndefined();
+  });
 });

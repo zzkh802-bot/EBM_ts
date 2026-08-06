@@ -54,7 +54,7 @@ export function registerReadRegistry(pi: Pick<ExtensionAPI, "registerTool" | "on
     if (!rawPath) return;
     const sessionDir = piSessionDirectory(ctx.cwd, ctx.sessionManager.getSessionId());
     const sourcePath = sourceRelativePath(ctx.cwd, sessionDir, rawPath);
-    if (!sourcePath || !sourcePath.startsWith("sources/read/") || sourcePath.endsWith("/toc.md")) return;
+    if (!sourcePath || (!(sourcePath.startsWith("sources/read/") || sourcePath.startsWith("artifacts/"))) || sourcePath.endsWith("/toc.md")) return;
     const source = await readFile(path.join(sessionDir, sourcePath), "utf8");
     const startLine = typeof input.offset === "number" && input.offset > 0 ? Math.floor(input.offset) : 1;
     const endLine = visibleLineEnd(event.content.flatMap((part) => part.type === "text" ? [part.text] : []).join("\n"), source.split("\n").length, startLine, input, event.details);

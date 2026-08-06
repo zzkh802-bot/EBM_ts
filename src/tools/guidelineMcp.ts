@@ -43,6 +43,7 @@ export type GuidelineRetrieveItem = GuidelineSearchItem & {
   lineEnd?: number;
   documentId?: string;
   sourceId?: string;
+  readId?: string;
 };
 
 export type GuidelineResult =
