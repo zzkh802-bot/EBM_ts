@@ -2,11 +2,30 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { ExtensionAPI, ToolResultEvent } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import type { SourceArchiveRecord } from "../tools/archive.js";
 import { listReadReceipts, registerReadReceipt } from "../tools/readRegistry.js";
 import { piSessionDirectory } from "./sessionPath.js";
 
 function textContent(event: ToolResultEvent): string {
   return event.content.flatMap((part) => part.type === "text" ? [part.text] : []).join("\n");
+}
+
+export function formatReadReceipt(receipt: { id: string; lineStart: number; lineEnd: number }): string {
+  return `\n\n[read_id: ${receipt.id}; absolute source lines ${receipt.lineStart}-${receipt.lineEnd} (not read-window-relative). With this ID, provide start_text/end_text; source_path is optional. line_start/line_end are optional absolute-line narrowing hints only—if they came from another candidate/read, omit them. If boundaries do not match, choose more distinctive anchors or reread a narrower window; the whole read range will not be used as an automatic fallback. Without this ID, use source_path + line_start/line_end.]`;
+}
+
+/** Register the exact visible window returned by an archive-backed read tool. */
+export async function registerArchiveReadReceipt(input: {
+  sessionDir: string;
+  archive: Pick<SourceArchiveRecord, "path" | "bodyLineStart" | "lines">;
+  lineStart: number;
+  lineEnd: number;
+}) {
+  const source = await readFile(path.join(input.sessionDir, input.archive.path), "utf8");
+  const sourceLineCount = source.split("\n").length;
+  const lineStart = Math.max(input.archive.bodyLineStart, Math.min(input.lineStart, sourceLineCount));
+  const lineEnd = Math.max(lineStart, Math.min(input.lineEnd, input.archive.bodyLineStart + input.archive.lines - 1, sourceLineCount));
+  return registerReadReceipt({ sessionDir: input.sessionDir, sourcePath: input.archive.path, source, lineStart, lineEnd });
 }
 
 function sourceRelativePath(cwd: string, sessionDir: string, rawPath: string): string | undefined {
@@ -42,7 +61,7 @@ export function registerReadRegistry(pi: Pick<ExtensionAPI, "registerTool" | "on
     const receipt = await registerReadReceipt({ sessionDir, sourcePath, source, lineStart: startLine, lineEnd: endLine });
     const text = textContent(event);
     return {
-      content: [...event.content, { type: "text", text: `\n\n[read_id: ${receipt.id}; source lines ${receipt.lineStart}-${receipt.lineEnd}. With this ID, provide start_text/end_text; source_path is optional. Without this ID, use source_path + line_start/line_end.]` }],
+      content: [...event.content, { type: "text", text: formatReadReceipt(receipt) }],
       details: { ...(event.details && typeof event.details === "object" ? event.details : {}), readId: receipt.id, sourcePath, sourceLines: [receipt.lineStart, receipt.lineEnd], sourcePreview: receipt.preview, originalTextChars: text.length },
     };
   });
@@ -58,7 +77,7 @@ export function registerReadRegistry(pi: Pick<ExtensionAPI, "registerTool" | "on
       const receipts = await listReadReceipts(sessionDir);
       const text = receipts.length
         ? receipts.flatMap((receipt) => [
-          `${receipt.id} · ${receipt.sourcePath} · L${receipt.lineStart}-${receipt.lineEnd}`,
+          `${receipt.id} · ${receipt.sourcePath} · absolute source L${receipt.lineStart}-${receipt.lineEnd}`,
           ...receipt.preview.map((line) => `${line.line}│${line.text}`),
           "",
         ]).join("\n").trim()

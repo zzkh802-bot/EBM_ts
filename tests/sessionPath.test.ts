@@ -133,4 +133,17 @@ describe("semantic session workspaces", () => {
     });
     expect(path.basename(workspace)).toBe("abcdef12_成人-aml-cr1-hdac-单药与多药联合巩固-哪种更合适");
   });
+
+  it("prefixes authenticated workspaces with the user id and persists the ownership metadata", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "ebm-workspace-user-"));
+    const sessionId = "abcdef12-749e-72e7-949f-aadc2cd8b509";
+    const workspace = await initializePiSessionDirectory(cwd, sessionId, {
+      userId: "u-7k3m9p2c",
+      sessionName: "卒中循证问题",
+      firstPrompt: "ignored",
+    });
+    expect(path.basename(workspace)).toBe("u-7k3m9p2c__abcdef12_卒中循证问题");
+    await expect(readFile(path.join(workspace, ".metadata", "session.json"), "utf8")).resolves.toContain('"user_id": "u-7k3m9p2c"');
+    await expect(readFile(path.join(cwd, "data", "sessions", ".metadata", "workspaces", `${sessionId}.json`), "utf8")).resolves.toContain('"user_id": "u-7k3m9p2c"');
+  });
 });

@@ -57,14 +57,45 @@ export async function buildPiRpcClientOptions(rootDir: string, input: {
   const cliPath = path.join(root, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
   await access(cliPath);
   await preparePiRuntime(root, input);
+  const projectEnv = await loadProjectEnv(root);
+  const env = allowlistedPiEnvironment(projectEnv, input.provider);
   return {
     cliPath,
     cwd: root,
-    env: { ...(await loadProjectEnv(root)), ...(input.extraEnv ?? {}) },
+    env: { ...env, ...(input.extraEnv ?? {}) },
     provider: input.provider,
     model: input.model,
     args: input.args,
   };
+}
+
+const SHARED_SAFE_ENV_KEYS = [
+  "NCBI_EMAIL", "NCBI_API_KEY", "TAVILY_API_KEY", "JINA_API_KEY", "JINA_READER_BASE_URL", "FIRECRAWL_API_KEY",
+  "WEB_READ_REQUEST_TIMEOUT_MS", "WEB_READ_TOTAL_TIMEOUT_MS", "PDF_MAX_PAGES_FOR_WEB_READ", "SOURCE_LIBRARY_DIR",
+  "GUIDELINE_MCP_URL", "GUIDELINE_MCP_TIMEOUT_MS", "MINERU_API_TOKEN", "MINERU_V4_BASE_URL",
+  "XINQIONG_API_KEY", "XINQIONG_BASE_URL", "XINQIONG_VISION_MODEL",
+] as const;
+
+export function allowlistedPiEnvironment(projectEnv: Record<string, string>, provider: string): Record<string, string> {
+  const keys = new Set<string>(SHARED_SAFE_ENV_KEYS);
+  for (const key of providerSecretKeys(provider)) keys.add(key);
+  const result: Record<string, string> = {};
+  for (const key of keys) {
+    const value = projectEnv[key];
+    if (value !== undefined) result[key] = value;
+  }
+  return result;
+}
+
+function providerSecretKeys(provider: string): readonly string[] {
+  switch (provider) {
+    case "deepseek": return ["DEEPSEEK_API_KEY"];
+    case "xinqiong": return ["XINQIONG_API_KEY", "OPENAI_API_KEY"];
+    case "openai": return ["OPENAI_API_KEY"];
+    case "anthropic": return ["ANTHROPIC_API_KEY", "ANTHROPIC_OAUTH_TOKEN"];
+    case "openai-codex": return [];
+    default: return [];
+  }
 }
 
 export function createDefaultPiRpcClient(options: PiRpcClientOptions): PiRpcClientLike {

@@ -46,12 +46,15 @@ export type EvidenceAttemptAnalysis = EvidenceAttemptBreakdown & {
   by_source: Partial<Record<EvidenceSourceKind, EvidenceAttemptBreakdown>>;
   /** source_span/source_id_quote/source_path_quote are retained only to read historical traces. */
   by_input_mode: Partial<Record<"read_id_anchors" | "line_anchors" | "source_span" | "source_id_quote" | "source_path_quote", EvidenceAttemptBreakdown>>;
-  failure_reasons: Partial<Record<"input_contract" | "source_path" | "quote_not_located" | "quote_ambiguous" | "quote_quality" | "other", number>>;
+  failure_reasons: Partial<Record<"input_contract" | "source_path" | "quote_not_located" | "quote_ambiguous" | "quote_quality" | "provenance_bounds" | "other", number>>;
 };
 
 export type TrajectoryAnalysis = {
   session_id: string;
+  user_ids: string[];
   runs: number;
+  user_queries: number;
+  system_reminders: number;
   turns: number;
   assistant_messages: number;
   thinking_chars: number;
@@ -87,6 +90,7 @@ export type TrajectoryAnalysis = {
   evidence_add_attempts: EvidenceAttemptAnalysis;
   run_summaries: Array<{
     run_id: string;
+    user_id?: string;
     duration_ms?: number;
     duration_seconds?: number;
     turns: number;
@@ -188,6 +192,7 @@ function evidenceFailureReason(result: unknown): keyof EvidenceAttemptAnalysis["
   const text = toolResultText(result);
   if (/provide .*source_span_id|provide read_id or line_start|exactly one of source_id|source_id does not match source_span_id/i.test(text)) return "input_contract";
   if (/source_path|ENOENT|no such file|unsafe relative path|outside session|different session workspace/i.test(text)) return "source_path";
+  if (/primary_abstract evidence must stay inside|read_id.*(?:范围|range).*与边界文本不一致|PubMed Abstract lines/i.test(text)) return "provenance_bounds";
   if (/匹配到\s*\d+\s*处|排版归一化后的 quote .*匹配到/i.test(text)) return "quote_ambiguous";
   if (/quality check failed|quote appears to be|citation evidence/i.test(text)) return "quote_quality";
   if (/未能在归档来源中唯一定位|没有找到可靠的原文候选|quote.*(?:locat|match)/i.test(text)) return "quote_not_located";
@@ -201,6 +206,7 @@ function emptyEvidenceBreakdown(): EvidenceAttemptBreakdown {
 export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalysis {
   const sessionId = records[0]?.session_id ?? "unknown";
   const runStarts = new Map<string, string>();
+  const runUsers = new Map<string, string>();
   const runEnds = new Map<string, string>();
   const runTurns = new Map<string, Set<number>>();
   const runToolCalls = new Map<string, number>();
@@ -210,6 +216,8 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
   const actionCounts = new Map<string, number>();
   const turns = new Set<string>();
   let assistantMessages = 0;
+  let userQueries = 0;
+  let systemReminders = 0;
   let thinkingChars = 0;
   let responseChars = 0;
   let toolCalls = 0;
@@ -281,7 +289,12 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
     if (state && record.event === "context_snapshot") state.contextTokens = numeric(data?.context_usage?.tokens);
     if (state && record.event === "turn_end") state.elapsedMs = numeric(data?.duration_ms);
     if (state && record.event === "assistant_message") state.modelMs = numeric(data?.request_timing?.duration_ms);
-    if (record.event === "run_start" && run) runStarts.set(run, record.timestamp);
+    if (record.event === "run_start" && run) {
+      runStarts.set(run, record.timestamp);
+      if (typeof data?.user_id === "string" && data.user_id.trim()) runUsers.set(run, data.user_id.trim());
+      if (data?.prompt_kind !== "system_reminder") userQueries += 1;
+    }
+    if (record.event === "system_reminder") systemReminders += 1;
     if (record.event === "run_settled" && run) runEnds.set(run, record.timestamp);
     if (record.event === "assistant_message") {
       assistantMessages += 1;
@@ -508,7 +521,10 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
 
   return {
     session_id: sessionId,
+    user_ids: [...new Set(runUsers.values())].sort(),
     runs: runIds.length,
+    user_queries: userQueries,
+    system_reminders: systemReminders,
     turns: turns.size,
     assistant_messages: assistantMessages,
     thinking_chars: thinkingChars,
@@ -539,8 +555,10 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
     evidence_add_attempts: evidenceAddAttempts,
     run_summaries: runIds.map((runId) => {
       const duration = milliseconds(runStarts.get(runId), runEnds.get(runId));
+      const userId = runUsers.get(runId);
       return {
         run_id: runId,
+        ...(userId ? { user_id: userId } : {}),
         ...(duration === undefined ? {} : { duration_ms: duration, duration_seconds: Math.round(duration) / 1000 }),
         turns: runTurns.get(runId)?.size ?? 0,
         tool_calls: runToolCalls.get(runId) ?? 0,

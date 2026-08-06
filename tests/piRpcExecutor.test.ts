@@ -88,6 +88,7 @@ const request = (sessionId?: string): AgentRunInput => ({
   thinkingLevel: "medium",
   searchEnabled: true,
   retrievalPolicy: "all",
+  responseMode: "report",
   maxIterations: 32,
   requestTimeoutSeconds: 600,
   provider: "deepseek",

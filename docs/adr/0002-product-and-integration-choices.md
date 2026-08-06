@@ -102,11 +102,11 @@ Do not make MCP the only path for guidelines; keep web/search/read fallback path
 
 ### 11. User/session isolation
 
-For now assume one local entity/user. Use session directories to isolate multiple sessions. Do not add multi-tenant storage abstraction yet.
+For the original local foundation assume one local entity/user. The internal beta web deployment supersedes this scope with the lightweight account/session ownership described in ADR-0004; do not introduce a database-backed multi-tenant abstraction.
 
 ### 12. TUI
 
-Keep Pi TUI as a first-class local development/test interface. Web UI is a future product target, not the first implementation target.
+Keep Pi TUI as a first-class local development/test interface. The internal beta web UI is now an in-scope deployment surface; this does not create a second agent runtime.
 
 ## Consequences
 

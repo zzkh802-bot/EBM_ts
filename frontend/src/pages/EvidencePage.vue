@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { agentService } from '../services'
+import { agentService, uploadAttachment, workspaceService } from '../services'
 import { useAgentRunStore, usePreferencesStore, useSessionsStore, useUiStore } from '../stores'
-import type { ClinicianDocument, Message, ModeSnapshot, RuntimeConfig } from '../types/domain'
-import { buildResearchRunRequest, newId, nowIso, responseText } from '../utils/core'
+import type { AgentRunResponse, ClinicianDocument, Message, ModeSnapshot, RuntimeConfig } from '../types/domain'
+import { buildResearchRunRequest, hydrateRunReport, newId, nowIso, responseText } from '../utils/core'
 import { parseReport, reportPlainText, type Reference } from '../utils/report'
 import { copyText } from '../utils/browser'
 import ReportRenderer from '../components/report/ReportRenderer.vue'
+import PdfDocumentViewer from '../components/evidence/PdfDocumentViewer.vue'
 import RunActivity from '../components/evidence/RunActivity.vue'
+import FeedbackPanel from '../components/evidence/FeedbackPanel.vue'
 import { goodCases } from '../data/goodCases'
 import { useAccountConnection } from '../composables/useAccountConnection'
 import { useResearchDocuments } from '../composables/useResearchDocuments'
@@ -23,6 +25,14 @@ const question = ref('')
 const feed = ref<HTMLElement | null>(null)
 const runtimeConfig = ref<RuntimeConfig | null>(null)
 const runtimeConfigError = ref('')
+const fileInput = ref<HTMLInputElement | null>(null)
+const medicalImageInput = ref<HTMLInputElement | null>(null)
+const attachmentError = ref('')
+const uploadingAttachments = ref(false)
+type PendingUpload = { file: File; kind: 'document' | 'medical_image' }
+const pendingUploads = ref<PendingUpload[]>([])
+const expandedReportMessageIds = ref<Set<string>>(new Set())
+const feedbackSeen = ref(false)
 const {
   conversationFiles,
   conversationFilesLoading,
@@ -45,7 +55,10 @@ const stages = {
 }
 watch(() => sessions.activeSessionId, () => {
   question.value = ''
-  run.queuedGuidance = []
+  run.bind(sessions.activeSessionId)
+  run.clearGuidance(sessions.activeSessionId)
+  const sessionId = sessions.active.researchSessionId
+  feedbackSeen.value = Boolean(sessionId && localStorage.getItem(`dp_xunyi_feedback_seen:${sessionId}`))
 })
 watch(() => route.path, (path) => {
   if (path === '/clinician') question.value = ''
@@ -55,6 +68,7 @@ watch(() => route.path, (path) => {
 // Flip this flag when ChatGPT/Claude account connections are ready for product use again.
 const showSubscriptionProviders = false
 const availableModels = computed(() => runtimeConfig.value?.models.filter((item) => item.available && (showSubscriptionProviders || !item.connection_provider)) || [])
+const feedbackEnabled = computed(() => runtimeConfig.value?.feedback_enabled !== false)
 const providers = computed(() => availableModels.value.filter((item, index, items) =>
   items.findIndex((candidate) => candidate.provider === item.provider) === index,
 ))
@@ -62,8 +76,7 @@ const modelsForProvider = computed(() => availableModels.value.filter((item) => 
 const subscriptionProviders = computed(() => showSubscriptionProviders ? runtimeConfig.value?.models.filter((item) => item.connection_provider) || [] : [])
 const questionInput = ref<HTMLTextAreaElement | null>(null)
 const thinkingLevelLabel = (level: ModeSnapshot['thinkingLevel']) => ({
-  off: 'off · 关闭', minimal: 'minimal · 极低', low: 'low · 低', medium: 'medium · 中',
-  high: 'high · 高', xhigh: 'xhigh · 极高', max: 'max · 最大',
+  off: 'off · 关闭', low: 'low · 低', medium: 'medium · 中', high: 'high · 高',
 }[level])
 const primaryActionLabel = computed(() => {
   if (!run.busy) return '开始研究'
@@ -71,11 +84,15 @@ const primaryActionLabel = computed(() => {
 })
 const homeMode = computed(() => route.path === '/clinician')
 const activeHasConversation = computed(() => sessions.active.messages.some((message) => message.role === 'user'))
+const firstReportMessage = computed(() => sessions.active.messages.find((message) => message.role === 'assistant' && !message.pending && (message.reportMarkdown || message.reportPath)))
 const hasConversation = computed(() => !homeMode.value && activeHasConversation.value)
 const researchCount = computed(() => sessions.active.messages.filter((message) => message.role === 'user').length)
 const sessionStatusLabel = computed(() => ({ draft: '待开始', active: '正在研究', complete: '可继续追踪' })[sessions.active.status])
-const documentKindLabel = (kind: ClinicianDocument['kind']) => kind === 'report' ? '最终报告' : '研究框架'
-const documentTitle = (file: ClinicianDocument) => file.path.split('/').at(-1)?.replace(/\.md$/, '') || documentKindLabel(file.kind)
+const documentKindLabel = (kind: ClinicianDocument['kind']) => ({
+  report: '最终报告', report_draft: '报告草稿', research_frame: '研究框架', artifact: '用户文件', attachment: '上传附件',
+}[kind])
+const documentTitle = (file: ClinicianDocument) => file.path.split('/').at(-1) || documentKindLabel(file.kind)
+const conversationDocuments = computed(() => conversationFiles.value)
 const hydrateHistoricalReports = async () => {
   const localSessionId = sessions.activeSessionId
   const sessionId = sessions.active.researchSessionId
@@ -86,9 +103,14 @@ const hydrateHistoricalReports = async () => {
     const markdown = await readFormalReport(sessionId, message.reportPath)
     if (markdown) sessions.patchMessageIn(localSessionId, message.id, { reportMarkdown: markdown })
   }))
+  if (!expandedReportMessageIds.value.size) {
+    const reportMessage = [...sessions.active.messages].reverse().find((message) => message.role === 'assistant' && (message.reportMarkdown || message.reportPath))
+    if (reportMessage) expandedReportMessageIds.value.add(reportMessage.id)
+  }
 }
 watch(() => [route.path, sessions.activeSessionId, sessions.active.researchSessionId], () => {
   closeConversationFile()
+  expandedReportMessageIds.value = new Set()
   if (homeMode.value) {
     conversationFiles.value = []
     return
@@ -115,15 +137,19 @@ watch(() => sessions.active.messages.length, async () => {
 
 async function submit(input = question.value, modeOverride?: ModeSnapshot) {
   const text = input.trim()
-  if (run.busy) {
-    if (text) { run.queuedGuidance.push(text); question.value = '' }
-    else run.stop()
-    return
-  }
   if (!text) return
   const localSessionId = homeMode.value && activeHasConversation.value
     ? sessions.create()
     : sessions.activeSessionId
+  // A new home-page question gets its own local session and can start while
+  // another session is still running. Only queue follow-up text within the
+  // same session.
+  run.bind(localSessionId)
+  if (run.busy) {
+    if (text) { run.addGuidance(localSessionId, text); question.value = '' }
+    else run.stop(localSessionId)
+    return
+  }
   if (homeMode.value) await router.replace('/clinician/evidence')
   question.value = ''
   const mode = modeOverride || { ...preferences.snapshot }
@@ -138,62 +164,108 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
     content: '正在梳理问题与检索范围…', trace: [], tools: [],
     sourceQuestion: text, pending: true, stage: 'planning', createdAt: nowIso(), ...mode,
   })
-  const signal = run.start()
+  const signal = run.start(localSessionId)
+  const requestResearchSessionId = sessions.active.researchSessionId
+  let loadedServerSessionId = requestResearchSessionId
+  let latestRunStatus: AgentRunResponse | null = null
   try {
+    attachmentError.value = ''
+    uploadingAttachments.value = pendingUploads.value.length > 0
+    const uploadedAttachments = await Promise.all(pendingUploads.value.map((pending) =>
+      uploadAttachment(pending.file, requestResearchSessionId || localSessionId)))
+    const attachmentIds = uploadedAttachments.map((uploaded) => uploaded.attachment_id)
+    pendingUploads.value = []
     const dto = buildResearchRunRequest(
       text,
-      sessions.active.researchSessionId,
+      requestResearchSessionId,
       mode,
       preferences.provider || undefined,
       preferences.model || undefined,
+      attachmentIds,
     )
     const data = await agentService.run(dto, signal, {
-          onStatus: (status) => {
-            if (status.session_id) {
-              sessions.setResearchSessionId(localSessionId, status.session_id)
-              void loadConversationFiles()
-            }
-            if (status.stage) run.setStage(status.stage)
-            else if (status.status === 'queued') run.setStage('planning')
-            else if (status.status === 'running') run.setStage('retrieving')
-            else if (status.status === 'cancelling') run.setStage('network_wait')
-            sessions.patchMessageIn(localSessionId, pendingId, {
-              trace: status.agent_trace || [],
-              progressUpdates: status.progress_updates || [],
-              tools: status.tools || [],
-              runStartedAt: status.started_at,
-              runCompletedAt: status.completed_at,
-            })
-          },
-          onNetworkRetry: () => { run.setStage('network_wait') },
+      onStatus: (status) => {
+        latestRunStatus = status
+        const attachmentProcessed = status.progress_updates?.some((update) => /附件.*(?:已完成文字解析|已加入本轮研究输入)/.test(update.text))
+        if (status.session_id && status.session_id !== loadedServerSessionId) {
+          loadedServerSessionId = status.session_id
+          sessions.setResearchSessionId(localSessionId, status.session_id)
+          void loadConversationFiles(status.session_id)
+        }
+        // The first session listing can race with OCR. Refresh once the
+        // backend reports that the processed attachment has been archived.
+        if (status.session_id && attachmentProcessed) void loadConversationFiles(status.session_id)
+        if (status.stage) run.setStage(localSessionId, status.stage)
+        else if (status.status === 'queued') run.setStage(localSessionId, 'planning')
+        else if (status.status === 'running') run.setStage(localSessionId, 'retrieving')
+        else if (status.status === 'cancelling') run.setStage(localSessionId, 'network_wait')
+        sessions.patchMessageIn(localSessionId, pendingId, {
+          runId: status.run_id,
+          queryId: status.query_id || status.run_id,
+          trace: status.agent_trace || [],
+          progressUpdates: status.progress_updates || [],
+          tools: status.tools || [],
+          runStartedAt: status.started_at,
+          runCompletedAt: status.completed_at,
         })
+      },
+      onNetworkRetry: () => { run.setStage(localSessionId, 'network_wait') },
+    })
     if (data.session_id) sessions.setResearchSessionId(localSessionId, data.session_id)
-    const reportMarkdown = data.report_markdown || await readFormalReport(data.session_id, data.report_path)
-    void loadConversationFiles()
+    const reportMarkdown = await hydrateRunReport(data, readFormalReport)
+    if (data.session_id) await loadConversationFiles(data.session_id)
     sessions.patchMessageIn(localSessionId, pendingId, {
+      runId: data.run_id,
+      queryId: data.query_id || data.run_id,
       pending: false, stage: 'idle', content: responseText(data), trace: data.agent_trace || [],
       progressUpdates: data.progress_updates || [], tools: data.tools || [],
       runStartedAt: data.started_at, runCompletedAt: data.completed_at,
       reportMarkdown, reportPath: data.report_path,
     })
+    if (reportMarkdown || data.report_path) expandedReportMessageIds.value.add(pendingId)
     sessions.completeResearchIn(localSessionId)
   } catch (error) {
+    attachmentError.value = error instanceof Error ? error.message : '附件上传失败'
     const stopped = error instanceof DOMException && error.name === 'AbortError'
+    const statusSnapshot = latestRunStatus as unknown as AgentRunResponse | undefined
     sessions.patchMessageIn(localSessionId, pendingId, {
       pending: false, stage: 'idle',
       content: stopped
         ? '已停止前端等待；后端任务可能仍会短暂收尾。'
         : `网络或后端连接异常：${error instanceof Error ? error.message : String(error)}`,
-      trace: [{ kind: stopped ? 'run.interrupted' : 'error', label: stopped ? '用户中断' : '请求异常' }],
+      runId: statusSnapshot?.run_id,
+      queryId: statusSnapshot?.query_id || statusSnapshot?.run_id,
+      trace: [
+        ...(statusSnapshot?.agent_trace || []),
+        { kind: stopped ? 'run.interrupted' : 'error', label: stopped ? '用户中断' : '请求异常' },
+      ],
+      progressUpdates: statusSnapshot?.progress_updates || [],
+      tools: statusSnapshot?.tools || [],
+      runStartedAt: statusSnapshot?.started_at,
+      runCompletedAt: statusSnapshot?.completed_at,
     })
+    const sessionToRefresh = statusSnapshot?.session_id || loadedServerSessionId || sessions.active.researchSessionId
+    if (sessionToRefresh) await loadConversationFiles(sessionToRefresh)
     sessions.completeResearchIn(localSessionId)
   } finally {
-    run.finish()
+    uploadingAttachments.value = false
+    run.finish(localSessionId)
   }
 }
 
+const addPendingFiles = (files: FileList | null, kind: PendingUpload['kind']) => {
+  if (!files) return
+  const allowed = /\.(?:pdf|docx?|png|jpe?g|webp|gif|txt|md)$/i
+  const additions = Array.from(files).filter((file) => allowed.test(file.name) && file.size > 0 && file.size <= 25 * 1024 * 1024)
+  pendingUploads.value.push(...additions.map((file) => ({ file, kind })))
+  if (additions.length < files.length) attachmentError.value = '仅支持 PDF、DOC/DOCX、常见图片、TXT/Markdown，单个文件不超过 25 MB。'
+  if (kind === 'medical_image') medicalImageInput.value && (medicalImageInput.value.value = '')
+  else if (fileInput.value) fileInput.value.value = ''
+}
+const removePendingFile = (index: number) => { pendingUploads.value.splice(index, 1) }
+
 const projectedText = (message: Message) =>
-  reportPlainText(parseReport(message.reportMarkdown || message.content))
+  reportPlainText(parseReport(message.content))
 
 const copy = async (message: Message) => copyText(projectedText(message))
 const speak = (message: Message) => {
@@ -217,12 +289,32 @@ const openCitation = (reference: Reference, reportPath?: string) => {
 const openWorkspace = async (preferredPath = '') => {
   if (!conversationFiles.value.length) await loadConversationFiles()
   const target = conversationFiles.value.find((file) => file.path === preferredPath)
-    || conversationFiles.value.find((file) => file.kind === 'report')
-    || conversationFiles.value[0]
+    || [...conversationFiles.value].reverse().find((file) => file.kind === 'report')
+    || conversationFiles.value.find((file) => file.kind !== 'report')
+    || conversationDocuments.value[0]
   if (target) await openConversationFile(target)
 }
+const markFeedbackSeen = () => {
+  const sessionId = sessions.active.researchSessionId
+  if (!sessionId) return
+  feedbackSeen.value = true
+  localStorage.setItem(`dp_xunyi_feedback_seen:${sessionId}`, '1')
+}
+const toggleReport = async (message: Message) => {
+  if (expandedReportMessageIds.value.has(message.id)) {
+    expandedReportMessageIds.value.delete(message.id)
+    return
+  }
+  if (!message.reportMarkdown && message.reportPath) {
+    const markdown = await readFormalReport(sessions.active.researchSessionId || undefined, message.reportPath)
+    if (markdown) sessions.patchMessage(message.id, { reportMarkdown: markdown })
+  }
+  expandedReportMessageIds.value.add(message.id)
+}
 const runQueued = (index: number) => {
-  const text = run.queuedGuidance.splice(index, 1)[0]
+  const localSessionId = sessions.activeSessionId
+  const text = run.queuedGuidance[index]
+  run.removeGuidance(localSessionId, index)
   if (text) void submit(text)
 }
 const focusQuestion = async () => {
@@ -235,7 +327,7 @@ const selectGoodCase = async (value: string) => {
 }
 const handlePrimaryAction = () => {
   if (run.busy && !question.value.trim()) {
-    run.stop()
+    run.stop(sessions.activeSessionId)
     return
   }
   void submit()
@@ -263,7 +355,7 @@ const handlePrimaryAction = () => {
             <span v-for="(item, index) in run.queuedGuidance" :key="`${item}-${index}`">
               {{ item }}
               <button type="button" :disabled="run.busy" @click="runQueued(index)">发送</button>
-              <button type="button" @click="run.queuedGuidance.splice(index, 1)">×</button>
+              <button type="button" @click="run.removeGuidance(sessions.activeSessionId, index)">×</button>
             </span>
           </div>
           <textarea
@@ -274,6 +366,18 @@ const handlePrimaryAction = () => {
             @keydown.ctrl.enter.prevent="submit()"
             @keydown.meta.enter.prevent="submit()"
           />
+          <div class="attachment-tray" aria-label="本轮附件">
+            <input ref="fileInput" type="file" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.gif,.txt,.md" hidden @change="addPendingFiles(($event.target as HTMLInputElement).files, 'document')" />
+            <input ref="medicalImageInput" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.gif" hidden @change="addPendingFiles(($event.target as HTMLInputElement).files, 'medical_image')" />
+            <button type="button" :disabled="run.busy || uploadingAttachments" @click="fileInput?.click()">上传附件</button>
+            <button type="button" :disabled="run.busy || uploadingAttachments" @click="medicalImageInput?.click()">上传医学图像</button>
+            <span v-for="(item, index) in pendingUploads" :key="`${item.file.name}-${index}`" class="attachment-chip">
+              {{ item.kind === 'medical_image' ? '医学图像 · ' : '' }}{{ item.file.name }}
+              <button type="button" aria-label="移除附件" @click="removePendingFile(index)">×</button>
+            </span>
+                    <small v-if="uploadingAttachments">正在上传附件；随后会并行进行 OCR/文字解析…</small>
+            <small v-if="attachmentError" class="attachment-error">{{ attachmentError }}</small>
+          </div>
         </div>
         <div class="composer-options" aria-label="检索选项">
           <label class="runtime-select">
@@ -292,12 +396,9 @@ const handlePrimaryAction = () => {
             <span>推理强度</span>
             <select v-model="preferences.thinkingLevel" :disabled="run.busy">
               <option value="off">off · 关闭</option>
-              <option value="minimal">minimal · 极低</option>
               <option value="low">low · 低</option>
               <option value="medium">medium · 中</option>
               <option value="high">high · 高</option>
-              <option value="xhigh">xhigh · 极高</option>
-              <option value="max">max · 最大</option>
             </select>
           </label>
           <span class="composer-option active" aria-label="证据检索已开启">证据检索已开启</span>
@@ -377,35 +478,38 @@ const handlePrimaryAction = () => {
                 :completed-at="message.runCompletedAt"
               />
               <ReportRenderer
-                v-if="message.role === 'assistant' && !message.pending && !message.showMarkdown && !message.reportMarkdown"
+                v-if="message.role === 'assistant' && !message.pending"
                 :markdown="message.content"
                 :audience="message.audienceMode"
                 @citation="openCitation($event, message.reportPath)"
               />
-              <pre v-else-if="message.showMarkdown">{{ message.reportMarkdown || message.content }}</pre>
-              <section v-else-if="message.role === 'assistant' && message.reportMarkdown" class="final-report" aria-label="正式报告">
-                <header class="final-report-head">
-                  <div>
-                    <span>最终报告</span>
-                    <strong>本轮研究结论与依据</strong>
-                  </div>
-                  <small>已保存</small>
-                </header>
-                <section class="model-answer" aria-label="本轮回答摘要">
-                  <span>本轮回答摘要</span>
+              <p v-else-if="message.role !== 'assistant' || !message.pending">{{ message.content }}</p>
+              <section v-if="message.role === 'assistant' && !message.pending && (message.reportMarkdown || message.reportPath)" class="report-attachment" aria-label="正式报告附件">
+                <button class="report-attachment-card" type="button" :aria-expanded="expandedReportMessageIds.has(message.id)" @click="toggleReport(message)">
+                  <span class="report-attachment-icon" aria-hidden="true">＋</span>
+                  <span class="report-attachment-copy">
+                    <strong>最终报告</strong>
+                    <small>{{ message.reportPath?.split('/').at(-1) || '本轮研究结论与依据' }}</small>
+                  </span>
+                  <span class="report-attachment-action">{{ expandedReportMessageIds.has(message.id) ? '收起' : '展开' }} <i aria-hidden="true">{{ expandedReportMessageIds.has(message.id) ? '⌃' : '⌄' }}</i></span>
+                </button>
+                <section v-if="expandedReportMessageIds.has(message.id)" class="final-report" aria-label="正式报告">
+                  <header class="final-report-head">
+                    <div>
+                      <span>最终报告</span>
+                      <strong>本轮研究结论与依据</strong>
+                    </div>
+                    <small>已保存</small>
+                  </header>
                   <ReportRenderer
-                    :markdown="message.content"
+                    v-if="message.reportMarkdown"
+                    :markdown="message.reportMarkdown"
                     :audience="message.audienceMode"
                     @citation="openCitation($event, message.reportPath)"
                   />
+                  <p v-else class="document-state">正在打开正式报告…</p>
                 </section>
-                <ReportRenderer
-                  :markdown="message.reportMarkdown"
-                  :audience="message.audienceMode"
-                  @citation="openCitation($event, message.reportPath)"
-                />
               </section>
-              <p v-else>{{ message.content }}</p>
               <div v-if="message.role === 'assistant' && !message.pending" class="message-actions">
                 <button class="message-action-primary" type="button" @click="focusQuestion">继续追问</button>
                 <button type="button" @click="retry(message, '请用更简洁、适合快速决策的方式回答：')">简化结论</button>
@@ -417,11 +521,16 @@ const handlePrimaryAction = () => {
                     <button type="button" @click="speak(message)">朗读</button>
                     <button type="button" @click="share(message)">分享</button>
                     <button type="button" @click="retry(message)">重新运行</button>
-                    <button type="button" @click="sessions.patchMessage(message.id, { showMarkdown: !message.showMarkdown })">{{ message.showMarkdown ? '返回阅读视图' : '查看报告 Markdown' }}</button>
-                    <button v-if="message.reportMarkdown" type="button" @click="openWorkspace(message.reportPath)">打开最终报告</button>
+                    <button v-if="message.reportMarkdown || message.reportPath" type="button" @click="toggleReport(message)">{{ expandedReportMessageIds.has(message.id) ? '收起最终报告' : '展开最终报告' }}</button>
                   </div>
                 </details>
               </div>
+              <FeedbackPanel
+                v-if="feedbackEnabled && !feedbackSeen && firstReportMessage?.id === message.id && message.reportMarkdown && message.runId && sessions.active.researchSessionId"
+                :session-id="sessions.active.researchSessionId"
+                :run-id="message.queryId || message.runId"
+                @closed="markFeedbackSeen"
+              />
             </div>
           </article>
         </section>
@@ -434,10 +543,10 @@ const handlePrimaryAction = () => {
         <span>本题文档</span>
       </div>
       <p v-if="conversationFilesLoading">正在同步研究文件…</p>
-      <p v-else-if="!conversationFiles.length">研究完成后，最终报告和研究框架会出现在这里。</p>
+      <p v-else-if="!conversationDocuments.length">模型生成的研究文件会出现在这里。</p>
       <nav v-else class="conversation-document-list" aria-label="本题可读文档">
         <button
-          v-for="file in conversationFiles"
+          v-for="file in conversationDocuments"
           :key="file.path"
           type="button"
           :class="{ active: selectedConversationFile?.path === file.path }"
@@ -460,12 +569,39 @@ const handlePrimaryAction = () => {
       <div class="session-document-body">
         <p v-if="conversationFileLoading" class="document-state">正在打开文档…</p>
         <p v-else-if="conversationFileError" class="document-state error">{{ conversationFileError }}</p>
+        <template v-else-if="selectedConversationFile?.kind === 'attachment'">
+          <div class="attachment-original-viewer">
+            <img
+              v-if="selectedConversationFile.media_type?.startsWith('image/')"
+              :src="workspaceService.attachmentPreviewUrl(sessions.active.researchSessionId || '', selectedConversationFile.path)"
+              :alt="documentTitle(selectedConversationFile)"
+            />
+            <PdfDocumentViewer
+              v-else-if="selectedConversationFile.media_type === 'application/pdf'"
+              :src="workspaceService.attachmentPreviewUrl(sessions.active.researchSessionId || '', selectedConversationFile.path)"
+              :title="documentTitle(selectedConversationFile)"
+            />
+            <p v-else class="document-state">原始文件格式不支持直接预览，请下载原件查看。</p>
+          </div>
+          <ReportRenderer
+            v-if="conversationFileContent && !selectedConversationFile.media_type?.startsWith('image/') && selectedConversationFile.media_type !== 'application/pdf'"
+            :markdown="conversationFileContent"
+            audience="clinician"
+          />
+          <div class="attachment-original-actions">
+            <a :href="workspaceService.downloadUrl(sessions.active.researchSessionId || '', selectedConversationFile.path)" download>下载原件</a>
+          </div>
+        </template>
         <ReportRenderer
-          v-else-if="conversationFileContent"
+          v-else-if="conversationFileContent && selectedConversationFile?.previewable !== false"
           :markdown="conversationFileContent"
           audience="clinician"
           @citation="openCitation($event, selectedConversationFile.kind === 'report' ? selectedConversationFile.path : undefined)"
         />
+        <div v-else class="document-download-state">
+          <p>该文件不适合在页面内预览。</p>
+          <a :href="workspaceService.downloadUrl(sessions.active.researchSessionId || '', selectedConversationFile.path)" download>下载文件</a>
+        </div>
       </div>
     </aside>
 
@@ -532,3 +668,18 @@ const handlePrimaryAction = () => {
     </aside>
   </div>
 </template>
+
+<style scoped>
+.attachment-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 8px 0 0; color: var(--ink-faint, #7d888d); font-size: 12px; }
+.attachment-tray > button { padding: 5px 8px; border: 1px solid rgba(49, 123, 107, .24); border-radius: 5px; background: rgba(255, 255, 255, .72); color: var(--ink-soft, #56636f); cursor: pointer; }
+.attachment-tray > button:disabled { cursor: not-allowed; opacity: .55; }
+.attachment-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 260px; padding: 4px 6px; border-radius: 5px; background: rgba(49, 123, 107, .1); color: var(--ink-soft, #56636f); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-chip button { border: 0; background: transparent; color: inherit; cursor: pointer; }
+.attachment-error { color: #a43d36; }
+.attachment-original-viewer { display: grid; gap: 12px; margin-bottom: 16px; }
+.attachment-original-viewer img { display: block; max-width: 100%; max-height: 720px; margin: 0 auto; border: 1px solid var(--line, #d9e2de); border-radius: 8px; object-fit: contain; background: #f6f8f7; }
+.attachment-original-viewer iframe { width: 100%; min-height: 720px; border: 1px solid var(--line, #d9e2de); border-radius: 8px; background: #fff; }
+.attachment-original-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+.attachment-original-actions a { color: var(--jade, #08766d); font-size: 12px; text-decoration: none; }
+.attachment-original-actions a:hover { text-decoration: underline; }
+</style>

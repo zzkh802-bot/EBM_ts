@@ -63,48 +63,6 @@ export type EvidenceAnchorAddInput = Omit<EvidenceAddInput, "sourcePath" | "sour
   endText?: string;
 };
 
-function evidenceQuoteQualityErrors(input: {
-  source: string;
-  quote: string;
-  provenance: EvidenceProvenance;
-  lineStart: number;
-  lineEnd: number;
-}): string[] {
-  const errors: string[] = [];
-  const sourceLines = input.source.split("\n");
-  if (/Navigation\/context only|Linked records below are not citation evidence/i.test(input.quote)) {
-    errors.push("PubMed context is navigation metadata, not citation evidence");
-  }
-
-  if (input.provenance === "primary_abstract" && /Source status:\s*PubMed abstract only/i.test(input.source)) {
-    const abstractHeading = sourceLines.findIndex((line) => /^##\s+Abstract\s*$/i.test(line.trim()));
-    if (abstractHeading >= 0) {
-      let nextHeading = sourceLines.findIndex((line, index) => index > abstractHeading && /^##\s+/.test(line.trim()));
-      if (nextHeading < 0) nextHeading = sourceLines.length;
-      let first = abstractHeading + 1;
-      while (first < nextHeading && !sourceLines[first]!.trim()) first += 1;
-      let last = nextHeading - 1;
-      while (last >= first && !sourceLines[last]!.trim()) last -= 1;
-      const abstractStart = first + 1;
-      const abstractEnd = last + 1;
-      if (input.lineStart < abstractStart || input.lineEnd > abstractEnd) {
-        errors.push(`primary_abstract evidence must stay inside the PubMed Abstract lines ${abstractStart}-${abstractEnd}`);
-      }
-    }
-  }
-
-  const lines = input.quote.split("\n").map((line) => line.trim()).filter(Boolean);
-  const hasMarkdownTable = lines.some((line) => /^\|.*\|$/.test(line))
-    && lines.some((line) => /^\|?\s*:?-{3,}/.test(line));
-  const shortLines = lines.filter((line) => Array.from(line).length <= 10).length;
-  const repeatedLines = lines.length - new Set(lines).size;
-  const tableMarkers = lines.filter((line) => /^(?:表|Table)\s*\d|^(?:项目|事件|标准剂量|低剂量)$/i.test(line)).length;
-  if (lines.length >= 12 && !hasMarkdownTable && tableMarkers >= 1 && shortLines / lines.length >= 0.55 && repeatedLines >= 3) {
-    errors.push("quote appears to be a fragmented PDF table; cite a nearby narrative passage or a structurally parsed table instead");
-  }
-  return errors;
-}
-
 function assertRelativeSafe(rel: string): void {
   if (!rel || rel.startsWith("/") || rel.includes("\0") || rel.split(/[\\/]+/).includes("..")) {
     throw new Error(`unsafe relative path: ${rel}`);
@@ -210,7 +168,7 @@ export async function addEvidence(input: EvidenceAddInput): Promise<EvidenceNode
   const sourceAbs = await resolveExistingSessionPath(input.sessionDir, sourcePath);
   const text = await readFile(sourceAbs, "utf8");
   const located = locateEvidenceQuote(text, input.quote);
-  return persistLocatedEvidence(input, sourcePath, text, located);
+  return persistLocatedEvidence(input, sourcePath, located);
 }
 
 export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Promise<EvidenceNode> {
@@ -225,11 +183,21 @@ export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Pro
     receipt = await resolveReadReceipt(input.sessionDir, input.readId);
     normalizedSourcePath = normalizeEvidenceSourcePath(input.sourcePath ?? receipt.sourcePath);
     if (receipt.sourcePath !== normalizedSourcePath) throw new Error("read_id does not match source_path");
-    if (lineStart !== undefined && (lineStart !== receipt.lineStart || lineEnd !== receipt.lineEnd)) {
-      throw new Error("line range does not match read_id");
+    // Line numbers are an optional narrowing hint. Models may copy a stale
+    // candidate range or a range from a different read, so do not reject the
+    // authoritative read_id solely because the hint falls outside it. The
+    // anchor match below remains bounded by the receipt either way.
+    if (lineStart !== undefined) {
+      lineStart = Math.max(receipt.lineStart, lineStart);
+      lineEnd = Math.min(receipt.lineEnd, lineEnd!);
+      if (lineStart > lineEnd) {
+        lineStart = receipt.lineStart;
+        lineEnd = receipt.lineEnd;
+      }
+    } else {
+      lineStart = receipt.lineStart;
+      lineEnd = receipt.lineEnd;
     }
-    lineStart = receipt.lineStart;
-    lineEnd = receipt.lineEnd;
   } else {
     if (!input.sourcePath?.trim()) throw new Error("source_path is required when read_id is absent");
     normalizedSourcePath = normalizeEvidenceSourcePath(input.sourcePath);
@@ -245,12 +213,32 @@ export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Pro
   }
   const hasStart = Boolean(input.startText?.trim());
   const hasEnd = Boolean(input.endText?.trim());
-  if (readIdMode && (!hasStart || !hasEnd)) {
-    throw new Error("read_id requires both start_text and end_text; use line_start and line_end when text anchors are unavailable");
+  if (hasStart !== hasEnd) {
+    throw new Error("start_text and end_text must be provided together");
   }
-  const located = hasStart && hasEnd
-    ? await locateAnchorsOrRange(source, input.startText!, input.endText!, lineStart!, lineEnd!, readIdMode)
-    : locateEvidenceRange(source, lineStart!, lineEnd!, "line_range");
+  if (readIdMode && (!hasStart || !hasEnd)) {
+    throw new Error("read_id requires both start_text and end_text; when text anchors are unavailable, omit read_id and use source_path with line_start and line_end");
+  }
+  let located: ReturnType<typeof locateEvidenceRange>;
+  if (hasStart && hasEnd) {
+    try {
+      located = await locateAnchorsOrRange(source, input.startText!, input.endText!, lineStart!, lineEnd!, readIdMode);
+    } catch (error) {
+      const receiptRange = receipt ? { lineStart: receipt.lineStart, lineEnd: receipt.lineEnd } : undefined;
+      const usedNarrowRange = receiptRange && (lineStart !== receiptRange.lineStart || lineEnd !== receiptRange.lineEnd);
+      if (!readIdMode || !usedNarrowRange) throw error;
+      try {
+        // A stale line hint must not invalidate anchors that are unique within
+        // the same receipt. This is still bounded and never becomes a whole
+        // source fallback because read_id anchors remain mandatory.
+        located = locateEvidenceAnchors(source, input.startText!, input.endText!, receiptRange);
+      } catch {
+        throw error;
+      }
+    }
+  } else {
+    located = locateEvidenceRange(source, lineStart!, lineEnd!, "line_range");
+  }
   return persistLocatedEvidence({
     sessionDir: input.sessionDir,
     question: input.question,
@@ -258,7 +246,7 @@ export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Pro
     relation: input.relation,
     ...(input.provenance ? { provenance: input.provenance } : {}),
     ...(input.confidence ? { confidence: input.confidence } : {}),
-  }, normalizedSourcePath, source, located);
+  }, normalizedSourcePath, located);
 }
 
 function normalizeEvidenceSourcePath(value: string): string {
@@ -284,6 +272,9 @@ async function locateAnchorsOrRange(
     return locateEvidenceAnchors(source, startText, endText, { lineStart, lineEnd });
   } catch (error) {
     if (!(error instanceof Error)) throw error;
+    if (readIdMode) {
+      throw new Error(`${error.message} 请保留当前 read_id，改用同一片段中更独特的 start_text/end_text；如果片段过大，请先重新读取更窄的窗口。不会自动把整个 read_id 范围保存为证据。`);
+    }
     // Anchor text is a precision aid, not a reason to lose an otherwise
     // version-checked read/line record. Keep the bounded quote and expose its
     // broad locator mode in evidence metadata when matching is unsuccessful.
@@ -294,20 +285,11 @@ async function locateAnchorsOrRange(
 async function persistLocatedEvidence(
   input: Omit<EvidenceAddInput, "sourcePath" | "sourceId" | "quote">,
   sourcePath: string,
-  text: string,
   located: ReturnType<typeof locateEvidenceQuote>,
 ): Promise<EvidenceNode> {
   const quote = located.quote;
   const identity = await sourceIdentityForPath(input.sessionDir, sourcePath);
   const provenance = input.provenance ?? "other";
-  const qualityErrors = evidenceQuoteQualityErrors({
-    source: text,
-    quote,
-    provenance,
-    lineStart: located.lineStart,
-    lineEnd: located.lineEnd,
-  });
-  if (qualityErrors.length) throw new Error(`evidence quote quality check failed: ${qualityErrors.join("; ")}`);
   const contentHash = createHash("sha256").update(quote).digest("hex");
   const base = {
     question: input.question.trim(),
@@ -330,7 +312,7 @@ async function persistLocatedEvidence(
     id: evidenceId(base),
     ...base,
     createdAt: formatBeijingTimestamp(),
-    citationEligible: !["guideline_mirror_unverified", "discovery_only"].includes(base.provenance),
+    citationEligible: base.provenance !== "discovery_only",
   };
   const outDir = path.join(input.sessionDir, "evidence");
   await mkdir(outDir, { recursive: true });
@@ -498,13 +480,6 @@ export async function verifyEvidence(sessionDir: string, node: EvidenceNode): Pr
     if (quote !== node.quote) errors.push("quote does not match source location");
     const hash = createHash("sha256").update(node.quote).digest("hex");
     if (hash !== node.contentHash) errors.push("contentHash mismatch");
-    errors.push(...evidenceQuoteQualityErrors({
-      source,
-      quote: node.quote,
-      provenance: node.provenance,
-      lineStart: node.lineStart,
-      lineEnd: node.lineEnd,
-    }));
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
   }

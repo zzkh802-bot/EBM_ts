@@ -70,6 +70,42 @@ function semanticSlug(value: string): string {
   return Array.from(normalized).slice(0, 64).join("").replace(/-+$/g, "") || "research";
 }
 
+function safeUserDirectoryPart(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim().toLowerCase();
+  return /^u-[a-z0-9_-]{4,64}$/.test(normalized) ? normalized : undefined;
+}
+
+async function annotateSessionIdentity(cwd: string, sessionId: string, workspace: string, label: string, userId?: string): Promise<void> {
+  const metadataFile = path.join(workspace, ".metadata", "session.json");
+  let metadata: Record<string, unknown> = {};
+  try { metadata = JSON.parse(await readFile(metadataFile, "utf8")) as Record<string, unknown>; } catch { /* initialize below */ }
+  if (metadata.sessionId !== undefined && metadata.sessionId !== sessionId) throw new Error(`session metadata mismatch for ${sessionId}`);
+  const existingUserId = typeof metadata.user_id === "string" ? metadata.user_id : undefined;
+  if (existingUserId && userId && existingUserId !== userId) throw new Error(`session ${sessionId} belongs to another user`);
+  const nextMetadata = {
+    ...metadata,
+    sessionId,
+    directory: path.basename(workspace),
+    displayName: typeof metadata.displayName === "string" ? metadata.displayName : label,
+    ...(userId ? { user_id: userId } : existingUserId ? { user_id: existingUserId } : {}),
+  };
+  if (JSON.stringify(metadata) !== JSON.stringify(nextMetadata)) await writeFile(metadataFile, `${JSON.stringify(nextMetadata, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+
+  const mappingFile = mappingPath(cwd, sessionId);
+  let mapping: Record<string, unknown> = {};
+  try { mapping = JSON.parse(await readFile(mappingFile, "utf8")) as Record<string, unknown>; } catch { /* initialize below */ }
+  const nextMapping = {
+    ...mapping,
+    sessionId,
+    session_id: sessionId,
+    directory: path.basename(workspace),
+    ...(userId ? { user_id: userId } : typeof mapping.user_id === "string" ? { user_id: mapping.user_id } : {}),
+  };
+  await mkdir(path.dirname(mappingFile), { recursive: true, mode: 0o700 });
+  if (JSON.stringify(mapping) !== JSON.stringify(nextMapping)) await writeFile(mappingFile, `${JSON.stringify(nextMapping, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+}
+
 export function piSessionDirectory(cwd: string, sessionId: string): string {
   validateSessionId(sessionId);
   return mappedWorkspace(cwd, sessionId) ?? path.join(sessionRoot(cwd), sessionId);
@@ -114,6 +150,7 @@ export function piReadableSessionPath(cwd: string, sessionId: string, relativePa
 export function initializePiSessionDirectory(cwd: string, sessionId: string, input: {
   sessionName?: string;
   firstPrompt: string;
+  userId?: string;
 }): Promise<string> {
   validateSessionId(sessionId);
   const key = cacheKey(cwd, sessionId);
@@ -129,13 +166,19 @@ export function initializePiSessionDirectory(cwd: string, sessionId: string, inp
 async function initializePiSessionDirectoryUnlocked(cwd: string, sessionId: string, input: {
   sessionName?: string;
   firstPrompt: string;
+  userId?: string;
 }): Promise<string> {
   validateSessionId(sessionId);
   const existingMapping = mappedWorkspace(cwd, sessionId);
-  if (existingMapping) return existingMapping;
+  const label = input.sessionName?.trim() || input.firstPrompt.trim() || "research";
+  const userDirectoryPart = safeUserDirectoryPart(input.userId);
+  if (input.userId && !userDirectoryPart) throw new Error("invalid user id for session workspace");
+  if (existingMapping) {
+    await annotateSessionIdentity(cwd, sessionId, existingMapping, label, userDirectoryPart);
+    return existingMapping;
+  }
 
   const root = sessionRoot(cwd);
-  const label = input.sessionName?.trim() || input.firstPrompt.trim() || "research";
   await mkdir(root, { recursive: true, mode: 0o700 });
   const legacy = path.join(root, sessionId);
   if (existsSync(legacy)) {
@@ -146,24 +189,15 @@ async function initializePiSessionDirectoryUnlocked(cwd: string, sessionId: stri
     const mappingsDir = path.dirname(mappingPath(cwd, sessionId));
     await mkdir(metadataDir, { recursive: true, mode: 0o700 });
     await mkdir(mappingsDir, { recursive: true, mode: 0o700 });
-    try {
-      await writeFile(metadataFile, `${JSON.stringify({ sessionId, directory: sessionId, displayName: label, createdAt: formatBeijingTimestamp() }, null, 2)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
-    } catch (error) {
-      const existing = JSON.parse(await readFile(metadataFile, "utf8")) as { sessionId?: unknown };
-      if (existing.sessionId !== sessionId) throw error;
-    }
-    const targetMapping = mappingPath(cwd, sessionId);
-    try {
-      await writeFile(targetMapping, `${JSON.stringify({ sessionId, directory: sessionId }, null, 2)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
-    } catch (error) {
-      const existing = JSON.parse(await readFile(targetMapping, "utf8")) as { directory?: unknown };
-      if (existing.directory !== sessionId) throw error;
-    }
+    await writeFile(metadataFile, `${JSON.stringify({ sessionId, directory: sessionId, displayName: label, createdAt: formatBeijingTimestamp(), ...(userDirectoryPart ? { user_id: userDirectoryPart } : {}) }, null, 2)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" }).catch(async (error) => {
+      if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
+    });
+    await annotateSessionIdentity(cwd, sessionId, safeLegacy, label, userDirectoryPart);
     workspaceCache.set(cacheKey(cwd, sessionId), safeLegacy);
     return safeLegacy;
   }
 
-  const baseDirectory = `${sessionId.slice(0, 8)}_${semanticSlug(label)}`;
+  const baseDirectory = `${userDirectoryPart ? `${userDirectoryPart}__` : ""}${sessionId.slice(0, 8)}_${semanticSlug(label)}`;
   let directory = baseDirectory;
   let workspace = path.join(root, directory);
   for (let suffix = 2; existsSync(workspace); suffix += 1) {
@@ -196,11 +230,11 @@ async function initializePiSessionDirectoryUnlocked(cwd: string, sessionId: stri
   await mkdir(workspaceMetadataDir, { recursive: true, mode: 0o700 });
   await mkdir(mappingsDir, { recursive: true, mode: 0o700 });
 
-  const metadata = { sessionId, directory, displayName: label, createdAt: formatBeijingTimestamp() };
+  const metadata = { sessionId, directory, displayName: label, createdAt: formatBeijingTimestamp(), ...(userDirectoryPart ? { user_id: userDirectoryPart } : {}) };
   await writeFile(path.join(workspaceMetadataDir, "session.json"), `${JSON.stringify(metadata, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
   const targetMapping = mappingPath(cwd, sessionId);
   try {
-    await writeFile(targetMapping, `${JSON.stringify({ sessionId, directory }, null, 2)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    await writeFile(targetMapping, `${JSON.stringify({ sessionId, session_id: sessionId, directory, ...(userDirectoryPart ? { user_id: userDirectoryPart } : {}) }, null, 2)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" });
   } catch (error) {
     try {
       const parsed = JSON.parse(await readFile(targetMapping, "utf8")) as { directory?: unknown };

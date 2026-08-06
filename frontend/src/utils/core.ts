@@ -1,4 +1,4 @@
-import type { AgentRunRequest, ModeSnapshot } from '../types/domain'
+import type { AgentRunRequest, AgentRunResponse, ModeSnapshot, ResponseMode } from '../types/domain'
 
 export const STORAGE_KEYS = {
   sessions: 'dp_xunyi_sessions',
@@ -10,6 +10,18 @@ export const STORAGE_KEYS = {
   patientIntakeActive: 'dp_xunyi_patient_intake_active',
   patientProfiles: 'dp_xunyi_patient_profiles',
 } as const
+
+export const AUTH_USER_STORAGE_KEY = 'dp_xunyi_internal_user'
+
+export const userScopedStorageKey = (key: string) => {
+  let user = 'anonymous'
+  try {
+    user = localStorage.getItem(AUTH_USER_STORAGE_KEY) || user
+  } catch {
+    // Keep the anonymous namespace when storage is unavailable.
+  }
+  return user === 'anonymous' ? key : `${key}:${user}`
+}
 
 export const newId = (prefix: string) =>
   `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -39,6 +51,8 @@ export function buildResearchRunRequest(
   mode: ModeSnapshot,
   provider?: string,
   model?: string,
+  attachments?: string[],
+  responseMode: ResponseMode = 'auto',
 ): AgentRunRequest {
   return {
     question,
@@ -46,10 +60,21 @@ export function buildResearchRunRequest(
     audience_mode: mode.audienceMode,
     thinking_level: mode.thinkingLevel,
     search_enabled: true,
+    response_mode: responseMode,
     ...(provider ? { provider } : {}),
     ...(model ? { model } : {}),
+    ...(attachments?.length ? { attachments } : {}),
   }
 }
 
 export const responseText = (data: { report_markdown?: string; agent_answer?: string; message?: string }) =>
   data.agent_answer || data.message || data.report_markdown || '本轮没有生成回答。'
+
+export async function hydrateRunReport(
+  data: Pick<AgentRunResponse, 'session_id' | 'report_markdown' | 'report_path'>,
+  readFormalReport: (sessionId?: string, preferredPath?: string) => Promise<string>,
+): Promise<string> {
+  if (data.report_markdown) return data.report_markdown
+  if (!data.report_path || !data.session_id) return ''
+  return readFormalReport(data.session_id, data.report_path)
+}

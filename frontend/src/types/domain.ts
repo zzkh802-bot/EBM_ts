@@ -1,4 +1,4 @@
-export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high'
 export type AudienceMode = 'clinician' | 'public'
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type ResearchSessionStatus = 'draft' | 'active' | 'complete'
@@ -28,6 +28,7 @@ export interface ResearchProgressUpdate {
 
 export type AgentRunStatus = 'queued' | 'running' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled'
 export type AgentStage = 'idle' | 'planning' | 'retrieving' | 'tooling' | 'generating' | 'network_wait'
+export type ResponseMode = 'auto' | 'report' | 'answer'
 
 export interface AgentRunRequest {
   question: string
@@ -35,8 +36,17 @@ export interface AgentRunRequest {
   audience_mode: AudienceMode
   thinking_level: ThinkingLevel
   search_enabled: boolean
+  response_mode?: ResponseMode
   provider?: string
   model?: string
+  attachments?: string[]
+}
+
+export interface AttachmentUploadResponse {
+  attachment_id: string
+  file_name: string
+  media_type: string
+  size: number
 }
 
 export interface RuntimeModel {
@@ -67,11 +77,33 @@ export interface RuntimeConfig {
   default_provider: string
   default_model: string
   models: RuntimeModel[]
+  feedback_enabled?: boolean
 }
 
+export interface InternalUser {
+  id: string
+  display_name?: string
+}
+
+export interface InternalAuthConfig {
+  auth_required: boolean
+}
+
+export type FeedbackRubric =
+  | 'requirement_understanding'
+  | 'clinical_interpretation_accuracy'
+  | 'subquestion_decomposition'
+  | 'evidence_support'
+  | 'report_trustworthiness'
+  | 'report_completeness'
+  | 'report_clarity'
+  | 'ebm_standard_compliance'
+  | 'time_worth'
+export type FeedbackRubrics = Partial<Record<FeedbackRubric, number>>
 export interface AgentRunResponse {
   contract_version: string
   run_id: string
+  query_id?: string
   status: AgentRunStatus
   stage?: AgentStage
   created_at?: string
@@ -107,6 +139,8 @@ export interface Message extends ModeSnapshot {
   pending?: boolean
   stage?: AgentStage
   showMarkdown?: boolean
+  runId?: string
+  queryId?: string
 }
 
 export interface PatientMessage {
@@ -170,9 +204,13 @@ export interface Session {
 
 export interface WorkspaceFile {
   path: string
-  kind: 'report' | 'research_frame' | 'evidence' | 'source'
+  kind: 'report' | 'report_draft' | 'research_frame' | 'artifact' | 'attachment'
   size: number
   modified_at: string
+  media_type?: string
+  previewable?: boolean
+  /** Processed Markdown path used to preview an uploaded attachment. */
+  preview_path?: string
 }
 
 export interface WorkspaceFilesResponse {
@@ -180,7 +218,7 @@ export interface WorkspaceFilesResponse {
   files: WorkspaceFile[]
 }
 
-export type ClinicianDocumentKind = 'report' | 'research_frame'
+export type ClinicianDocumentKind = 'report' | 'report_draft' | 'research_frame' | 'artifact' | 'attachment'
 
 export interface ClinicianDocument extends Omit<WorkspaceFile, 'kind'> {
   kind: ClinicianDocumentKind
@@ -193,6 +231,19 @@ export interface ClinicianDocumentsResponse extends Omit<WorkspaceFilesResponse,
 export interface WorkspaceFileResponse extends WorkspaceFile {
   session_id: string
   content: string
+}
+
+export interface SessionAttachment {
+  attachment_id: string
+  file_name: string
+  media_type: string
+  size: number
+  processed_path?: string
+}
+
+export interface SessionAttachmentsResponse {
+  session_id: string
+  attachments: SessionAttachment[]
 }
 
 export interface CitationEvidenceExcerpt {

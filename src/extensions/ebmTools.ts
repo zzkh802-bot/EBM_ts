@@ -18,6 +18,7 @@ import { registerReportTools } from "./reportTools.js";
 import { registerResearchRoundHint } from "./researchRoundHint.js";
 import { registerResearchFrameTools } from "./researchFrameTools.js";
 import { registerReadRegistry } from "./readRegistry.js";
+import { registerSecurityGuard } from "./securityGuard.js";
 import { piReadableSessionPath, piSessionDirectory, registerSessionWorkspace } from "./sessionPath.js";
 import { registerStreamStallWatchdog } from "./streamStallWatchdog.js";
 import { registerTrajectoryRecorder } from "./trajectoryRecorder.js";
@@ -39,17 +40,19 @@ export function registerEbmTools(pi: ExtensionAPI): void {
   registerEbmIdentity(pi);
   registerResearchRoundHint(pi);
   registerStreamStallWatchdog(pi);
+  registerSecurityGuard(pi);
 
   pi.registerTool({
     name: "evidence_add",
     label: "Add Evidence",
-    description: "Archive claim-linked evidence using either a read receipt with text boundaries or a source path with a line range.",
+    description: "Archive claim-linked evidence using a bounded read receipt or a source line range; text anchors improve location precision but do not judge clinical quality.",
     promptSnippet: "Archive claim-linked evidence with a read receipt or source line range",
     promptGuidelines: [
-      "Use evidence_add only after reading the archived source. Choose exactly one locator mode: (1) read_id plus start_text and end_text copied from that read; source_path is optional because the receipt carries it, but may be supplied for cross-checking; or (2) source_path plus line_start and line_end, with text anchors optional.",
-      "start_text and end_text are short boundary snippets, not paraphrases or character offsets. Copy them from the read view; layout, XML/entity, punctuation, and transport-symbol noise may be normalized for matching, but numbers, units, drug names, wording, and OCR characters are never repaired. The two anchors must identify one continuous passage; never join discontinuous passages with ellipses.",
-      "If the tool returns canonical source candidates after a mismatch, copy the candidate text and retry evidence_add. Do not scan the session with bash merely to reconstruct a quote.",
-      "Classify provenance honestly. Search snippets and unverified mirrors are discovery-only and cannot support a final report. Use expert_consensus for consensus/position documents rather than calling them guidelines.",
+      "Use evidence_add only after reading the archived source. Choose one locator mode: (1) read_id plus start_text and end_text copied from that read; source_path is optional and line_start/line_end are only optional absolute-source-line narrowing hints; or (2) source_path plus line_start and line_end, with optional start_text/end_text. A read_id still requires both text anchors; line-range mode does not. If line numbers came from another candidate or read, omit them rather than combining them with this read_id. Never convert absolute source lines into read-window-relative offsets.",
+      "Use short, distinctive, continuous boundary snippets from the same read. There is no fixed character count. Include a claim-specific phrase or number when useful, and avoid generic repeated markers. Layout, XML/entity, punctuation, and transport-symbol noise are normalized; wording and clinical numbers are not invented or repaired.",
+      "If anchor matching fails in read_id mode, do not accept a whole-read fallback: keep the read_id, choose shorter and more distinctive start_text/end_text from that same read, or reread a narrower window. In line-range mode, the explicitly supplied line range remains the locator, so keep it narrow and never use an entire article as a convenience range.",
+      "The evidence tool preserves source text and provenance; it does not judge article quality, PubMed section boundaries, or PDF table structure. Use your clinical judgment and state limitations in the report when relevant.",
+      "Classify provenance honestly. An unverified mirror may be cited as an unverified mirror; never call it an official guideline. Search snippets and discovery snapshots remain discovery-only. Use expert_consensus for consensus/position documents rather than calling them guidelines.",
       "For secondary sources, attribute claims to that source; never rewrite a paraphrase as the target guideline's direct recommendation.",
       "Evidence can be preliminary: use confidence=low or moderate for early candidate evidence instead of delaying all evidence_add calls until the end.",
     ],
@@ -73,8 +76,8 @@ export function registerEbmTools(pi: ExtensionAPI): void {
       confidence: Type.Optional(StringEnum(["low", "moderate", "high"] as const)),
       source_path: Type.Optional(Type.String({ description: "Archive path for the source; required in line-range mode, optional when read_id is provided" })),
       read_id: Type.Optional(Type.String({ pattern: "^r[0-9]+$", description: "Read receipt ID returned by read for the same source" })),
-      line_start: Type.Optional(Type.Integer({ minimum: 1, description: "1-based fallback source line range start; use with line_end when read_id is unavailable" })),
-      line_end: Type.Optional(Type.Integer({ minimum: 1, description: "1-based fallback source line range end; use with line_start when read_id is unavailable" })),
+      line_start: Type.Optional(Type.Integer({ minimum: 1, description: "Optional 1-based source line range start; with read_id it narrows within that receipt, otherwise use with source_path and line_end" })),
+      line_end: Type.Optional(Type.Integer({ minimum: 1, description: "Optional 1-based source line range end; with read_id it narrows within that receipt, otherwise use with source_path and line_start" })),
       start_text: Type.Optional(Type.String({ minLength: 2, description: "Boundary text at the beginning; required with read_id, optional in line-range mode" })),
       end_text: Type.Optional(Type.String({ minLength: 2, description: "Boundary text at the end; required with read_id, optional in line-range mode" })),
     }),
@@ -101,10 +104,13 @@ export function registerEbmTools(pi: ExtensionAPI): void {
       }));
       const evidencePath = path.posix.join("evidence", `${node.id}.md`);
       pi.events.emit("ebm:evidence_added", { sessionId, evidenceId: node.id, path: evidencePath });
+      const locatorNote = node.matchMode === "line_range"
+        ? "已按来源行号范围保存；文本边界未作为阻断条件。"
+        : "文本边界已用于精确定位。";
       return {
         content: [{
           type: "text",
-          text: `Evidence archived: ${node.id}\nRecord: ${evidencePath}\nConfidence: ${node.confidence}`,
+          text: `Evidence archived: ${node.id}\nRecord: ${evidencePath}\nConfidence: ${node.confidence}\nLocator: ${locatorNote}`,
         }],
         details: { path: evidencePath, evidenceId: node.id, node },
       };

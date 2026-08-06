@@ -4,16 +4,16 @@ import type { ModeSnapshot, RuntimeConfig, ThemeMode, ThinkingLevel } from '../t
 import { safeRead, safeWrite, STORAGE_KEYS } from '../utils/core'
 
 export const defaultModes: ModeSnapshot = {
-  audienceMode: 'clinician', thinkingLevel: 'high', searchEnabled: true,
+  audienceMode: 'clinician', thinkingLevel: 'low', searchEnabled: true,
 }
 
-const thinkingLevels: ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']
+const thinkingLevels: ThinkingLevel[] = ['off', 'low', 'medium', 'high']
 
 export const usePreferencesStore = defineStore('preferences', () => {
   const stored = safeRead<Partial<ModeSnapshot>>(STORAGE_KEYS.modes, {})
   const thinkingLevel = ref<ThinkingLevel>(thinkingLevels.includes(stored.thinkingLevel as ThinkingLevel)
     ? stored.thinkingLevel as ThinkingLevel
-    : 'high')
+    : 'low')
   // Evidence retrieval is part of the clinician workflow and is no longer a
   // user-toggleable mode. Keep the field for wire/storage compatibility.
   const searchEnabled = ref(true)

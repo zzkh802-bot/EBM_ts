@@ -339,7 +339,7 @@ function formatLineRange(candidate: EvidenceQuoteCandidate): string {
 function formatCandidates(candidates: EvidenceQuoteCandidate[]): string {
   return candidates.map((candidate, index) => [
     `候选 ${index + 1} · ${formatLineRange(candidate)}`,
-    candidate.quote,
+    candidate.quote.length > 800 ? `${candidate.quote.slice(0, 800)}…` : candidate.quote,
   ].join("\n")).join("\n\n");
 }
 
@@ -474,7 +474,11 @@ export function locateEvidenceAnchors(
       ...boundaryCandidateSpans(noiseSource, noiseEnd),
     ]);
   if (pairs.length > 1) {
-    throw new EvidenceQuoteLocationError(`start_text/end_text 在限定范围内匹配到 ${pairs.length} 处，无法唯一定位。请提供更具体的边界文本。`, candidates);
+    throw new EvidenceQuoteLocationError([
+      `start_text/end_text 在限定范围内匹配到 ${pairs.length} 处，无法唯一定位。`,
+      ...(candidates.length ? [formatCandidates(candidates)] : []),
+      "请从同一候选片段中提供更具体的连续边界文本后重试；不要使用整篇来源作为证据。",
+    ].join("\n\n"), candidates);
   }
   const detail = candidates.length
     ? [

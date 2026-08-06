@@ -52,6 +52,7 @@ function markdown(analysis: ReturnType<typeof analyzeTrajectory>, tracePath: str
     "",
     `- Trace: ${tracePath}`,
     `- Session: ${sessionLabel}`,
+    `- Users: ${analysis.user_ids.length ? analysis.user_ids.join(", ") : "unknown/pre-auth"}`,
     `- Runs: ${analysis.runs}`,
     `- Turns: ${analysis.turns}`,
     `- Total elapsed: ${analysis.total_elapsed_seconds} s`,
@@ -108,9 +109,40 @@ function markdown(analysis: ReturnType<typeof analyzeTrajectory>, tracePath: str
   ].join("\n");
 }
 
+function byUserMarkdown(records: TrajectoryRecord[]): string {
+  const runsByUser = new Map<string, Set<string>>();
+  const sessionsByUser = new Map<string, Set<string>>();
+  for (const record of records) {
+    if (record.event !== "run_start" || !record.run_id) continue;
+    const data = record.data as Record<string, unknown>;
+    const userId = typeof data.user_id === "string" && data.user_id.trim() ? data.user_id.trim() : "unknown/pre-auth";
+    const runs = runsByUser.get(userId) ?? new Set<string>();
+    runs.add(record.run_id);
+    runsByUser.set(userId, runs);
+    const sessions = sessionsByUser.get(userId) ?? new Set<string>();
+    sessions.add(record.session_id);
+    sessionsByUser.set(userId, sessions);
+  }
+  const rows = [...runsByUser.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([userId, runIds]) => {
+    const userSessions = sessionsByUser.get(userId) ?? new Set<string>();
+    const subset = records.filter((record) => record.run_id ? runIds.has(record.run_id) : userSessions.has(record.session_id));
+    const analysis = analyzeTrajectory(subset);
+    return `| ${userId} | ${new Set(subset.map((record) => record.session_id)).size} | ${analysis.runs} | ${analysis.user_queries} | ${analysis.turns} | ${analysis.total_elapsed_seconds} | ${analysis.tool_calls} | ${analysis.tool_errors} | ${Math.round(analysis.evidence_add_attempts.first_attempt_failure_rate * 1_000) / 10}% |`;
+  });
+  return [
+    "## By user",
+    "",
+    "| User ID | Sessions | Runs | Queries | Turns | Elapsed s | Tool calls | Tool errors | First evidence failure rate |",
+    "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+    rows.length ? rows.join("\n") : "| unknown/pre-auth | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0% |",
+    "",
+  ].join("\n");
+}
+
 const args = process.argv.slice(2);
 const asMarkdown = args.includes("--markdown");
 const analyzeAll = args.includes("--all");
+const byUser = args.includes("--by-user");
 const explicit = args.find((arg) => !arg.startsWith("--"));
 const traceRoot = path.resolve("data", "sessions");
 const tracePaths = analyzeAll
@@ -130,4 +162,5 @@ const records = (await Promise.all(tracePaths.map(async (tracePath) => (await re
 const analysis = analyzeTrajectory(records);
 const traceLabel = analyzeAll ? `${tracePaths.length} traces under ${traceRoot}` : tracePaths[0]!;
 const sessionLabel = analyzeAll ? `${new Set(records.map((record) => record.session_id)).size} sessions` : analysis.session_id;
-process.stdout.write(asMarkdown ? markdown(analysis, traceLabel, sessionLabel) : `${JSON.stringify(analysis, null, 2)}\n`);
+const rendered = asMarkdown || byUser ? `${markdown(analysis, traceLabel, sessionLabel)}${byUser ? `\n${byUserMarkdown(records)}` : ""}` : `${JSON.stringify(analysis, null, 2)}\n`;
+process.stdout.write(rendered);

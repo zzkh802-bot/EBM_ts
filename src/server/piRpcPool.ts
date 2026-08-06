@@ -12,13 +12,23 @@ type PoolEntry<TClient extends PoolablePiRpcClient> = {
   lastUsed: number;
 };
 
+export const DEFAULT_MAX_CONCURRENT_SESSIONS = 8;
+
+/** Parse the shared local Pi-process limit; invalid values keep the safe default. */
+export function parseMaxConcurrentSessions(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(String(value ?? "").trim());
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 500
+    ? parsed
+    : DEFAULT_MAX_CONCURRENT_SESSIONS;
+}
+
 /** Owns native Pi RPC process reuse, session affinity, eviction, and failure cleanup. */
 export class PiRpcSessionPool<TClient extends PoolablePiRpcClient> {
   private readonly sessions = new Map<string, PoolEntry<TClient>>();
   private readonly pendingSessions = new Map<string, Promise<PoolEntry<TClient>>>();
   private reservedSlots = 0;
 
-  constructor(private readonly maximumSessions = 8) {}
+  constructor(private readonly maximumSessions = DEFAULT_MAX_CONCURRENT_SESSIONS) {}
 
   async run<TResult>(input: {
     requestedSessionId?: string;

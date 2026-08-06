@@ -3,6 +3,7 @@ import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { TrajectoryWriter } from "../observability/trajectory.js";
 import { compactBeijingTimestamp } from "../tools/time.js";
+import { readCurrentQueryMetadata } from "../observability/queryMetadata.js";
 import { piSessionDirectory } from "./sessionPath.js";
 
 type ActiveTool = { startedAt: number; toolName: string; args: unknown };
@@ -104,6 +105,14 @@ export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on" | "events
         ...(turnIndex === undefined ? {} : { turnIndex }),
       });
     });
+    pi.events.on("ebm:system_reminder", (data) => {
+      void writer?.record({
+        event: "system_reminder",
+        data: { ...(data && typeof data === "object" ? data : {}), prompt_kind: "system_reminder" },
+        ...(runId ? { runId } : {}),
+        ...(turnIndex === undefined ? {} : { turnIndex }),
+      });
+    });
   }
 
   pi.on("session_start", async (event, ctx) => {
@@ -128,7 +137,8 @@ export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on" | "events
       pendingSessionStart = undefined;
     }
     runCounter += 1;
-    runId = `${compactTimestamp()}-${runCounter}`;
+    const query = await readCurrentQueryMetadata(piSessionDirectory(ctx.cwd, ctx.sessionManager.getSessionId()));
+    runId = query?.query_id || `${compactTimestamp()}-${runCounter}`;
     turnIndex = undefined;
     runStartedAt = performance.now();
     const skills = Array.isArray(event.systemPromptOptions?.skills)
@@ -136,6 +146,10 @@ export function registerTrajectoryRecorder(pi: Pick<ExtensionAPI, "on" | "events
       : [];
     await record(ctx, "run_start", {
       prompt: event.prompt,
+      prompt_kind: "user_query",
+      user_query: query?.question ?? event.prompt,
+      ...(query ? { query_id: query.query_id } : {}),
+      ...(query?.user_id ? { user_id: query.user_id } : {}),
       runtime: {
         provider: ctx.model?.provider,
         model: ctx.model?.id,

@@ -19,14 +19,13 @@ export function registerReportTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
     description: "逐一核验引用的证据记录及其归档来源后，写入 Markdown 循证报告。",
     promptSnippet: "保存一份证据引用已核验的正式 Markdown 报告",
     promptGuidelines: [
-      "In the report body, cite evidence with numbered references like [1] or [1,2], not raw ev_ identifiers.",
-      "Pass the hidden evidence mapping through the references parameter: citation numbers represent bibliographic sources. The same number may appear multiple times only when the citation text is the same, to map one source to multiple supporting evidence_id records. Do not use the same number for different citations.",
-      "When references is provided, you may omit the Markdown reference list; the tool will append a renderable numbered reference section. Every reference number must be used by at least one decision-relevant body citation, and every body citation [n] must exist in references.",
-      "Before calling report_write, run a citation preflight mentally: collect all body citation numbers before the reference section and all references[].number values as sets; the two sets must be identical. Duplicate reference numbers are allowed only for identical citation text mapping to additional evidence_id records.",
-      "Before calling report_write, run a non-blocking clinical preflight: re-check case facts against the user's original information; keep unspecified facts unknown; recalculate any stated clinical score from its listed components; make patient-level eligibility and safety conclusions conditional on all required facts; and omit or explicitly qualify time-sensitive claims that lack a current authoritative source.",
-      "Write an argued but concise EBM report: decompose the user's decision into sub-questions and claims, integrate evidence into reasoning, cite each key claim with numbered references, and avoid source-by-source lists or unnecessary method-log detail.",
+      "正文使用 [1]、[1,2] 等编号引用，不要把 ev_ ID 写进用户可见正文；把 ev_ ID 放在 references 参数中。",
+      "references 中的 number、citation 和 evidence_id 只负责建立可回溯映射；提供 references 后可以省略正文末尾的参考文献列表，工具会生成它。",
+      "写作前做一个轻量检查：回答用户真正的临床决策，保留未知事实，说明证据的适用边界和不确定性；不要为了满足关键词或固定模板扩展检索。",
+      "报告应围绕少量能改变决策的子问题组织论证：主张 → 证据 → 证据限制 → 对当前问题的含义。不要写成检索日志或逐篇文献清单。",
+      "证据的文章质量、摘要范围和 PDF 排版由模型结合上下文判断；工具只核验来源和定位完整性。非官方镜像可以引用，但必须如实标注来源性质，不能写成官方指南。",
       "报告标题、正文和面向用户的参考文献说明默认使用自然中文；仅在药名、研究名称、缩写或必要的原文短语中保留英文。除非用户明确要求其他语言，不要输出英文报告。",
-      "Set allow_no_evidence only when the report explicitly documents an evidence gap rather than making supported claims.",
+      "只有在报告明确说明证据缺口、且没有把缺口写成已证实结论时，才使用 allow_no_evidence。",
     ],
     parameters: Type.Object({
       title: Type.String({ minLength: 1 }),
@@ -70,6 +69,7 @@ export function registerReportTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
         const draft = await writeReportDraft(input, message);
         const readableDraftPath = piReadableSessionPath(ctx.cwd, sessionId, draft.path);
         return {
+          isError: true,
           content: [{
             type: "text",
             text: [
@@ -90,11 +90,9 @@ export function registerReportTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
     description: "读取已编辑的 reports/drafts/*.draft.md 草稿，核验证据引用后发布为正式 Markdown 循证报告。",
     promptSnippet: "无需重新发送整篇 Markdown，直接核验并发布本地编辑过的未核验草稿",
     promptGuidelines: [
-      "Use this after report_write saved an unverified draft and the draft has been fixed with read/edit.",
-      "Provide the draft_path returned by report_write and the references mapping. The tool reads the draft Markdown from disk, verifies citations/evidence, and writes the final report under reports/ on success.",
-      "The draft reference section is only a preview. report_finalize regenerates the final reference section from the references parameter, so citation/reference changes must be reflected in references; editing only the draft reference text is not enough.",
-      "Before finalizing, run the same non-blocking clinical preflight as for report_write: re-check case facts, recompute stated scores, preserve unknowns, condition patient-level eligibility or safety conclusions, and qualify unsupported time-sensitive claims.",
-      "If finalization fails, edit only the reported local problem in the same draft and call report_finalize again; do not regenerate the whole report unless the clinical content itself is wrong.",
+      "仅当 report_write 已保存未核验草稿时使用 report_finalize；普通成功的 report_write 不需要再次调用它。",
+      "使用 report_write 返回的 draft_path 和最新 references。先修复工具报告的具体完整性问题，再用同一草稿重试，不要重新检索整篇来源。",
+      "临床适用性、冲突和不确定性由模型结合证据判断并在报告中说明，不由关键词规则自动判定。",
     ],
     parameters: Type.Object({
       draft_path: Type.String({ minLength: 1, description: "Relative session path like reports/drafts/name.draft.md, or the readable data/sessions/... path returned by report_write" }),
@@ -137,6 +135,7 @@ export function registerReportTools(pi: Pick<ExtensionAPI, "registerTool" | "eve
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return {
+          isError: true,
           content: [{
             type: "text",
             text: [

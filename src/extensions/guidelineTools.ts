@@ -3,6 +3,7 @@ import { Type } from "typebox";
 import { GuidelineMcpClient, readGuideline, retrieveGuidelines, searchGuidelines, type GuidelineRetrieveItem, type GuidelineSearchItem } from "../tools/guidelineMcp.js";
 import { upsertSourceLibraryFromArchive } from "../tools/sourceLibrary.js";
 import { archiveDetails } from "./archiveOutput.js";
+import { formatReadReceipt, registerArchiveReadReceipt } from "./readRegistry.js";
 import { piReadableSessionPath, piSessionDirectory } from "./sessionPath.js";
 
 function indentedText(value: string, spaces = 4): string {
@@ -45,6 +46,37 @@ function informativeHeading(text: string): boolean {
   return /(abstract|method|result|recommend|discussion|conclusion|pico|population|scope|treatment|therapy|diagnos|management|secondary prevention|acute)/i.test(normalized);
 }
 
+const MCP_READ_PREVIEW_CHARS = 3_500;
+
+function guidelinePreview(record: { content: string; bodyLineStart: number }): { lines: Array<{ line: number; text: string }>; chars: number; sourceChars: number } {
+  const lines = record.content.split("\n");
+  const targetIndex = [
+    /\b(?:evidence[- ]based recommendation|recommend(?:ation|ed)?)\b/i,
+    /\bconclusion\b/i,
+    /\babstract\b/i,
+  ].map((pattern) => lines.findIndex((line) => pattern.test(line))).find((index) => index >= 0) ?? -1;
+  const startIndex = Math.max(0, targetIndex >= 0 ? targetIndex : 0);
+  const previewLines: Array<{ line: number; text: string }> = [];
+  let previewChars = 0;
+  for (const [offset, line] of lines.slice(startIndex).entries()) {
+    if (previewLines.length && /^(?:#{1,6}\s+|Keywords\b|Date received\b|Correspondence\b|References\b)/i.test(line.trim())) break;
+    if (!/^\s*\d+\s*$/.test(line)) {
+      const nextChars = Array.from(line).length + (previewLines.length ? 1 : 0);
+      if (previewChars + nextChars > MCP_READ_PREVIEW_CHARS) break;
+      previewLines.push({ line: record.bodyLineStart + startIndex + offset, text: line });
+      previewChars += nextChars;
+    }
+  }
+  return { lines: previewLines, chars: previewChars, sourceChars: Array.from(lines.slice(startIndex).join("\n")).length };
+}
+
+export function guidelineReadPreviewRange(record: { content: string; bodyLineStart: number }): { lineStart: number; lineEnd: number } {
+  const preview = guidelinePreview(record);
+  const lineStart = preview.lines[0]?.line ?? record.bodyLineStart;
+  const lineEnd = preview.lines.at(-1)?.line ?? lineStart;
+  return { lineStart, lineEnd };
+}
+
 export function renderGuidelineReadText(
   readablePath: string,
   record: { content: string; bodyLineStart: number; lines: number; tocPath?: string },
@@ -58,19 +90,9 @@ export function renderGuidelineReadText(
     const title = match[2]!.trim();
     return informativeHeading(title) ? [`- ${match[1]} ${title} — line ${record.bodyLineStart + index}`] : [];
   }).slice(0, 20);
-  const targetIndex = [
-    /\b(?:evidence[- ]based recommendation|recommend(?:ation|ed)?)\b/i,
-    /\bconclusion\b/i,
-    /\babstract\b/i,
-  ].map((pattern) => lines.findIndex((line) => pattern.test(line))).find((index) => index >= 0) ?? -1;
-  const startIndex = Math.max(0, targetIndex >= 0 ? targetIndex : 0);
-  const previewLines: Array<{ line: number; text: string }> = [];
-  for (const [offset, line] of lines.slice(startIndex).entries()) {
-    if (previewLines.length && /^(?:#{1,6}\s+|Keywords\b|Date received\b|Correspondence\b|References\b)/i.test(line.trim())) break;
-    if (!/^\s*\d+\s*$/.test(line)) previewLines.push({ line: record.bodyLineStart + startIndex + offset, text: line });
-    if (previewLines.length >= 12) break;
-  }
-  const previewStart = previewLines[0]?.line ?? record.bodyLineStart + startIndex;
+  const preview = guidelinePreview(record);
+  const previewLines = preview.lines;
+  const previewStart = previewLines[0]?.line ?? record.bodyLineStart;
   const previewEnd = previewLines.at(-1)?.line ?? previewStart;
   const readableTocPath = record.tocPath ? readablePath.replace(/full\.md$/, "toc.md") : undefined;
   return [
@@ -85,12 +107,13 @@ export function renderGuidelineReadText(
     `Readable guideline path: ${readablePath}`,
     ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
     `Archive lines: 1-${totalLines} (${totalLines} total lines; 1-based).`,
-    "After read, choose one evidence_add locator: the returned read_id with start_text/end_text (source_path optional), or source_path with line_start/line_end (text anchors optional). Layout/XML/entity/punctuation noise is normalized; clinical numbers and wording are not repaired.",
+    "After read, choose one evidence_add locator: the returned read_id with start_text/end_text (source_path optional; line_start/line_end are optional absolute-source-line narrowing hints—omit them if they came from another candidate/read), or source_path with line_start/line_end (text anchors optional). Layout/XML/entity/punctuation noise is normalized. If read_id anchors do not match, choose more distinctive boundaries or reread a narrower window; do not archive the whole read range as a fallback.",
     ...(headings.length ? ["", "Best-effort navigation index (generated from cleaned Markdown; verify against full text):", ...headings] : []),
     "",
     `Informative preview lines ${previewStart}-${previewEnd}:`,
     "",
     numberLines(previewLines),
+    ...(preview.chars < preview.sourceChars ? [`[Preview truncated at ${MCP_READ_PREVIEW_CHARS} characters; full normalized source remains at ${readablePath}.]`] : []),
   ].join("\n");
 }
 
@@ -112,7 +135,7 @@ export function renderRetrieveCards(title: string, items: GuidelineRetrieveItem[
     }
     lines.push("");
   });
-  lines.push("These are candidate materials, not evidence yet. Read the relevant source path, then choose read_id plus start_text/end_text (source_path optional), or source_path plus line_start/line_end. Layout/XML/entity/punctuation noise is normalized; if candidates are returned after a mismatch, copy them and retry instead of scanning with bash.");
+  lines.push("These are candidate materials, not evidence yet. Read the relevant source path, then choose read_id plus start_text/end_text (source_path optional), or source_path plus line_start/line_end. Layout/XML/entity/punctuation noise is normalized; if read_id anchors mismatch, choose a more unique pair or reread a narrower window instead of scanning with bash.");
   return lines.join("\n");
 }
 
@@ -163,7 +186,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
     label: "Retrieve Guideline Chunks",
     description: "Run internal guideline RAG retrieval and archive each returned chunk as a citation-capable quote source.",
     promptSnippet: "Retrieve traceable guideline chunks that can directly support evidence when relevant",
-    promptGuidelines: ["RAG chunks may directly support evidence. Read the returned source path, then use read_id plus exact start_text/end_text with evidence_add; if read_id is unavailable, use the returned line range. Never join separate spans or insert ellipses. Use guideline_mcp_read when broader context is needed."],
+    promptGuidelines: ["RAG chunks may directly support evidence. Read the returned source path or its returned line range, then register the decision-relevant claim promptly with evidence_add; do not defer all evidence until the end. Use read_id plus short, distinctive start_text/end_text; if anchors mismatch, choose a more unique pair or reread a narrower window. If read_id is unavailable, use the returned line range. Never join separate spans or insert ellipses. Use guideline_mcp_read when broader context is needed, but do not read the entire full.md when a focused chunk/window is sufficient."],
     parameters: Type.Object({
       query: Type.String({ minLength: 2, description: "Focused clinical retrieval query" }),
       topk: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
@@ -197,8 +220,8 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
   pi.registerTool({
     name: "guideline_mcp_read",
     label: "Read Guideline",
-    description: "Read one full guideline from the internal MCP by doc_id or exact title and archive it before exposure.",
-    promptSnippet: "Read and archive a guideline selected from internal search",
+    description: "Read a guideline selected from internal search for context and archive it before exposure. Prefer focused follow-up windows for evidence rather than loading the entire full.md into one read.",
+    promptSnippet: "Read selected guideline context, then register focused evidence promptly",
     parameters: Type.Object({
       doc_id: Type.Optional(Type.String()),
       title: Type.Optional(Type.String()),
@@ -216,12 +239,14 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
       });
       if (!result.ok) throw new Error(JSON.stringify(result.error));
       const readablePath = piReadableSessionPath(ctx.cwd, sessionId, result.archive.path);
+      const previewRange = guidelineReadPreviewRange(result.archive);
+      const receipt = await registerArchiveReadReceipt({ sessionDir: piSessionDirectory(ctx.cwd, sessionId), archive: result.archive, ...previewRange });
       const sourceLibraryDir = process.env.SOURCE_LIBRARY_DIR || "data/source_library/guidelines";
       const library = await upsertSourceLibraryFromArchive({ sourceLibraryDir, archive: result.archive, provider: "guideline_mcp", sessionId });
       pi.events.emit("ebm:source_archived", { sessionId, provider: "guideline_mcp", path: result.archive.path, kind: "read", sourceLibraryPath: library.path, sourceLibraryWritten: library.written });
       return {
-        content: [{ type: "text", text: renderGuidelineReadText(readablePath, result.archive, result.document) }],
-        details: { archive: archiveDetails(result.archive), sourceLibrary: library, truncated: false },
+        content: [{ type: "text", text: `${renderGuidelineReadText(readablePath, result.archive, result.document)}${formatReadReceipt(receipt)}` }],
+        details: { archive: archiveDetails(result.archive), sourceLibrary: library, readId: receipt.id, sourcePath: result.archive.path, sourceLines: [receipt.lineStart, receipt.lineEnd], truncated: false },
       };
     },
   });

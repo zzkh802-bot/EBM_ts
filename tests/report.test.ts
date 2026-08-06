@@ -330,7 +330,7 @@ describe("verified Markdown reports", () => {
     })).rejects.toThrow(/verification failed/);
   });
 
-  it("rejects citation-ineligible discovery or unverified-mirror evidence", async () => {
+  it("allows an unverified mirror when its provenance is preserved", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-report-"));
     await writeFile(path.join(sessionDir, "mirror.md"), "Unverified guideline recommendation.", "utf8");
     const evidence = await addEvidence({
@@ -346,7 +346,7 @@ describe("verified Markdown reports", () => {
       sessionDir,
       title: "Unverified recommendation",
       content: `Claim [Evidence ${evidence.id}](../evidence/${evidence.id}.md).`,
-    })).rejects.toThrow(/not citation eligible/);
+    })).resolves.toMatchObject({ evidenceIds: [evidence.id] });
   });
 
   it("requires explicit opt-in for an evidence-gap report", async () => {

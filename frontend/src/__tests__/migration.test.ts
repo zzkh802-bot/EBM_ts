@@ -60,11 +60,11 @@ describe('报告 AST 与投影', () => {
 describe('Agent run DTO', () => {
   it('只构建当前后端契约需要的追踪会话请求', () => {
     const dto = buildResearchRunRequest('完整问题', 'remote-1', {
-      thinkingLevel: 'max', audienceMode: 'public', searchEnabled: false,
+      thinkingLevel: 'high', audienceMode: 'public', searchEnabled: false,
     }, 'openai', 'gpt-5-mini')
     expect(dto).toMatchObject({
       question: '完整问题', session_id: 'remote-1',
-      audience_mode: 'public', thinking_level: 'max', search_enabled: true,
+      audience_mode: 'public', thinking_level: 'high', search_enabled: true,
       provider: 'openai', model: 'gpt-5-mini',
     })
     expect(dto).not.toHaveProperty('retrieval_policy')

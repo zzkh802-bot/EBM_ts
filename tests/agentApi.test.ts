@@ -8,6 +8,7 @@ import { buildPatientIntakePrompt, type PatientIntakeInput } from "../src/server
 import { archiveSource } from "../src/tools/archive.js";
 import { addEvidence } from "../src/tools/evidence.js";
 import { writeReport } from "../src/tools/report.js";
+import { InternalAuthStore } from "../src/server/internalAuth.js";
 
 type TestRunResponse = Omit<AgentRunResponse, "agent_trace" | "progress_updates" | "tools" | "summary"> & {
   agent_trace: Array<{ kind: string; label?: string }>;
@@ -41,6 +42,7 @@ describe("循医研究服务 API", () => {
     thinkingLevel: "high",
     searchEnabled: true,
     retrievalPolicy: "all",
+    responseMode: "report",
     maxIterations: 32,
     requestTimeoutSeconds: 600,
     provider: "deepseek",
@@ -48,9 +50,82 @@ describe("循医研究服务 API", () => {
     ...overrides,
   });
 
+  it("uses the shared internal key as an access gate and keeps agent runs user-scoped", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-auth-api-"));
+    const runtimeConfig: RuntimeConfig = {
+      default_provider: "deepseek", default_model: "deepseek-v4-flash",
+      models: [{ provider: "deepseek", provider_label: "DeepSeek", model: "deepseek-v4-flash", model_label: "DeepSeek V4 Flash", available: true }],
+    };
+    const api = createAgentApiServer({ executor: async () => ({ sessionId: "owned-session", message: "完成。" }), rootDir, runtimeConfig, internalAccessKey: "shared-test-key" });
+    api.server.listen(0, "127.0.0.1");
+    await once(api.server, "listening");
+    const address = api.server.address();
+    if (!address || typeof address === "string") throw new Error("Expected a TCP test server");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+    try {
+      const config = await fetch(`${baseUrl}/api/v1/auth/config`);
+      expect(await config.json()).toEqual({ auth_required: true });
+      const denied = await fetch(`${baseUrl}/api/v1/agent-runs`);
+      expect(denied.status).toBe(401);
+      const registration = await fetch(`${baseUrl}/api/v1/auth/register`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ display_name: "同名标注员", password: "test-pass-1", invite_key: "shared-test-key" }),
+      });
+      expect(registration.status).toBe(201);
+      const registered = await registration.json() as { user: { id: string } };
+      expect(registered.user.id).toMatch(/^u-[23456789abcdefghjkmnpqrstuvwxyz]{8}$/);
+      const cookie = registration.headers.get("set-cookie");
+      expect(cookie).toContain("ebm_internal_session=");
+      const sessionCookie = cookie!.split(";")[0]!;
+      const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
+        method: "POST", headers: { "content-type": "application/json", cookie: sessionCookie }, body: JSON.stringify({ question: "内部测试问题" }),
+      });
+      expect(created.status).toBe(202);
+      const accepted = await created.json() as { run_id: string };
+      const own = await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`, { headers: { cookie: sessionCookie } });
+      expect(own.status).toBe(200);
+      const secondRegistration = await fetch(`${baseUrl}/api/v1/auth/register`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ display_name: "另一位", password: "test-pass-2", invite_key: "shared-test-key" }),
+      });
+      expect(secondRegistration.status).toBe(201);
+      const otherRegistration = await fetch(`${baseUrl}/api/v1/auth/register`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ display_name: "同名标注员", password: "test-pass-2", invite_key: "shared-test-key" }),
+      });
+      expect(otherRegistration.status).toBe(201);
+      const otherCookie = otherRegistration.headers.get("set-cookie")!.split(";")[0]!;
+      const crossUser = await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`, { headers: { cookie: otherCookie } });
+      expect(crossUser.status).toBe(404);
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
+  });
+
+  it("keeps a valid login session across a backend restart", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-auth-session-"));
+    const first = new InternalAuthStore("restart-test-key", rootDir);
+    const registration = await first.register("重启测试", "test-pass-1", "restart-test-key", "test-client");
+    expect(registration.ok).toBe(true);
+    if (!registration.ok) return;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const restarted = new InternalAuthStore("restart-test-key", rootDir);
+    const request = { headers: { cookie: restarted.cookie(registration.token, false).split(";")[0] } } as unknown as import("node:http").IncomingMessage;
+    expect(restarted.authenticate(request)?.id).toBe(registration.user.id);
+  });
+
+  it("uses the generated user ID as the login identity", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-auth-id-login-"));
+    const auth = new InternalAuthStore("id-login-key", rootDir);
+    const registration = await auth.register("只记 ID", "test-pass-1", "id-login-key", "test-client");
+    expect(registration.ok).toBe(true);
+    if (!registration.ok) return;
+    expect(registration.user.id).toMatch(/^u-[23456789abcdefghjkmnpqrstuvwxyz]{8}$/);
+    const login = auth.login(registration.user.id, "test-pass-1", "test-client");
+    expect(login?.user.id).toBe(registration.user.id);
+  });
+
   it("delegates clinician report structure to the writing skill independently of thinking level", () => {
     const low = buildAgentPrompt(promptInput({ thinkingLevel: "low" }));
-    const maximum = buildAgentPrompt(promptInput({ thinkingLevel: "max" }));
+    const maximum = buildAgentPrompt(promptInput({ thinkingLevel: "high" }));
     const publicPrompt = buildAgentPrompt(promptInput({ audienceMode: "public", retrievalPolicy: "mcp_only" }));
     for (const prompt of [low, maximum, publicPrompt]) {
       expect(prompt).toContain("在最终回复前调用 report_write")
@@ -80,6 +155,14 @@ describe("循医研究服务 API", () => {
     expect(prompt).toContain("source_library_search")
     expect(prompt).toContain("可按需使用已配置的检索工具")
     expect(prompt).not.toContain("只使用当前会话中的既有材料")
+  });
+
+  it("keeps follow-up QA on the direct-answer path instead of forcing report tools", () => {
+    const prompt = buildAgentPrompt(promptInput({ responseMode: "answer" }));
+    expect(prompt).toContain("只需完成对话式回答")
+    expect(prompt).toContain("不要为了回答追问而重复执行正式报告流程")
+    expect(prompt).not.toContain("在最终回复前调用 report_write")
+    expect(prompt).not.toContain("必须生成正式循证报告")
   });
 
   it("returns verified source excerpts for a numbered report citation without exposing evidence IDs", async () => {
@@ -207,7 +290,7 @@ describe("循医研究服务 API", () => {
       const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question: "类风湿关节炎患者该如何升级治疗？", thinking_level: "xhigh" }),
+        body: JSON.stringify({ question: "类风湿关节炎患者该如何升级治疗？", thinking_level: "high" }),
       });
       expect(created.status).toBe(202);
       const accepted = await created.json() as { run_id: string; status: string; contract_version: string };
@@ -222,8 +305,8 @@ describe("循医研究服务 API", () => {
       expect(result.report_markdown).toContain("完整循证报告");
       expect(result.summary.request_timeout_seconds).toBe(600);
       expect(result.summary.retrieval_policy).toBe("all");
-      expect(result.summary.thinking_level).toBe("xhigh");
-      expect(receivedInput?.thinkingLevel).toBe("xhigh");
+      expect(result.summary.thinking_level).toBe("high");
+      expect(receivedInput?.thinkingLevel).toBe("high");
       expect(receivedInput?.retrievalPolicy).toBe("all");
       expect(result.agent_trace.some((event: { kind: string }) => event.kind === "tool.completed")).toBe(true);
       expect(result.progress_updates).toEqual([expect.objectContaining({ text: "正在核对最新治疗建议。" })]);
@@ -383,7 +466,7 @@ describe("循医研究服务 API", () => {
     expect(buildPatientIntakePrompt({ ...input, message: "ignored", intent: "summary" })).toContain("用户明确提供的信息");
   });
 
-  it.each(["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const)("passes Pi thinking level %s through without a research-mode mapping", async (thinkingLevel) => {
+  it.each(["off", "low", "medium", "high"] as const)("passes Pi thinking level %s through without a research-mode mapping", async (thinkingLevel) => {
     let receivedInput: Parameters<AgentExecutor>[0] | undefined;
     const { api, baseUrl } = await startApi(async (input) => {
       receivedInput = input;
@@ -498,7 +581,7 @@ describe("循医研究服务 API", () => {
     }
   });
 
-  it("cancels a running job and rejects unsupported file attachments explicitly", async () => {
+  it("cancels a running job and validates attachment IDs explicitly", async () => {
     const executor: AgentExecutor = async (_input, hooks) => new Promise((_resolve, reject) => {
       if (hooks.signal.aborted) {
         const error = new Error("cancelled");
@@ -520,7 +603,7 @@ describe("循医研究服务 API", () => {
         body: JSON.stringify({ question: "带附件的问题", attachments: [{ name: "paper.pdf" }] }),
       });
       expect(unsupported.status).toBe(422);
-      expect(await unsupported.json()).toMatchObject({ error: { code: "attachments_not_supported" } });
+      expect(await unsupported.json()).toMatchObject({ error: { code: "invalid_attachment" } });
 
       const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
         method: "POST",

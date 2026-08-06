@@ -64,7 +64,7 @@ const formatUpdatedAt = (value: string) => {
   if (Number.isNaN(date.getTime())) return '时间未知'
   return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })
 }
-const documentKindLabel = (file: WorkspaceAsset) => file.kind === 'report' ? '最终报告' : '研究框架'
+const documentKindLabel = (file: WorkspaceAsset) => file.kind === 'report' ? '最终报告' : file.kind === 'attachment' ? '上传附件' : '研究框架'
 const documentTitle = (file: WorkspaceAsset) => file.path.split('/').at(-1)?.replace(/\.md$/, '') || documentKindLabel(file)
 const openDocument = async (archive: ResearchArchive, file: WorkspaceAsset) => {
   const request = ++documentReadSequence
