@@ -19,4 +19,23 @@ describe('研究运行阶段', () => {
       vi.useRealTimers()
     }
   })
+
+  it('为不同研究会话保留独立的运行状态和中断控制', () => {
+    const run = useAgentRunStore()
+    const firstSignal = run.start('session-a')
+    const secondSignal = run.start('session-b')
+
+    run.bind('session-a')
+    expect(run.busy).toBe(true)
+    run.bind('session-b')
+    expect(run.busy).toBe(true)
+
+    run.stop('session-b')
+    expect(secondSignal.aborted).toBe(true)
+    expect(firstSignal.aborted).toBe(false)
+    run.bind('session-a')
+    expect(run.busy).toBe(true)
+    run.finish('session-a')
+    expect(run.busy).toBe(false)
+  })
 })

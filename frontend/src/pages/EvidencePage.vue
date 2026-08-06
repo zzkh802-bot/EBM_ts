@@ -55,7 +55,8 @@ const stages = {
 }
 watch(() => sessions.activeSessionId, () => {
   question.value = ''
-  run.queuedGuidance = []
+  run.bind(sessions.activeSessionId)
+  run.clearGuidance(sessions.activeSessionId)
   const sessionId = sessions.active.researchSessionId
   feedbackSeen.value = Boolean(sessionId && localStorage.getItem(`dp_xunyi_feedback_seen:${sessionId}`))
 })
@@ -136,15 +137,19 @@ watch(() => sessions.active.messages.length, async () => {
 
 async function submit(input = question.value, modeOverride?: ModeSnapshot) {
   const text = input.trim()
-  if (run.busy) {
-    if (text) { run.queuedGuidance.push(text); question.value = '' }
-    else run.stop()
-    return
-  }
   if (!text) return
   const localSessionId = homeMode.value && activeHasConversation.value
     ? sessions.create()
     : sessions.activeSessionId
+  // A new home-page question gets its own local session and can start while
+  // another session is still running. Only queue follow-up text within the
+  // same session.
+  run.bind(localSessionId)
+  if (run.busy) {
+    if (text) { run.addGuidance(localSessionId, text); question.value = '' }
+    else run.stop(localSessionId)
+    return
+  }
   if (homeMode.value) await router.replace('/clinician/evidence')
   question.value = ''
   const mode = modeOverride || { ...preferences.snapshot }
@@ -159,7 +164,7 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
     content: '正在梳理问题与检索范围…', trace: [], tools: [],
     sourceQuestion: text, pending: true, stage: 'planning', createdAt: nowIso(), ...mode,
   })
-  const signal = run.start()
+  const signal = run.start(localSessionId)
   const requestResearchSessionId = sessions.active.researchSessionId
   let loadedServerSessionId = requestResearchSessionId
   let latestRunStatus: AgentRunResponse | null = null
@@ -190,10 +195,10 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
         // The first session listing can race with OCR. Refresh once the
         // backend reports that the processed attachment has been archived.
         if (status.session_id && attachmentProcessed) void loadConversationFiles(status.session_id)
-        if (status.stage) run.setStage(status.stage)
-        else if (status.status === 'queued') run.setStage('planning')
-        else if (status.status === 'running') run.setStage('retrieving')
-        else if (status.status === 'cancelling') run.setStage('network_wait')
+        if (status.stage) run.setStage(localSessionId, status.stage)
+        else if (status.status === 'queued') run.setStage(localSessionId, 'planning')
+        else if (status.status === 'running') run.setStage(localSessionId, 'retrieving')
+        else if (status.status === 'cancelling') run.setStage(localSessionId, 'network_wait')
         sessions.patchMessageIn(localSessionId, pendingId, {
           runId: status.run_id,
           queryId: status.query_id || status.run_id,
@@ -204,7 +209,7 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
           runCompletedAt: status.completed_at,
         })
       },
-      onNetworkRetry: () => { run.setStage('network_wait') },
+      onNetworkRetry: () => { run.setStage(localSessionId, 'network_wait') },
     })
     if (data.session_id) sessions.setResearchSessionId(localSessionId, data.session_id)
     const reportMarkdown = await hydrateRunReport(data, readFormalReport)
@@ -244,7 +249,7 @@ async function submit(input = question.value, modeOverride?: ModeSnapshot) {
     sessions.completeResearchIn(localSessionId)
   } finally {
     uploadingAttachments.value = false
-    run.finish()
+    run.finish(localSessionId)
   }
 }
 
@@ -307,7 +312,9 @@ const toggleReport = async (message: Message) => {
   expandedReportMessageIds.value.add(message.id)
 }
 const runQueued = (index: number) => {
-  const text = run.queuedGuidance.splice(index, 1)[0]
+  const localSessionId = sessions.activeSessionId
+  const text = run.queuedGuidance[index]
+  run.removeGuidance(localSessionId, index)
   if (text) void submit(text)
 }
 const focusQuestion = async () => {
@@ -320,7 +327,7 @@ const selectGoodCase = async (value: string) => {
 }
 const handlePrimaryAction = () => {
   if (run.busy && !question.value.trim()) {
-    run.stop()
+    run.stop(sessions.activeSessionId)
     return
   }
   void submit()
@@ -348,7 +355,7 @@ const handlePrimaryAction = () => {
             <span v-for="(item, index) in run.queuedGuidance" :key="`${item}-${index}`">
               {{ item }}
               <button type="button" :disabled="run.busy" @click="runQueued(index)">发送</button>
-              <button type="button" @click="run.queuedGuidance.splice(index, 1)">×</button>
+              <button type="button" @click="run.removeGuidance(sessions.activeSessionId, index)">×</button>
             </span>
           </div>
           <textarea
