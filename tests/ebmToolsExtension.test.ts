@@ -64,7 +64,7 @@ describe("EBM Pi extension tools", () => {
     expect(output).toContain("PMID: unknown");
     expect(output).toContain("Abstract preview: Result line one. Result line two.");
     expect(output).toContain("Readable abstract path: data/sessions/session-1/sources/read/trial/full.md");
-    expect(output).toContain("choose read_id with start_text/end_text (source_path optional)");
+    expect(output).toContain("choose read_id with the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary)");
     expect(output).not.toContain("Navigation/context only");
     expect(output).not.toContain("10.1000/test");
     expect(output).not.toContain("Evidence source_path:");

@@ -107,7 +107,7 @@ export function renderGuidelineReadText(
     `Readable guideline path: ${readablePath}`,
     ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
     `Archive lines: 1-${totalLines} (${totalLines} total lines; 1-based).`,
-    "After read, choose one evidence_add locator: the returned read_id with start_text/end_text (source_path optional; line_start/line_end are optional absolute-source-line narrowing hints—omit them if they came from another candidate/read), or source_path with line_start/line_end (text anchors optional). Layout/XML/entity/punctuation noise is normalized. If read_id anchors do not match, choose more distinctive boundaries or reread a narrower window; do not archive the whole read range as a fallback.",
+    "After read, choose one evidence_add locator: the returned read_id with the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary; line_start/line_end are optional absolute-source-line narrowing hints—prefer the matching pair to narrow repeated phrases, but omit them if they came from another candidate/read), or source_path with line_start/line_end (text anchors optional). Layout/XML/entity/punctuation noise is normalized. If read_id anchors do not match, choose more distinctive boundaries or reread a narrower window; do not archive the whole read range as a fallback.",
     ...(headings.length ? ["", "Best-effort navigation index (generated from cleaned Markdown; verify against full text):", ...headings] : []),
     "",
     `Informative preview lines ${previewStart}-${previewEnd}:`,
@@ -186,7 +186,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
     label: "Retrieve Guideline Chunks",
     description: "Run internal guideline RAG retrieval and archive each returned chunk as a citation-capable quote source.",
     promptSnippet: "Retrieve traceable guideline chunks that can directly support evidence when relevant",
-    promptGuidelines: ["RAG chunks may directly support evidence. Read the returned source path or its returned line range, then register the decision-relevant claim promptly with evidence_add; do not defer all evidence until the end. Use read_id plus short, distinctive start_text/end_text; if anchors mismatch, choose a more unique pair or reread a narrower window. If read_id is unavailable, use the returned line range. Never join separate spans or insert ellipses. Use guideline_mcp_read when broader context is needed, but do not read the entire full.md when a focused chunk/window is sufficient."],
+    promptGuidelines: ["RAG chunks may directly support evidence. Read the returned source path or its returned line range, then register the decision-relevant claim promptly with evidence_add; do not defer all evidence until the end. Use read_id plus the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary; include a nearby local word when a marker repeats), and prefer matching line_start/line_end when available; if anchors mismatch, choose a more unique pair or reread a narrower window. If read_id is unavailable, use the returned line range. Never join separate spans or insert ellipses. Use guideline_mcp_read when broader context is needed, but do not read the entire full.md when a focused chunk/window is sufficient."],
     parameters: Type.Object({
       query: Type.String({ minLength: 2, description: "Focused clinical retrieval query" }),
       topk: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),

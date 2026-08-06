@@ -11,7 +11,7 @@ function textContent(event: ToolResultEvent): string {
 }
 
 export function formatReadReceipt(receipt: { id: string; lineStart: number; lineEnd: number }): string {
-  return `\n\n[read_id: ${receipt.id}; absolute source lines ${receipt.lineStart}-${receipt.lineEnd} (not read-window-relative). With this ID, provide start_text/end_text; source_path is optional. line_start/line_end are optional absolute-line narrowing hints only—if they came from another candidate/read, omit them. If boundaries do not match, choose more distinctive anchors or reread a narrower window; the whole read range will not be used as an automatic fallback. Without this ID, use source_path + line_start/line_end.]`;
+  return `\n\n[read_id: ${receipt.id}; absolute source lines ${receipt.lineStart}-${receipt.lineEnd} (not read-window-relative). With this ID, provide start_text/end_text; source_path is optional. line_start/line_end are optional absolute-line narrowing hints—prefer the matching pair when the receipt gives a focused range, but if they came from another candidate/read, omit them. If you copied one complete passage into both boundary fields, identical start_text/end_text are accepted as one quote; otherwise choose distinct beginning/end snippets. If boundaries do not match, choose more distinctive anchors or reread a narrower window; the whole read range will not be used as an automatic fallback. Without this ID, use source_path + line_start/line_end.]`;
 }
 
 /** Register the exact visible window returned by an archive-backed read tool. */
