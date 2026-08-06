@@ -519,20 +519,8 @@ const handlePrimaryAction = () => {
                   <p v-else class="document-state">正在打开正式报告…</p>
                 </section>
               </section>
-              <div v-if="message.role === 'assistant' && !message.pending" class="message-actions">
-                <button class="message-action-primary" type="button" @click="focusQuestion">继续追问</button>
-                <button type="button" @click="retry(message, '请用更简洁、适合快速决策的方式回答：')">简化结论</button>
-                <button type="button" @click="retry(message, '请展开 PICO、证据等级、引用依据和复核点：')">展开依据</button>
-                <details class="message-more-actions">
-                  <summary>更多</summary>
-                  <div>
-                    <button type="button" @click="copy(message)">复制</button>
-                    <button type="button" @click="speak(message)">朗读</button>
-                    <button type="button" @click="share(message)">分享</button>
-                    <button type="button" @click="retry(message)">重新运行</button>
-                    <button v-if="message.reportMarkdown || message.reportPath" type="button" @click="toggleReport(message)">{{ expandedReportMessageIds.has(message.id) ? '收起最终报告' : '展开最终报告' }}</button>
-                  </div>
-                </details>
+<div v-if="message.role === 'assistant' && !message.pending" class="message-actions">
+                <button type="button" @click="copy(message)">复制</button>
               </div>
               <FeedbackPanel
                 v-if="feedbackEnabled && !feedbackSeen && firstReportMessage?.id === message.id && message.reportMarkdown && message.runId && sessions.active.researchSessionId"
