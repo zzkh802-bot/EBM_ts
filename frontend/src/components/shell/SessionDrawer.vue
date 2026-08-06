@@ -40,7 +40,11 @@ const createSession = () => {
 }
 
 const clearSessions = () => {
-  if (!run.anyBusy) sessions.clear()
+  if (run.anyBusy) return
+  const confirmed = window.confirm(
+    '清空本机的会话列表？\n\n仅清除当前浏览器显示的列表，不影响服务端的研究数据、报告与会话记录。',
+  )
+  if (confirmed) sessions.clear()
 }
 
 const formatSessionTime = (value: string) => {
