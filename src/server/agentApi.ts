@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { readFile, realpath, stat } from "node:fs/promises";
+import { readFile, realpath, stat, readdir, mkdir, rm, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
@@ -162,10 +163,42 @@ type InternalRun = {
   ownerId?: string;
 };
 
+type PersistedRun = {
+  id: string;
+  input: AgentRunInput;
+  status: AgentRunStatus;
+  stage: ResearchStage;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  sessionId?: string;
+  message: string;
+  reportMarkdown?: string;
+  reportPath?: string;
+  agentTrace: AgentTraceEvent[];
+  progressUpdates: ResearchProgressUpdate[];
+  tools: Array<Record<string, unknown>>;
+  error?: { code: string; message: string };
+  ownerId?: string;
+};
+
 export class AgentRunStore {
   private readonly runs = new Map<string, InternalRun>();
 
-  constructor(private readonly executor: AgentExecutor, private readonly maxCompletedRuns = 100, private readonly onSessionId?: (sessionId: string, ownerId?: string) => void) {}
+  constructor(
+    private readonly executor: AgentExecutor,
+    private readonly maxCompletedRuns = 100,
+    private readonly onSessionId?: (sessionId: string, ownerId?: string) => void,
+    private readonly runsDir?: string,
+    private readonly retentionMs?: number,
+  ) {}
+
+  async initialize(): Promise<void> {
+    if (!this.runsDir) return;
+    await mkdir(this.runsDir, { recursive: true });
+    await this.loadFromDisk();
+    this.pruneCompletedRuns();
+  }
 
   submit(input: AgentRunInput, ownerId?: string): AgentRunResponse {
     this.pruneCompletedRuns();
@@ -184,24 +217,38 @@ export class AgentRunStore {
       ...(ownerId ? { ownerId } : {}),
     };
     this.runs.set(run.id, run);
+    void this.persist(run);
     queueMicrotask(() => void this.execute(run));
     return this.toResponse(run);
   }
 
   get(runId: string, ownerId?: string): AgentRunResponse | undefined {
     const run = this.runs.get(runId);
-    return run && (!ownerId || run.ownerId === ownerId) ? this.toResponse(run) : undefined;
+    if (run && (!ownerId || run.ownerId === ownerId)) return this.toResponse(run);
+    // Fallback: read from disk if not in memory (e.g. after restart).
+    const persisted = this.readPersisted(runId);
+    if (persisted && (!ownerId || persisted.ownerId === ownerId)) return this.toResponseFromPersisted(persisted);
+    return undefined;
   }
 
   cancel(runId: string, ownerId?: string): AgentRunResponse | undefined {
     const run = this.runs.get(runId);
-    if (!run || (ownerId && run.ownerId !== ownerId)) return undefined;
-    if (["succeeded", "failed", "cancelled"].includes(run.status)) return this.toResponse(run);
-    run.status = "cancelling";
-    run.message = "已请求中断任务，正在停止 Agent 进程。";
-    this.addTrace(run, trace("run.cancelling", "正在中断", "浏览器请求停止当前任务"));
-    run.controller.abort(new Error("Run cancelled by client"));
-    return this.toResponse(run);
+    if (run) {
+      if (ownerId && run.ownerId !== ownerId) return undefined;
+      if (["succeeded", "failed", "cancelled"].includes(run.status)) return this.toResponse(run);
+      run.status = "cancelling";
+      run.message = "已请求中断任务，正在停止 Agent 进程。";
+      this.addTrace(run, trace("run.cancelling", "正在中断", "浏览器请求停止当前任务"));
+      run.controller.abort(new Error("Run cancelled by client"));
+      void this.persist(run);
+      return this.toResponse(run);
+    }
+    // Disk-only run (already completed across a restart). No controller to abort.
+    const persisted = this.readPersisted(runId);
+    if (persisted && (!ownerId || persisted.ownerId === ownerId)) {
+      return this.toResponseFromPersisted(persisted);
+    }
+    return undefined;
   }
 
   private async execute(run: InternalRun): Promise<void> {
@@ -214,6 +261,7 @@ export class AgentRunStore {
     run.startedAt = new Date().toISOString();
     run.message = "循证研究服务正在检索和生成回答。";
     this.addTrace(run, trace("run.started", "任务已启动", `推理强度：${run.input.thinkingLevel}`));
+    void this.persist(run);
     try {
       const result = await this.executor(run.input, {
         signal: run.controller.signal,
@@ -240,6 +288,7 @@ export class AgentRunStore {
       run.completedAt = new Date().toISOString();
       run.message = result.message.trim() || "Agent 已完成，但没有生成可展示的文本。";
       this.addTrace(run, trace("run.completed", "任务完成", "已收到最终回答"));
+      void this.persist(run);
     } catch (error) {
       if (run.controller.signal.aborted || isAbortError(error)) {
         this.markCancelled(run);
@@ -251,6 +300,7 @@ export class AgentRunStore {
       run.message = "循证研究服务未能完成本次任务。";
       run.error = { code: "agent_execution_failed", message: errorMessage(error) };
       this.addTrace(run, trace("run.failed", "任务失败", run.error.message));
+      void this.persist(run);
     }
   }
 
@@ -260,6 +310,7 @@ export class AgentRunStore {
     run.completedAt = new Date().toISOString();
     run.message = "任务已中断。";
     this.addTrace(run, trace("run.cancelled", "任务已中断", "研究引擎已收到取消信号"));
+    void this.persist(run);
   }
 
   private addTrace(run: InternalRun, event: AgentTraceEvent): void {
@@ -329,8 +380,173 @@ export class AgentRunStore {
     const completed = [...this.runs.values()]
       .filter((run) => ["succeeded", "failed", "cancelled"].includes(run.status))
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+    const now = Date.now();
+    const retentionMs = this.retentionMs ?? 7 * 24 * 60 * 60 * 1000;
+    for (const run of completed) {
+      const completedAtMs = run.completedAt ? Date.parse(run.completedAt) : Date.parse(run.createdAt);
+      const expired = now - completedAtMs > retentionMs;
+      if (expired) {
+        this.runs.delete(run.id);
+        void this.removePersisted(run.id);
+      }
+    }
+    // Trim by count only when retention isn't the binding constraint.
+    if (retentionMs <= 0) return;
     const excess = completed.length - this.maxCompletedRuns + 1;
-    for (const run of completed.slice(0, Math.max(0, excess))) this.runs.delete(run.id);
+    if (excess <= 0) return;
+    for (const run of completed.slice(0, excess)) {
+      this.runs.delete(run.id);
+      void this.removePersisted(run.id);
+    }
+  }
+
+  private async persist(run: InternalRun): Promise<void> {
+    if (!this.runsDir) return;
+    try {
+      await writeFile(path.join(this.runsDir, `${run.id}.json`), JSON.stringify(this.toPersisted(run)), { mode: 0o600 });
+    } catch { /* persistence must never break RPC */ }
+  }
+
+  private async removePersisted(runId: string): Promise<void> {
+    if (!this.runsDir) return;
+    try {
+      await rm(path.join(this.runsDir, `${runId}.json`), { force: true });
+    } catch { /* ignore */ }
+  }
+
+  private readPersisted(runId: string): PersistedRun | undefined {
+    if (!this.runsDir) return undefined;
+    const file = path.join(this.runsDir, `${runId}.json`);
+    try {
+      const raw = readFileSync(file, "utf8");
+      return JSON.parse(raw) as PersistedRun;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async loadFromDisk(): Promise<void> {
+    if (!this.runsDir) return;
+    let entries: string[];
+    try {
+      entries = await readdir(this.runsDir);
+    } catch {
+      return;
+    }
+    const retentionMs = this.retentionMs ?? 7 * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - retentionMs;
+    for (const entry of entries) {
+      if (!entry.endsWith(".json")) continue;
+      const runId = entry.slice(0, -".json".length);
+      const file = path.join(this.runsDir, entry);
+      let raw: string;
+      try {
+        raw = await readFile(file, "utf8");
+      } catch {
+        continue;
+      }
+      let parsed: PersistedRun;
+      try {
+        parsed = JSON.parse(raw) as PersistedRun;
+      } catch {
+        continue;
+      }
+      if (!parsed || typeof parsed !== "object" || !parsed.id) continue;
+      const completedAtMs = parsed.completedAt ? Date.parse(parsed.completedAt) : Date.parse(parsed.createdAt);
+      if (Number.isFinite(cutoff) && retentionMs > 0 && completedAtMs < cutoff) {
+        await rm(file, { force: true });
+        continue;
+      }
+      // Only completed runs are restored; running/queued runs from a prior process
+      // cannot be safely resumed (their Pi subprocess is gone) and are skipped.
+      if (!["succeeded", "failed", "cancelled"].includes(parsed.status)) {
+        await rm(file, { force: true });
+        continue;
+      }
+      this.runs.set(parsed.id, this.fromPersisted(parsed));
+    }
+  }
+
+  private toPersisted(run: InternalRun): PersistedRun {
+    return {
+      id: run.id,
+      input: run.input,
+      status: run.status,
+      stage: run.stage,
+      createdAt: run.createdAt,
+      ...(run.startedAt ? { startedAt: run.startedAt } : {}),
+      ...(run.completedAt ? { completedAt: run.completedAt } : {}),
+      ...(run.sessionId ? { sessionId: run.sessionId } : {}),
+      message: run.message,
+      ...(run.reportMarkdown ? { reportMarkdown: run.reportMarkdown } : {}),
+      ...(run.reportPath ? { reportPath: run.reportPath } : {}),
+      agentTrace: [...run.agentTrace],
+      progressUpdates: [...run.progressUpdates],
+      tools: [...run.tools],
+      ...(run.error ? { error: run.error } : {}),
+      ...(run.ownerId ? { ownerId: run.ownerId } : {}),
+    };
+  }
+
+  private fromPersisted(p: PersistedRun): InternalRun {
+    return {
+      id: p.id,
+      input: p.input,
+      status: p.status,
+      stage: p.stage,
+      createdAt: p.createdAt,
+      ...(p.startedAt ? { startedAt: p.startedAt } : {}),
+      ...(p.completedAt ? { completedAt: p.completedAt } : {}),
+      ...(p.sessionId ? { sessionId: p.sessionId } : {}),
+      message: p.message,
+      ...(p.reportMarkdown ? { reportMarkdown: p.reportMarkdown } : {}),
+      ...(p.reportPath ? { reportPath: p.reportPath } : {}),
+      agentTrace: [...p.agentTrace],
+      progressUpdates: [...p.progressUpdates],
+      tools: [...p.tools],
+      ...(p.error ? { error: p.error } : {}),
+      ...(p.ownerId ? { ownerId: p.ownerId } : {}),
+      // No controller: a completed run has no live subprocess to abort.
+      controller: new AbortController(),
+    };
+  }
+
+  private toResponseFromPersisted(p: PersistedRun): AgentRunResponse {
+    const completed = p.status === "succeeded";
+    return {
+      contract_version: CONTRACT_VERSION,
+      run_id: p.id,
+      query_id: p.id,
+      status: p.status,
+      stage: p.stage,
+      created_at: p.createdAt,
+      ...(p.startedAt ? { started_at: p.startedAt } : {}),
+      ...(p.completedAt ? { completed_at: p.completedAt } : {}),
+      ...(p.sessionId ? { session_id: p.sessionId } : {}),
+      message: p.message,
+      ...(completed ? {
+        agent_answer: p.message,
+        patient_summary: p.message,
+        ...(p.reportMarkdown ? { report_markdown: p.reportMarkdown } : {}),
+        ...(p.reportPath ? { report_path: p.reportPath } : {}),
+      } : {}),
+      agent_trace: [...p.agentTrace],
+      progress_updates: [...p.progressUpdates],
+      tools: [...p.tools],
+      summary: {
+        audience_mode: p.input.audienceMode,
+        thinking_level: p.input.thinkingLevel,
+        search_enabled: p.input.searchEnabled,
+        retrieval_policy: p.input.retrievalPolicy,
+        response_mode: p.input.responseMode,
+        max_iterations: p.input.maxIterations,
+        max_iterations_is_advisory: true,
+        request_timeout_seconds: p.input.requestTimeoutSeconds,
+        provider: p.input.provider,
+        model: p.input.model,
+      },
+      ...(p.error ? { error: p.error } : {}),
+    };
   }
 }
 
@@ -339,6 +555,8 @@ export type AgentApiServerOptions = {
   patientIntakeExecutor?: PatientIntakeExecutor;
   corsOrigin?: string;
   maxCompletedRuns?: number;
+  agentRunsDir?: string;
+  agentRunRetentionMs?: number;
   runtimeConfig?: RuntimeConfig | (() => Promise<RuntimeConfig>);
   accountConnections?: AccountConnectionStore;
   staticDir?: string;
@@ -351,9 +569,19 @@ export function createAgentApiServer(options: AgentApiServerOptions): { server: 
   const auth = new InternalAuthStore(options.internalAccessKey, rootDir);
   const ownership = new SessionOwnershipStore(rootDir);
   const attachments = new AttachmentStore(rootDir);
-  const store = new AgentRunStore(options.executor, options.maxCompletedRuns, (sessionId, ownerId) => {
-    if (ownerId) void ownership.claim(sessionId, ownerId).catch(() => undefined);
-  });
+  const store = new AgentRunStore(
+    options.executor,
+    options.maxCompletedRuns,
+    (sessionId, ownerId) => {
+      if (ownerId) void ownership.claim(sessionId, ownerId).catch(() => undefined);
+    },
+    options.agentRunsDir ?? path.join(rootDir, "data", "agent-runs"),
+    options.agentRunRetentionMs ?? (() => {
+      const days = Number(process.env.EBM_RUN_RETENTION_DAYS ?? "7");
+      return Number.isFinite(days) && days > 0 ? days * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+    })(),
+  );
+  void store.initialize().catch(() => undefined);
   const configuredRuntimeConfig = options.runtimeConfig;
   const runtimeConfig = typeof configuredRuntimeConfig === "function"
     ? configuredRuntimeConfig
