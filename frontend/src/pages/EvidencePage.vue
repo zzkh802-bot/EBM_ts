@@ -268,7 +268,9 @@ const addPendingFiles = (files: FileList | null, kind: PendingUpload['kind']) =>
   const additions = Array.from(files).filter((file) => allowed.test(file.name) && file.size > 0 && file.size <= 25 * 1024 * 1024)
   pendingUploads.value.push(...additions.map((file) => ({ file, kind })))
   if (additions.length < files.length) attachmentError.value = '仅支持 PDF、DOC/DOCX、常见图片、TXT/Markdown，单个文件不超过 25 MB。'
-  if (kind === 'medical_image') medicalImageInput.value && (medicalImageInput.value.value = '')
+  if (kind === 'medical_image') {
+    if (medicalImageInput.value) medicalImageInput.value.value = ''
+  }
   else if (fileInput.value) fileInput.value.value = ''
 }
 const removePendingFile = (index: number) => { pendingUploads.value.splice(index, 1) }
@@ -277,20 +279,6 @@ const projectedText = (message: Message) =>
   reportPlainText(parseReport(message.content))
 
 const copy = async (message: Message) => copyText(projectedText(message))
-const speak = (message: Message) => {
-  speechSynthesis.cancel()
-  const utterance = new SpeechSynthesisUtterance(projectedText(message).slice(0, 1200))
-  utterance.lang = 'zh-CN'
-  speechSynthesis.speak(utterance)
-}
-const share = async (message: Message) => {
-  const text = projectedText(message)
-  if (navigator.share) await navigator.share({ title: '循医循证报告', text })
-  else await copyText(text)
-}
-const retry = (message: Message, detail = '') => submit(`${detail}${message.sourceQuestion || ''}`, {
-  audienceMode: message.audienceMode, thinkingLevel: message.thinkingLevel, searchEnabled: message.searchEnabled,
-})
 const openCitation = (reference: Reference, reportPath?: string) => {
   const sessionId = sessions.active.researchSessionId
   ui.openCitation(reference, sessionId && reportPath ? { sessionId, reportPath } : undefined)
@@ -384,7 +372,7 @@ const handlePrimaryAction = () => {
               {{ item.kind === 'medical_image' ? '医学图像 · ' : '' }}{{ item.file.name }}
               <button type="button" aria-label="移除附件" @click="removePendingFile(index)">×</button>
             </span>
-                    <small v-if="uploadingAttachments">正在上传附件；随后会并行进行 OCR/文字解析…</small>
+            <small v-if="uploadingAttachments">正在上传附件；随后会并行进行 OCR/文字解析…</small>
             <small v-if="attachmentError" class="attachment-error">{{ attachmentError }}</small>
           </div>
         </div>
@@ -519,7 +507,7 @@ const handlePrimaryAction = () => {
                   <p v-else class="document-state">正在打开正式报告…</p>
                 </section>
               </section>
-<div v-if="message.role === 'assistant' && !message.pending" class="message-actions">
+              <div v-if="message.role === 'assistant' && !message.pending" class="message-actions">
                 <button type="button" @click="copy(message)">复制</button>
               </div>
               <FeedbackPanel
