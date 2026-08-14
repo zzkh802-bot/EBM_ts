@@ -64,7 +64,7 @@ describe("EBM Pi extension tools", () => {
     expect(output).toContain("PMID: unknown");
     expect(output).toContain("Abstract preview: Result line one. Result line two.");
     expect(output).toContain("Readable abstract path: data/sessions/session-1/sources/read/trial/full.md");
-    expect(output).toContain("choose read_id with start_text/end_text (source_path optional)");
+    expect(output).toContain("choose read_id with the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary)");
     expect(output).not.toContain("Navigation/context only");
     expect(output).not.toContain("10.1000/test");
     expect(output).not.toContain("Evidence source_path:");
@@ -127,13 +127,15 @@ describe("EBM Pi extension tools", () => {
       sourcePath: "sources/read/hypertension.md",
       lineStart: 21,
       lineEnd: 24,
+      readId: "r01",
       candidateMaterial: "Recommendation text.",
     }], (sourcePath) => `data/sessions/s1/${sourcePath}`);
 
     expect(text).toContain("readable chunk path: data/sessions/s1/sources/read/hypertension.md");
+    expect(text).toContain("read_id: r01");
     expect(text).toContain("candidate material (identical to archived body):");
     expect(text).toContain("candidate materials, not evidence yet");
-    expect(text).toContain("choose read_id plus start_text/end_text (source_path optional)");
+    expect(text).toContain("When a read_id is shown");
     expect(text).not.toContain("offset:");
     expect(text).not.toContain("limit:");
   });
@@ -207,7 +209,15 @@ describe("EBM Pi extension tools", () => {
     const workspace = `data/sessions/${path.basename(sessionDir)}`;
     expect(report.content[0].text).toContain(`会话工作区：${workspace}`);
     expect(report.content[0].text).toContain(`已写入并核验正式报告：${workspace}/reports/mortality-report.md`);
+    expect(report.content[0].text).toContain("报告已由工具规范化");
+    expect(report.content[0].text).toContain("参考文献列表已根据 references 参数重建");
     expect(report.details).toMatchObject({ readablePath: `${workspace}/reports/mortality-report.md`, sessionWorkspace: workspace });
+    expect(report.details.normalization).toMatchObject({
+      contentChanged: true,
+      referencesRebuilt: true,
+      referenceNumbersCompacted: false,
+      finalReferenceCount: 1,
+    });
   });
 
   it("registers evidence with a required source path and exact anchors", async () => {

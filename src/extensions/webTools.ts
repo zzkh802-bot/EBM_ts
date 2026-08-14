@@ -22,7 +22,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
     label: "Search Local Source Library",
     description: "Search the persistent local curated source library without network access. It returns document-level historical candidates, not citation-ready evidence passages.",
     promptSnippet: "Search the accumulated local source library before MCP/PubMed/web fallbacks",
-    promptGuidelines: ["This is a persistent cross-session index. Search it first for each new sub-question; if a direct hit has source_url, call web_read on that URL to materialize the cached source in the current session. Do not treat the result list or snippet as evidence. Use Chinese queries for Chinese guideline/library content.", "guideline_mcp_search returns document candidates only; use guideline_mcp_retrieve or a read operation for evidence passages."],
+    promptGuidelines: ["This is a persistent cross-session index. Search it first for each new sub-question; if a direct hit has source_url, call web_read on that URL to materialize the cached source in the current session. For mcp:// source_url values, web_read performs the local-library read; never use an imported_from path or a historical session path with native read. Do not treat the result list or snippet as evidence. Use Chinese queries for Chinese guideline/library content.", "guideline_mcp_search returns document candidates only; use guideline_mcp_retrieve or a read operation for evidence passages."],
     parameters: Type.Object({
       query: Type.String({ minLength: 2 }),
       max_results: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
@@ -42,7 +42,7 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
           `   Slug: ${candidate.slug}`,
           ...(candidate.sourceUrl ? [`   Source URL: ${candidate.sourceUrl}`, `   Next: web_read(url=${JSON.stringify(candidate.sourceUrl)}) will reuse the local library copy if source_url matches.`] : []),
           `   Acquisition route: ${candidate.discoveryQueries.length ? `${candidate.provider ?? "source"}_search(query=${JSON.stringify(candidate.discoveryQueries.at(-1))}) → ${candidate.sourceUrl ? `web_read(url=${JSON.stringify(candidate.sourceUrl)})` : "local archive"}` : `${candidate.provider ?? "unknown"}${candidate.sourceUrl ? ` read(url=${JSON.stringify(candidate.sourceUrl)})` : " local archive"}`}`,
-          `   Provenance: provider=${candidate.provider ?? "unknown"}${candidate.sourceStatus ? `; status=${candidate.sourceStatus}` : ""}${candidate.importedFrom ? `; imported_from=${candidate.importedFrom}` : ""}${candidate.importedAt ? `; imported_at=${candidate.importedAt}` : ""}${candidate.accessCount !== undefined ? `; access_count=${candidate.accessCount}` : ""}`,
+          `   Provenance: provider=${candidate.provider ?? "unknown"}${candidate.sourceStatus ? `; status=${candidate.sourceStatus}` : ""}${candidate.importedAt ? `; imported_at=${candidate.importedAt}` : ""}${candidate.accessCount !== undefined ? `; access_count=${candidate.accessCount}` : ""}`,
           ...(candidate.identifiers.pmid || candidate.identifiers.pmcid || candidate.identifiers.doi || candidate.identifiers.year || candidate.identifiers.publicationTypes.length ? [`   Identifiers: ${[
             candidate.identifiers.pmid ? `PMID ${candidate.identifiers.pmid}` : undefined,
             candidate.identifiers.pmcid ? `PMCID ${candidate.identifiers.pmcid}` : undefined,
@@ -66,11 +66,11 @@ export function registerWebTools(pi: Pick<ExtensionAPI, "registerTool" | "events
   pi.registerTool({
     name: "web_read",
     label: "Read Web Source",
-    description: "Read documents through MinerU Premium or web pages through Jina with Firecrawl fallback, then normalize and archive before exposure.",
+    description: "Read HTTP(S) documents/pages through MinerU Premium, Jina, or Firecrawl, or materialize an internal mcp:// source_url from the local source library; normalize and archive before exposure.",
     promptSnippet: "Read and archive a public web source for quote-verified citation",
-    promptGuidelines: ["After reading, choose read_id with start_text/end_text (source_path optional; line_start/line_end are optional absolute-source-line narrowing hints—omit them if they came from another candidate/read), or source_path with line_start/line_end. Layout/XML/entity/punctuation noise is normalized; if read_id anchors mismatch, choose more distinctive boundaries or reread a narrower window rather than archiving the whole read. Never paraphrase, repair clinical text, or join discontinuous passages."],
+    promptGuidelines: ["After reading, choose read_id with the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary; include a nearby local word when a marker repeats) (source_path optional; prefer matching absolute-source line_start/line_end to narrow repeated phrases, but omit line hints copied from another candidate/read), or source_path with line_start/line_end. For an internal mcp:// source_url, call web_read to materialize the local-library copy in the current session; never read an imported_from historical filesystem path. Layout/XML/entity/punctuation noise is normalized; if read_id anchors mismatch, choose more distinctive boundaries or reread a narrower window rather than archiving the whole read. Never paraphrase, repair clinical text, or join discontinuous passages."],
     parameters: Type.Object({
-      url: Type.String({ description: "Public HTTP(S) URL" }),
+      url: Type.String({ description: "Public HTTP(S) URL or an internal mcp:// source_url from source_library_search" }),
       pdf_pages: Type.Optional(Type.String({ description: "Optional focused PDF page range such as 1-5. Use only when the relevant pages are known; max 25 pages." })),
     }),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {

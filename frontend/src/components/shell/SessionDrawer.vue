@@ -9,6 +9,11 @@ const ui = useUiStore()
 const router = useRouter()
 const query = ref('')
 
+const lastQueryAt = (session: (typeof sessions.sessions)[number]) =>
+  [...session.messages].reverse().find((message) => message.role === 'user')?.createdAt
+  || session.lastRunAt
+  || session.updatedAt
+
 const filtered = computed(() => {
   const text = query.value.trim().toLowerCase()
   const matching = sessions.sessions.filter((session) =>
@@ -17,7 +22,10 @@ const filtered = computed(() => {
       || session.title.toLowerCase().includes(text)
       || session.clinicalQuestion.toLowerCase().includes(text)
       || session.messages.some((message) => message.content.toLowerCase().includes(text))))
-  return [...matching].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+  // Progress/tool updates touch updatedAt, but the drawer should reflect the
+  // user's latest query—not whichever model happened to emit an event last.
+  // The last user-message timestamp remains stable while that query runs.
+  return [...matching].sort((left, right) => lastQueryAt(right).localeCompare(lastQueryAt(left)))
 })
 
 const openSession = (id: string) => {
@@ -32,7 +40,11 @@ const createSession = () => {
 }
 
 const clearSessions = () => {
-  if (!run.anyBusy) sessions.clear()
+  if (run.anyBusy) return
+  const confirmed = window.confirm(
+    '清空本机的会话列表？\n\n仅清除当前浏览器显示的列表，不影响服务端的研究数据、报告与会话记录。',
+  )
+  if (confirmed) sessions.clear()
 }
 
 const formatSessionTime = (value: string) => {

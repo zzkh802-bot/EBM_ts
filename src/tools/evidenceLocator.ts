@@ -330,6 +330,10 @@ function deduplicateCandidates(source: string, spans: ScoredSpan[]): EvidenceQuo
     .slice(0, 3);
 }
 
+function spansWithinScope(spans: ScoredSpan[], scope: { start: number; end: number }): ScoredSpan[] {
+  return spans.filter((span) => span.start >= scope.start && span.end <= scope.end);
+}
+
 function formatLineRange(candidate: EvidenceQuoteCandidate): string {
   return candidate.lineStart === candidate.lineEnd
     ? `第 ${candidate.lineStart} 行`
@@ -433,6 +437,60 @@ export function locateEvidenceAnchors(
   const endNeedle = endText.trim();
   if (!startNeedle || !endNeedle) throw new Error("start_text and end_text are required");
   const scope = lineScope(source, options.lineStart, options.lineEnd);
+  const normalizedStartNeedle = normalizeEvidenceLayout(startNeedle).value;
+  const normalizedEndNeedle = normalizeEvidenceLayout(endNeedle).value;
+
+  // Models sometimes copy one complete passage into both fields. Treat that
+  // as a single quote, rather than pairing the same needle as two independent
+  // anchors. The latter creates artificial supersets (start at the passage,
+  // end at a later occurrence) and turns a unique passage into an ambiguity.
+  if (startNeedle === endNeedle || normalizedStartNeedle === normalizedEndNeedle) {
+    const directMatches = occurrences(source, startNeedle)
+      .filter((start) => start >= scope.start && start + startNeedle.length <= scope.end);
+    if (directMatches.length === 1) {
+      return locationFromOriginal(source, directMatches[0]!, directMatches[0]! + startNeedle.length, "exact");
+    }
+    if (directMatches.length > 1) {
+      const candidates = directMatches.slice(0, 3).map((start) => candidateFromSpan(source, {
+        start,
+        end: start + startNeedle.length,
+        score: startNeedle.length,
+        matchedBy: "duplicate",
+      }, 1));
+      throw new EvidenceQuoteLocationError([
+        `start_text/end_text 在限定范围内匹配到 ${directMatches.length} 处，无法唯一定位。`,
+        formatCandidates(candidates),
+      "请从目标候选的前后各取最短、唯一的连续原文边界；不需要语义完整，可以在词或句子中间结束，但不要只使用通用标签。",
+      ].join("\n\n"), candidates);
+    }
+
+    const singleNeedlePasses: Array<{ source: NormalizedText; needle: string; mode: LocatedEvidenceQuote["matchMode"] }> = [
+      { source: normalizeEvidenceLayout(source), needle: normalizedStartNeedle, mode: "layout_normalized" },
+      { source: normalizeEvidenceNoise(source), needle: normalizeEvidenceNoise(decodeMatchEntities(startNeedle)).value, mode: "noise_normalized" },
+    ];
+    for (const pass of singleNeedlePasses) {
+      const matches = occurrences(pass.source.value, pass.needle).flatMap((start) => {
+        const mapped = originalSpan(pass.source, start, start + pass.needle.length);
+        if (!mapped || mapped.start < scope.start || mapped.end > scope.end) return [];
+        if (pass.mode === "noise_normalized" && !numericSignaturesAgree(source.slice(mapped.start, mapped.end), startNeedle)) return [];
+        return [mapped];
+      });
+      if (matches.length === 1) return locationFromOriginal(source, matches[0]!.start, matches[0]!.end, pass.mode);
+      if (matches.length > 1) {
+        const candidates = matches.slice(0, 3).map((match) => candidateFromSpan(source, {
+          ...match,
+          score: pass.needle.length,
+          matchedBy: "duplicate",
+        }, 1));
+        throw new EvidenceQuoteLocationError([
+          `start_text/end_text 在限定范围内匹配到 ${matches.length} 处，无法唯一定位。`,
+          formatCandidates(candidates),
+          "请从目标候选的前后各取最短、唯一的连续原文边界；不需要语义完整，可以在词或句子中间结束，但不要只使用通用标签。",
+        ].join("\n\n"), candidates);
+      }
+    }
+  }
+
   const exactPairs = anchorPairs(source, startNeedle, endNeedle, scope);
   if (exactPairs.length === 1) return locationFromOriginal(source, exactPairs[0]!.start, exactPairs[0]!.end, "exact");
 
@@ -468,23 +526,23 @@ export function locateEvidenceAnchors(
     matchedBy: "boundary_anchors" as const,
     }))
     : deduplicateCandidates(source, [
-      ...boundaryCandidateSpans(normalizedSource, normalizedStart),
-      ...boundaryCandidateSpans(normalizedSource, normalizedEnd),
-      ...boundaryCandidateSpans(noiseSource, noiseStart),
-      ...boundaryCandidateSpans(noiseSource, noiseEnd),
+      ...spansWithinScope(boundaryCandidateSpans(normalizedSource, normalizedStart), scope),
+      ...spansWithinScope(boundaryCandidateSpans(normalizedSource, normalizedEnd), scope),
+      ...spansWithinScope(boundaryCandidateSpans(noiseSource, noiseStart), scope),
+      ...spansWithinScope(boundaryCandidateSpans(noiseSource, noiseEnd), scope),
     ]);
   if (pairs.length > 1) {
     throw new EvidenceQuoteLocationError([
       `start_text/end_text 在限定范围内匹配到 ${pairs.length} 处，无法唯一定位。`,
       ...(candidates.length ? [formatCandidates(candidates)] : []),
-      "请从同一候选片段中提供更具体的连续边界文本后重试；不要使用整篇来源作为证据。",
+      "请从目标候选的前后各取最短、唯一的连续原文边界；不需要语义完整，可以在词或句子中间结束，但不要只使用通用标签。不要使用整篇来源作为证据。",
     ].join("\n\n"), candidates);
   }
   const detail = candidates.length
     ? [
       "未能在限定的 read 片段或行号范围内唯一定位 start_text/end_text。以下是仍然匹配到的原文候选；候选尚未登记为证据。",
       formatCandidates(candidates),
-      "请从候选中复制最小、充分、连续的原文边界后重试 evidence_add；不要改写数字、药名或措辞。",
+      "请从候选中复制最短、唯一、连续的原文边界后重试 evidence_add；不需要语义完整，可以在词或句子中间结束；不要改写数字、药名或措辞。",
     ].join("\n\n")
     : "未能在限定的 read 片段或行号范围内找到 start_text/end_text。请重新读取来源并使用原文边界。";
   throw new EvidenceQuoteLocationError(detail, candidates);

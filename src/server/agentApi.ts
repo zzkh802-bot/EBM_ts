@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { readFile, realpath, stat } from "node:fs/promises";
+import { readFile, realpath, stat, readdir, mkdir, rm, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import path from "node:path";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
@@ -162,10 +163,42 @@ type InternalRun = {
   ownerId?: string;
 };
 
+type PersistedRun = {
+  id: string;
+  input: AgentRunInput;
+  status: AgentRunStatus;
+  stage: ResearchStage;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  sessionId?: string;
+  message: string;
+  reportMarkdown?: string;
+  reportPath?: string;
+  agentTrace: AgentTraceEvent[];
+  progressUpdates: ResearchProgressUpdate[];
+  tools: Array<Record<string, unknown>>;
+  error?: { code: string; message: string };
+  ownerId?: string;
+};
+
 export class AgentRunStore {
   private readonly runs = new Map<string, InternalRun>();
 
-  constructor(private readonly executor: AgentExecutor, private readonly maxCompletedRuns = 100, private readonly onSessionId?: (sessionId: string, ownerId?: string) => void) {}
+  constructor(
+    private readonly executor: AgentExecutor,
+    private readonly maxCompletedRuns = 100,
+    private readonly onSessionId?: (sessionId: string, ownerId?: string) => void,
+    private readonly runsDir?: string,
+    private readonly retentionMs?: number,
+  ) {}
+
+  async initialize(): Promise<void> {
+    if (!this.runsDir) return;
+    await mkdir(this.runsDir, { recursive: true });
+    await this.loadFromDisk();
+    this.pruneCompletedRuns();
+  }
 
   submit(input: AgentRunInput, ownerId?: string): AgentRunResponse {
     this.pruneCompletedRuns();
@@ -184,24 +217,38 @@ export class AgentRunStore {
       ...(ownerId ? { ownerId } : {}),
     };
     this.runs.set(run.id, run);
+    void this.persist(run);
     queueMicrotask(() => void this.execute(run));
     return this.toResponse(run);
   }
 
   get(runId: string, ownerId?: string): AgentRunResponse | undefined {
     const run = this.runs.get(runId);
-    return run && (!ownerId || run.ownerId === ownerId) ? this.toResponse(run) : undefined;
+    if (run && (!ownerId || run.ownerId === ownerId)) return this.toResponse(run);
+    // Fallback: read from disk if not in memory (e.g. after restart).
+    const persisted = this.readPersisted(runId);
+    if (persisted && (!ownerId || persisted.ownerId === ownerId)) return this.toResponseFromPersisted(persisted);
+    return undefined;
   }
 
   cancel(runId: string, ownerId?: string): AgentRunResponse | undefined {
     const run = this.runs.get(runId);
-    if (!run || (ownerId && run.ownerId !== ownerId)) return undefined;
-    if (["succeeded", "failed", "cancelled"].includes(run.status)) return this.toResponse(run);
-    run.status = "cancelling";
-    run.message = "已请求中断任务，正在停止 Agent 进程。";
-    this.addTrace(run, trace("run.cancelling", "正在中断", "浏览器请求停止当前任务"));
-    run.controller.abort(new Error("Run cancelled by client"));
-    return this.toResponse(run);
+    if (run) {
+      if (ownerId && run.ownerId !== ownerId) return undefined;
+      if (["succeeded", "failed", "cancelled"].includes(run.status)) return this.toResponse(run);
+      run.status = "cancelling";
+      run.message = "已请求中断任务，正在停止 Agent 进程。";
+      this.addTrace(run, trace("run.cancelling", "正在中断", "浏览器请求停止当前任务"));
+      run.controller.abort(new Error("Run cancelled by client"));
+      void this.persist(run);
+      return this.toResponse(run);
+    }
+    // Disk-only run (already completed across a restart). No controller to abort.
+    const persisted = this.readPersisted(runId);
+    if (persisted && (!ownerId || persisted.ownerId === ownerId)) {
+      return this.toResponseFromPersisted(persisted);
+    }
+    return undefined;
   }
 
   private async execute(run: InternalRun): Promise<void> {
@@ -214,6 +261,7 @@ export class AgentRunStore {
     run.startedAt = new Date().toISOString();
     run.message = "循证研究服务正在检索和生成回答。";
     this.addTrace(run, trace("run.started", "任务已启动", `推理强度：${run.input.thinkingLevel}`));
+    void this.persist(run);
     try {
       const result = await this.executor(run.input, {
         signal: run.controller.signal,
@@ -240,6 +288,7 @@ export class AgentRunStore {
       run.completedAt = new Date().toISOString();
       run.message = result.message.trim() || "Agent 已完成，但没有生成可展示的文本。";
       this.addTrace(run, trace("run.completed", "任务完成", "已收到最终回答"));
+      void this.persist(run);
     } catch (error) {
       if (run.controller.signal.aborted || isAbortError(error)) {
         this.markCancelled(run);
@@ -251,6 +300,7 @@ export class AgentRunStore {
       run.message = "循证研究服务未能完成本次任务。";
       run.error = { code: "agent_execution_failed", message: errorMessage(error) };
       this.addTrace(run, trace("run.failed", "任务失败", run.error.message));
+      void this.persist(run);
     }
   }
 
@@ -260,6 +310,7 @@ export class AgentRunStore {
     run.completedAt = new Date().toISOString();
     run.message = "任务已中断。";
     this.addTrace(run, trace("run.cancelled", "任务已中断", "研究引擎已收到取消信号"));
+    void this.persist(run);
   }
 
   private addTrace(run: InternalRun, event: AgentTraceEvent): void {
@@ -329,8 +380,173 @@ export class AgentRunStore {
     const completed = [...this.runs.values()]
       .filter((run) => ["succeeded", "failed", "cancelled"].includes(run.status))
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+    const now = Date.now();
+    const retentionMs = this.retentionMs ?? 7 * 24 * 60 * 60 * 1000;
+    for (const run of completed) {
+      const completedAtMs = run.completedAt ? Date.parse(run.completedAt) : Date.parse(run.createdAt);
+      const expired = now - completedAtMs > retentionMs;
+      if (expired) {
+        this.runs.delete(run.id);
+        void this.removePersisted(run.id);
+      }
+    }
+    // Trim by count only when retention isn't the binding constraint.
+    if (retentionMs <= 0) return;
     const excess = completed.length - this.maxCompletedRuns + 1;
-    for (const run of completed.slice(0, Math.max(0, excess))) this.runs.delete(run.id);
+    if (excess <= 0) return;
+    for (const run of completed.slice(0, excess)) {
+      this.runs.delete(run.id);
+      void this.removePersisted(run.id);
+    }
+  }
+
+  private async persist(run: InternalRun): Promise<void> {
+    if (!this.runsDir) return;
+    try {
+      await writeFile(path.join(this.runsDir, `${run.id}.json`), JSON.stringify(this.toPersisted(run)), { mode: 0o600 });
+    } catch { /* persistence must never break RPC */ }
+  }
+
+  private async removePersisted(runId: string): Promise<void> {
+    if (!this.runsDir) return;
+    try {
+      await rm(path.join(this.runsDir, `${runId}.json`), { force: true });
+    } catch { /* ignore */ }
+  }
+
+  private readPersisted(runId: string): PersistedRun | undefined {
+    if (!this.runsDir) return undefined;
+    const file = path.join(this.runsDir, `${runId}.json`);
+    try {
+      const raw = readFileSync(file, "utf8");
+      return JSON.parse(raw) as PersistedRun;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async loadFromDisk(): Promise<void> {
+    if (!this.runsDir) return;
+    let entries: string[];
+    try {
+      entries = await readdir(this.runsDir);
+    } catch {
+      return;
+    }
+    const retentionMs = this.retentionMs ?? 7 * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - retentionMs;
+    for (const entry of entries) {
+      if (!entry.endsWith(".json")) continue;
+      const runId = entry.slice(0, -".json".length);
+      const file = path.join(this.runsDir, entry);
+      let raw: string;
+      try {
+        raw = await readFile(file, "utf8");
+      } catch {
+        continue;
+      }
+      let parsed: PersistedRun;
+      try {
+        parsed = JSON.parse(raw) as PersistedRun;
+      } catch {
+        continue;
+      }
+      if (!parsed || typeof parsed !== "object" || !parsed.id) continue;
+      const completedAtMs = parsed.completedAt ? Date.parse(parsed.completedAt) : Date.parse(parsed.createdAt);
+      if (Number.isFinite(cutoff) && retentionMs > 0 && completedAtMs < cutoff) {
+        await rm(file, { force: true });
+        continue;
+      }
+      // Only completed runs are restored; running/queued runs from a prior process
+      // cannot be safely resumed (their Pi subprocess is gone) and are skipped.
+      if (!["succeeded", "failed", "cancelled"].includes(parsed.status)) {
+        await rm(file, { force: true });
+        continue;
+      }
+      this.runs.set(parsed.id, this.fromPersisted(parsed));
+    }
+  }
+
+  private toPersisted(run: InternalRun): PersistedRun {
+    return {
+      id: run.id,
+      input: run.input,
+      status: run.status,
+      stage: run.stage,
+      createdAt: run.createdAt,
+      ...(run.startedAt ? { startedAt: run.startedAt } : {}),
+      ...(run.completedAt ? { completedAt: run.completedAt } : {}),
+      ...(run.sessionId ? { sessionId: run.sessionId } : {}),
+      message: run.message,
+      ...(run.reportMarkdown ? { reportMarkdown: run.reportMarkdown } : {}),
+      ...(run.reportPath ? { reportPath: run.reportPath } : {}),
+      agentTrace: [...run.agentTrace],
+      progressUpdates: [...run.progressUpdates],
+      tools: [...run.tools],
+      ...(run.error ? { error: run.error } : {}),
+      ...(run.ownerId ? { ownerId: run.ownerId } : {}),
+    };
+  }
+
+  private fromPersisted(p: PersistedRun): InternalRun {
+    return {
+      id: p.id,
+      input: p.input,
+      status: p.status,
+      stage: p.stage,
+      createdAt: p.createdAt,
+      ...(p.startedAt ? { startedAt: p.startedAt } : {}),
+      ...(p.completedAt ? { completedAt: p.completedAt } : {}),
+      ...(p.sessionId ? { sessionId: p.sessionId } : {}),
+      message: p.message,
+      ...(p.reportMarkdown ? { reportMarkdown: p.reportMarkdown } : {}),
+      ...(p.reportPath ? { reportPath: p.reportPath } : {}),
+      agentTrace: [...p.agentTrace],
+      progressUpdates: [...p.progressUpdates],
+      tools: [...p.tools],
+      ...(p.error ? { error: p.error } : {}),
+      ...(p.ownerId ? { ownerId: p.ownerId } : {}),
+      // No controller: a completed run has no live subprocess to abort.
+      controller: new AbortController(),
+    };
+  }
+
+  private toResponseFromPersisted(p: PersistedRun): AgentRunResponse {
+    const completed = p.status === "succeeded";
+    return {
+      contract_version: CONTRACT_VERSION,
+      run_id: p.id,
+      query_id: p.id,
+      status: p.status,
+      stage: p.stage,
+      created_at: p.createdAt,
+      ...(p.startedAt ? { started_at: p.startedAt } : {}),
+      ...(p.completedAt ? { completed_at: p.completedAt } : {}),
+      ...(p.sessionId ? { session_id: p.sessionId } : {}),
+      message: p.message,
+      ...(completed ? {
+        agent_answer: p.message,
+        patient_summary: p.message,
+        ...(p.reportMarkdown ? { report_markdown: p.reportMarkdown } : {}),
+        ...(p.reportPath ? { report_path: p.reportPath } : {}),
+      } : {}),
+      agent_trace: [...p.agentTrace],
+      progress_updates: [...p.progressUpdates],
+      tools: [...p.tools],
+      summary: {
+        audience_mode: p.input.audienceMode,
+        thinking_level: p.input.thinkingLevel,
+        search_enabled: p.input.searchEnabled,
+        retrieval_policy: p.input.retrievalPolicy,
+        response_mode: p.input.responseMode,
+        max_iterations: p.input.maxIterations,
+        max_iterations_is_advisory: true,
+        request_timeout_seconds: p.input.requestTimeoutSeconds,
+        provider: p.input.provider,
+        model: p.input.model,
+      },
+      ...(p.error ? { error: p.error } : {}),
+    };
   }
 }
 
@@ -339,6 +555,8 @@ export type AgentApiServerOptions = {
   patientIntakeExecutor?: PatientIntakeExecutor;
   corsOrigin?: string;
   maxCompletedRuns?: number;
+  agentRunsDir?: string;
+  agentRunRetentionMs?: number;
   runtimeConfig?: RuntimeConfig | (() => Promise<RuntimeConfig>);
   accountConnections?: AccountConnectionStore;
   staticDir?: string;
@@ -351,9 +569,19 @@ export function createAgentApiServer(options: AgentApiServerOptions): { server: 
   const auth = new InternalAuthStore(options.internalAccessKey, rootDir);
   const ownership = new SessionOwnershipStore(rootDir);
   const attachments = new AttachmentStore(rootDir);
-  const store = new AgentRunStore(options.executor, options.maxCompletedRuns, (sessionId, ownerId) => {
-    if (ownerId) void ownership.claim(sessionId, ownerId).catch(() => undefined);
-  });
+  const store = new AgentRunStore(
+    options.executor,
+    options.maxCompletedRuns,
+    (sessionId, ownerId) => {
+      if (ownerId) void ownership.claim(sessionId, ownerId).catch(() => undefined);
+    },
+    options.agentRunsDir ?? path.join(rootDir, "data", "agent-runs"),
+    options.agentRunRetentionMs ?? (() => {
+      const days = Number(process.env.EBM_RUN_RETENTION_DAYS ?? "7");
+      return Number.isFinite(days) && days > 0 ? days * 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+    })(),
+  );
+  void store.initialize().catch(() => undefined);
   const configuredRuntimeConfig = options.runtimeConfig;
   const runtimeConfig = typeof configuredRuntimeConfig === "function"
     ? configuredRuntimeConfig
@@ -1283,7 +1511,8 @@ export function buildAgentPrompt(input: AgentRunInput, attachmentContext = ""): 
     reportPreflight,
     ...(input.responseMode === "report" ? ["本轮必须生成正式循证报告：在最终回复前调用 report_write；若 report_write 只保存了 draft，则修复后调用 report_finalize。最终聊天消息使用自然、简洁的中文答复，概括结论、重要边界和下一步，不复制完整报告；该摘要会与正式报告同时展示。"] : []),
     "证据登记节奏：每读完一个能改变临床判断的来源片段，就在当前轮次尽快调用 evidence_add，不要把多个 read_id 留到检索结束后再并行登记。每次登记前核对当前 read_id 对应的 source_path 和行号范围；read_id 只绑定它实际读取的片段，后续重新读取同一来源会产生新的 read_id。若边界不在当前片段内，使用正确的 read_id 或重新读取目标行后重试，不要用整篇 full.md 作为证据。",
-    "证据边界选择：start_text 和 end_text 都要从当前 read 原文中复制，选择能让整对边界唯一的最小连续短语；不设固定字数。优先带有章节/小节上下文、主张关键词以及数字或单位，避免只用‘结果’、‘结论’、‘推荐’或‘(证据等级 2b)’等重复短语；如果工具提示有多个候选，先逐步增加上下文或使用可选的行号缩小读取范围，再重试 evidence_add。",
+    "证据边界选择：start_text 和 end_text 都要从当前 read 原文中复制，目标是最短且唯一的连续片段，不要求语义完整，可以在词或句子中间结束；优先在通用标签前后带一两个本地词（例如不要只用‘证据等级 2b’，而要带上它前面的治疗/人群短语），避免复制完整句子造成重复命中。若 read 回执给出绝对行号，优先同时提供匹配的 line_start/line_end 缩小范围；不要把其他候选或其他 read 的行号混入。若工具提示有多个候选，再逐步增加本地上下文或重读更窄窗口；不接受任意猜测或整篇 read 回退。",
+    "证据定位 few-shot（示例文字仅示范动作，必须替换为当前 read 中逐字复制的原文）：①原文为‘预后良好组……单药应用[20-21]（证据等级1a）’，不要用通用的 end_text=‘证据等级1a’，应带本地词，例如 end_text=‘单药应用[20-21]’；start_text 也取‘预后良好组’附近的最短唯一片段。②receipt 显示绝对行 238–243 时，使用 read_id 加 line_start=238、line_end=243；不要把 read 窗口内的第 15–17 行当成绝对行号。③如果 read_id 覆盖整篇 full.md，不要用短通用词在全文搜索；先用 read 读取目标行的窄窗口，再用该新 receipt 登记。每次仍须保证 start_text 在 end_text 之前且两者来自同一段连续原文。",
     "长来源处理：guideline_mcp_read 主要用于获得上下文；默认只读取与当前主张相关的窗口，优先使用检索结果给出的候选片段和行号，单次读取尽量控制在 3500 个 Unicode 字符左右。不要为了寻找一条主张而 read(path, offset=1, limit=全文行数)。",
     "研究过程中，可在工具调用前用一句简短中文说明对医生有意义的进展。只有研究目标、临床判断或面向医生的阶段发生实质变化时才说明进展，例如完成问题框定、找到会改变决策的关键证据、发现重要冲突或缺口、停止检索并进入写作。原文定位、登记证据和可自动恢复的工具重试属于内部操作，无需播报；同一阶段不要反复说明‘证据已足够’或下一项内部动作。不要暴露工具参数、内部路径，也不要把未经核验的中间发现写成结论；无需为了展示而凑数量。",
     retrievalInstruction,

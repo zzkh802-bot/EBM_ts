@@ -67,7 +67,7 @@ export function renderAbstractNavigation(
       `   Abstract lines: ${preview.startLine}-${preview.endLine}`,
       `   Abstract preview: ${preview.text}`,
       `   Readable abstract path: ${readablePath}`,
-      "   Evidence use: call pubmed_read first, then choose read_id with start_text/end_text (source_path optional); line_start/line_end are optional absolute-source-line narrowing hints, so omit them if they came from another candidate/read. Or use the displayed source path with line_start/line_end. Layout/XML/entity/punctuation noise is normalized; if read_id anchors mismatch, choose more distinctive boundaries or reread a narrower window rather than archiving the whole read.",
+      "   Evidence use: call pubmed_read first, then choose read_id with the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary); prefer the matching absolute line_start/line_end when the read range is known, but omit line hints copied from another candidate/read. Or use the displayed source path with line_start/line_end. Layout/XML/entity/punctuation noise is normalized; if read_id anchors mismatch, choose more distinctive boundaries or reread a narrower window rather than archiving the whole read.",
       "",
     );
   });

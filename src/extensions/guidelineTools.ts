@@ -1,9 +1,12 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { GuidelineMcpClient, readGuideline, retrieveGuidelines, searchGuidelines, type GuidelineRetrieveItem, type GuidelineSearchItem } from "../tools/guidelineMcp.js";
 import { upsertSourceLibraryFromArchive } from "../tools/sourceLibrary.js";
 import { archiveDetails } from "./archiveOutput.js";
 import { formatReadReceipt, registerArchiveReadReceipt } from "./readRegistry.js";
+import { registerReadReceipt } from "../tools/readRegistry.js";
 import { piReadableSessionPath, piSessionDirectory } from "./sessionPath.js";
 
 function indentedText(value: string, spaces = 4): string {
@@ -107,7 +110,7 @@ export function renderGuidelineReadText(
     `Readable guideline path: ${readablePath}`,
     ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
     `Archive lines: 1-${totalLines} (${totalLines} total lines; 1-based).`,
-    "After read, choose one evidence_add locator: the returned read_id with start_text/end_text (source_path optional; line_start/line_end are optional absolute-source-line narrowing hints—omit them if they came from another candidate/read), or source_path with line_start/line_end (text anchors optional). Layout/XML/entity/punctuation noise is normalized. If read_id anchors do not match, choose more distinctive boundaries or reread a narrower window; do not archive the whole read range as a fallback.",
+    "After read, choose one evidence_add locator: the returned read_id with the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary; line_start/line_end are optional absolute-source-line narrowing hints—prefer the matching pair to narrow repeated phrases, but omit them if they came from another candidate/read), or source_path with line_start/line_end (text anchors optional). Layout/XML/entity/punctuation noise is normalized. If read_id anchors do not match, choose more distinctive boundaries or reread a narrower window; do not archive the whole read range as a fallback.",
     ...(headings.length ? ["", "Best-effort navigation index (generated from cleaned Markdown; verify against full text):", ...headings] : []),
     "",
     `Informative preview lines ${previewStart}-${previewEnd}:`,
@@ -130,12 +133,13 @@ export function renderRetrieveCards(title: string, items: GuidelineRetrieveItem[
     if (item.chunkType) lines.push(`   chunk_type: ${item.chunkType}`);
     const sourcePath = item.sourcePath ? readablePath(item.sourcePath) : undefined;
     if (sourcePath) lines.push(`   readable chunk path: ${sourcePath}`);
+    if (item.readId) lines.push(`   read_id: ${item.readId}`);
     if (item.candidateMaterial) {
       lines.push("   candidate material (identical to archived body):", "", item.candidateMaterial);
     }
     lines.push("");
   });
-  lines.push("These are candidate materials, not evidence yet. Read the relevant source path, then choose read_id plus start_text/end_text (source_path optional), or source_path plus line_start/line_end. Layout/XML/entity/punctuation noise is normalized; if read_id anchors mismatch, choose a more unique pair or reread a narrower window instead of scanning with bash.");
+  lines.push("These are candidate materials, not evidence yet. When a read_id is shown, use it with the shortest distinctive start_text/end_text (source_path optional); otherwise use source_path plus line_start/line_end. Layout/XML/entity/punctuation noise is normalized; if read_id anchors mismatch, choose a more unique pair or reread a narrower window instead of scanning with bash.");
   return lines.join("\n");
 }
 
@@ -186,7 +190,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
     label: "Retrieve Guideline Chunks",
     description: "Run internal guideline RAG retrieval and archive each returned chunk as a citation-capable quote source.",
     promptSnippet: "Retrieve traceable guideline chunks that can directly support evidence when relevant",
-    promptGuidelines: ["RAG chunks may directly support evidence. Read the returned source path or its returned line range, then register the decision-relevant claim promptly with evidence_add; do not defer all evidence until the end. Use read_id plus short, distinctive start_text/end_text; if anchors mismatch, choose a more unique pair or reread a narrower window. If read_id is unavailable, use the returned line range. Never join separate spans or insert ellipses. Use guideline_mcp_read when broader context is needed, but do not read the entire full.md when a focused chunk/window is sufficient."],
+    promptGuidelines: ["RAG chunks may directly support evidence. Each returned chunk is archived and has its own read_id; register the decision-relevant claim promptly with evidence_add instead of deferring all evidence until the end. Use that read_id plus the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary; include a nearby local word when a marker repeats), and optionally matching line_start/line_end; if anchors mismatch, choose a more unique pair or reread a narrower window. If read_id is unavailable, use the returned source_path and line range. Never join separate spans or insert ellipses. Use guideline_mcp_read when broader context is needed, but do not read the entire full.md when a focused chunk/window is sufficient."],
     parameters: Type.Object({
       query: Type.String({ minLength: 2, description: "Focused clinical retrieval query" }),
       topk: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
@@ -207,12 +211,27 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
       });
       if (!result.ok) throw new Error(JSON.stringify(result.error));
       pi.events.emit("ebm:source_archived", { sessionId, provider: "guideline_mcp", path: result.archive.path, kind: "search" });
-      result.items.forEach((item) => {
+      const sessionDir = piSessionDirectory(ctx.cwd, sessionId);
+      const receiptErrors: string[] = [];
+      await Promise.all(result.items.map(async (item) => {
+        try {
+          if (item.sourcePath && item.lineStart !== undefined && item.lineEnd !== undefined) {
+            const source = await readFile(path.join(sessionDir, item.sourcePath), "utf8");
+            const receipt = await registerReadReceipt({ sessionDir, sourcePath: item.sourcePath, source, lineStart: item.lineStart, lineEnd: item.lineEnd });
+            item.readId = receipt.id;
+          }
+        } catch (error) {
+          receiptErrors.push(`${item.sourcePath || item.title}: ${error instanceof Error ? error.message : String(error)}`);
+        }
         if (item.sourcePath) pi.events.emit("ebm:source_archived", { sessionId, provider: "guideline_mcp", path: item.sourcePath, kind: "read", sourceStatus: "rag_chunk" });
-      });
+      }));
+      const sortedReceiptErrors = [...receiptErrors].sort();
+      const receiptWarning = sortedReceiptErrors.length
+        ? `\n\nRead receipt warnings (candidate remains available; use its source_path and line range only if the archive is readable):\n${sortedReceiptErrors.map((error) => `- ${error}`).join("\n")}`
+        : "";
       return {
-        content: [{ type: "text", text: renderRetrieveCards(`Guideline RAG retrieval candidates (${result.items.length} returned):`, result.items, (sourcePath) => piReadableSessionPath(ctx.cwd, sessionId, sourcePath)) }],
-        details: { archive: archiveDetails(result.archive), itemCount: result.items.length, chunkArchives: result.items.flatMap((item) => item.sourcePath ? [{ path: item.sourcePath, sourceId: item.sourceId, documentId: item.documentId, lineStart: item.lineStart, lineEnd: item.lineEnd }] : []), truncated: false },
+        content: [{ type: "text", text: `${renderRetrieveCards(`Guideline RAG retrieval candidates (${result.items.length} returned):`, result.items, (sourcePath) => piReadableSessionPath(ctx.cwd, sessionId, sourcePath))}${receiptWarning}` }],
+        details: { archive: archiveDetails(result.archive), itemCount: result.items.length, ...(sortedReceiptErrors.length ? { receiptErrors: sortedReceiptErrors } : {}), chunkArchives: result.items.flatMap((item) => item.sourcePath ? [{ path: item.sourcePath, sourceId: item.sourceId, documentId: item.documentId, lineStart: item.lineStart, lineEnd: item.lineEnd, ...(item.readId ? { readId: item.readId } : {}) }] : []), truncated: false },
       };
     },
   });

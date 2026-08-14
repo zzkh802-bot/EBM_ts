@@ -5,7 +5,7 @@ import { strToU8, zipSync } from "fflate";
 import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { readWeb, renderSearchCandidatesText, searchWeb } from "../src/tools/web.js";
-import { searchSourceLibrary, sourceLibraryMetadataFields, upsertSourceLibraryFromArchive } from "../src/tools/sourceLibrary.js";
+import { searchSourceLibrary, sourceLibraryLocator, sourceLibraryMetadataFields, upsertSourceLibraryFromArchive } from "../src/tools/sourceLibrary.js";
 import { expandSourceLibraryQueryTerms } from "../src/tools/sourceLibraryTerms.js";
 
 function mockFetch(responses: Response[]) {
@@ -322,6 +322,55 @@ describe("archived web tools", () => {
     });
 
     expect(result).toMatchObject({ ok: true, provider: "library" });
+    expect(mock.calls).toHaveLength(0);
+  });
+
+  it("materializes an internal mcp source URL from the library without outbound URL access", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
+    const libraryDir = await mkdtemp(path.join(os.tmpdir(), "ebm-library-"));
+    await mkdir(path.join(libraryDir, "cma-aml"), { recursive: true });
+    await writeFile(path.join(libraryDir, "cma-aml", "metadata.json"), JSON.stringify({
+      title: "CMA AML Guideline",
+      source_url: "mcp://guideline/cma_2023_demo#chunk_00001",
+    }));
+    await writeFile(path.join(libraryDir, "cma-aml", "full.md"), "# CMA AML Guideline\n\nCached recommendation.");
+    const mock = mockFetch([]);
+
+    const result = await readWeb({
+      sessionDir,
+      url: "mcp://guideline/cma_2023_demo#chunk_00001",
+      fetcher: mock.fetcher,
+      sourceLibraryDir: libraryDir,
+    });
+
+    expect(result).toMatchObject({ ok: true, provider: "library" });
+    if (!result.ok) return;
+    expect(result.archive.sourceUrl).toBe("mcp://guideline/cma_2023_demo#chunk_00001");
+    expect(await readFile(path.join(sessionDir, result.archive.path), "utf8")).toContain("Cached recommendation.");
+    expect(mock.calls).toHaveLength(0);
+  });
+
+  it("materializes legacy library entries without an external source URL by stable slug", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
+    const libraryDir = await mkdtemp(path.join(os.tmpdir(), "ebm-library-"));
+    await mkdir(path.join(libraryDir, "中国急性缺血性卒中诊治指南-2023"), { recursive: true });
+    await writeFile(path.join(libraryDir, "中国急性缺血性卒中诊治指南-2023", "metadata.json"), JSON.stringify({
+      title: "中国急性缺血性卒中诊治指南 2023",
+      provider: "archive",
+    }));
+    await writeFile(path.join(libraryDir, "中国急性缺血性卒中诊治指南-2023", "full.md"), "# 指南\n\n血压管理推荐。");
+    const mock = mockFetch([]);
+
+    const result = await readWeb({
+      sessionDir,
+      url: sourceLibraryLocator("中国急性缺血性卒中诊治指南-2023"),
+      fetcher: mock.fetcher,
+      sourceLibraryDir: libraryDir,
+    });
+
+    expect(result).toMatchObject({ ok: true, provider: "library" });
+    if (!result.ok) return;
+    expect(await readFile(path.join(sessionDir, result.archive.path), "utf8")).toContain("血压管理推荐。");
     expect(mock.calls).toHaveLength(0);
   });
 

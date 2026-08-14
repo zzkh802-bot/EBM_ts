@@ -1,9 +1,9 @@
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { archiveSource } from "../src/tools/archive.js";
-import { addEvidenceFromAnchors } from "../src/tools/evidence.js";
+import { addEvidenceFromAnchors, readEvidence, verifyEvidence } from "../src/tools/evidence.js";
 import { listReadReceipts, registerReadReceipt, resolveReadReceipt } from "../src/tools/readRegistry.js";
 import { archiveToolText } from "../src/extensions/archiveOutput.js";
 import { registerArchiveReadReceipt, registerReadRegistry } from "../src/extensions/readRegistry.js";
@@ -46,6 +46,10 @@ describe("read receipts", () => {
       endText: "eligible.",
     });
     expect(evidence.quote).toBe("Use treatment when eligible.");
+    expect(evidence.readId).toBe(receipt.id);
+    expect(await readFile(path.join(sessionDir, "evidence", `${evidence.id}.md`), "utf8")).toContain(`read_id: ${receipt.id}`);
+    expect((await readEvidence(sessionDir, evidence.id)).verification).toEqual({ ok: true, errors: [] });
+    expect(await verifyEvidence(sessionDir, { ...evidence, readId: "r99" })).toMatchObject({ ok: false, errors: [expect.stringMatching(/read_id was not found/)] });
     await expect(resolveReadReceipt(sessionDir, "r99")).rejects.toThrow(/read_id was not found/);
   });
 
@@ -332,6 +336,30 @@ describe("read receipts", () => {
       isError: false,
     }, { cwd, sessionManager: { getSessionId: () => sessionId } });
     expect(result.content[0].text).toBe("Recommendation\nUse treatment when eligible.");
+    expect(result.content.at(-1).text).toMatch(/read_id: r\d+/);
+  });
+
+  it("also registers receipts for processed attachment Markdown", async () => {
+    const cwd = await mkdtemp(path.join(os.tmpdir(), "ebm-read-registry-"));
+    const sessionId = "session-attachment";
+    const sessionDir = await initializePiSessionDirectory(cwd, sessionId, { sessionName: "Attachment read", firstPrompt: "Evidence" });
+    await mkdir(path.join(sessionDir, "artifacts", "uploads"), { recursive: true });
+    const relative = "artifacts/uploads/att_demo.md";
+    await writeFile(path.join(sessionDir, ...relative.split("/")), "OCR finding\nA relevant result.", "utf8");
+    let handler: ((event: any, ctx: any) => Promise<any>) | undefined;
+    registerReadRegistry({
+      registerTool: () => undefined,
+      on: (_name: string, callback: (event: any, ctx: any) => Promise<any>) => { handler = callback; },
+    } as never);
+    const readablePath = piReadableSessionPath(cwd, sessionId, relative);
+    const result = await handler!({
+      toolName: "read",
+      toolCallId: "read-attachment",
+      input: { path: readablePath, offset: 1, limit: 2 },
+      content: [{ type: "text", text: "OCR finding\nA relevant result." }],
+      details: {},
+      isError: false,
+    }, { cwd, sessionManager: { getSessionId: () => sessionId } });
     expect(result.content.at(-1).text).toMatch(/read_id: r\d+/);
   });
 });

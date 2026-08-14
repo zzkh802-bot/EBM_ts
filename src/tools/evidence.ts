@@ -29,6 +29,8 @@ export type EvidenceNode = {
   provenance: EvidenceProvenance;
   confidence: EvidenceConfidence;
   sourcePath: string;
+  /** Session-local receipt used to locate the exact read window during audit. */
+  readId?: string;
   sourceId?: string;
   documentId?: string;
   quote: string;
@@ -50,6 +52,7 @@ export type EvidenceAddInput = {
   provenance?: EvidenceProvenance;
   confidence?: EvidenceConfidence;
   sourcePath?: string;
+  readId?: string;
   sourceId?: string;
   quote: string;
 };
@@ -83,7 +86,7 @@ async function resolveExistingSessionPath(sessionDir: string, rel: string): Prom
 }
 
 function evidenceId(input: Omit<EvidenceNode, "id" | "createdAt" | "citationEligible">): string {
-  const { matchMode: _matchMode, ...stableIdentity } = input;
+  const { matchMode: _matchMode, readId: _readId, ...stableIdentity } = input;
   return `ev_${createHash("sha256").update(JSON.stringify(stableIdentity)).digest("hex").slice(0, 16)}`;
 }
 
@@ -107,6 +110,7 @@ export function renderEvidenceMarkdown(node: EvidenceNode): string {
     `provenance: ${node.provenance}`,
     `confidence: ${node.confidence}`,
     `source_path: ${yamlString(node.sourcePath)}`,
+    ...(node.readId ? [`read_id: ${node.readId}`] : []),
     ...(node.sourceId ? [`source_id: ${node.sourceId}`] : []),
     ...(node.documentId ? [`document_id: ${node.documentId}`] : []),
     `source_line_start: ${node.lineStart}`,
@@ -244,6 +248,7 @@ export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Pro
     question: input.question,
     claim: input.claim,
     relation: input.relation,
+    ...(input.readId ? { readId: input.readId } : {}),
     ...(input.provenance ? { provenance: input.provenance } : {}),
     ...(input.confidence ? { confidence: input.confidence } : {}),
   }, normalizedSourcePath, located);
@@ -298,6 +303,7 @@ async function persistLocatedEvidence(
     provenance,
     confidence: input.confidence ?? "moderate",
     sourcePath,
+    ...(input.readId ? { readId: input.readId } : {}),
     sourceId: identity.sourceId,
     documentId: identity.documentId,
     quote,
@@ -395,6 +401,7 @@ function parseEvidenceMarkdown(markdown: string): EvidenceNode {
   const charStart = optionalNumber("source_char_start");
   const charEnd = optionalNumber("source_char_end");
   const sourceId = optionalString("source_id");
+  const readId = optionalString("read_id");
   const documentId = optionalString("document_id");
   if ((charStart === undefined) !== (charEnd === undefined)) throw new Error("evidence character coordinates must be stored together");
   return {
@@ -405,6 +412,7 @@ function parseEvidenceMarkdown(markdown: string): EvidenceNode {
     provenance: provenance as EvidenceProvenance,
     confidence: confidence as EvidenceConfidence,
     sourcePath: requiredString("source_path"),
+    ...(readId ? { readId } : {}),
     ...(sourceId ? { sourceId } : {}),
     ...(documentId ? { documentId } : {}),
     quote: fenced.slice(firstBreak + 1, quoteEnd),
@@ -469,6 +477,19 @@ export async function verifyEvidence(sessionDir: string, node: EvidenceNode): Pr
   try {
     const sourcePath = await resolveExistingSessionPath(sessionDir, node.sourcePath);
     const source = await readFile(sourcePath, "utf8");
+    if (node.readId) {
+      try {
+        const receipt = await resolveReadReceipt(sessionDir, node.readId);
+        const normalizedReceiptPath = path.posix.normalize(receipt.sourcePath.replaceAll("\\", "/"));
+        const normalizedNodePath = path.posix.normalize(node.sourcePath.replaceAll("\\", "/"));
+        if (normalizedReceiptPath !== normalizedNodePath) errors.push("read_id source path mismatch");
+        if (node.lineStart < receipt.lineStart || node.lineEnd > receipt.lineEnd) errors.push("evidence lines fall outside read_id range");
+        const sourceHash = createHash("sha256").update(source).digest("hex");
+        if (sourceHash !== receipt.sourceHash) errors.push("read_id no longer matches the archived source revision");
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : String(error));
+      }
+    }
     if (node.sourceId || node.documentId) {
       const identity = await sourceIdentityForPath(sessionDir, node.sourcePath);
       if (node.sourceId && identity.sourceId !== node.sourceId) errors.push("sourceId mismatch");

@@ -28,4 +28,28 @@ describe('研究记录抽屉', () => {
     await clear.trigger('click')
     expect(sessions.sessions.some((session) => session.id === inFlightSessionId)).toBe(true)
   })
+
+  it('按用户最后一次提问排序，不因模型进度更新时间刷新而跳动', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createAppRouter(createMemoryHistory())
+    await router.push('/clinician/evidence')
+    await router.isReady()
+    const sessions = useSessionsStore()
+    const run = useAgentRunStore()
+    const first = sessions.activeSessionId
+    sessions.beginResearchIn(first, '第一个并行问题')
+    sessions.addMessageTo(first, { id: 'question-a', role: 'user', title: '问题', content: '第一个并行问题', createdAt: new Date().toISOString(), trace: [], audienceMode: 'clinician', thinkingLevel: 'low', searchEnabled: true })
+    const second = sessions.create()
+    sessions.beginResearchIn(second, '第二个并行问题')
+    sessions.addMessageTo(second, { id: 'question-b', role: 'user', title: '问题', content: '第二个并行问题', createdAt: new Date().toISOString(), trace: [], audienceMode: 'clinician', thinkingLevel: 'low', searchEnabled: true })
+    run.start(first)
+    run.start(second)
+
+    const wrapper = mount(SessionDrawer, { global: { plugins: [pinia, router] } })
+    const initialOrder = wrapper.findAll('.history-question').map((item) => item.text())
+    sessions.patchMessageIn(first, 'question-a', { content: '第一个问题刚刚收到新的运行进度' })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('.history-question').map((item) => item.text())).toEqual(initialOrder)
+  })
 })

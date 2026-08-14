@@ -27,6 +27,7 @@ export type EvidenceSourceKind =
   | "pubmed"
   | "web"
   | "source_library"
+  | "attachment"
   | "unknown";
 
 export type EvidenceAttemptBreakdown = {
@@ -135,7 +136,9 @@ function recordValue(value: unknown): Record<string, any> | undefined {
 
 function canonicalSourcePath(value: unknown): string {
   if (typeof value !== "string") return "";
-  return value.replace(/^@/, "").replaceAll("\\", "/").replace(/^\.\//, "").replace(/^data\/sessions\/[^/]+\//, "");
+  const normalized = value.replace(/^@/, "").replaceAll("\\", "/").replace(/^\.\//, "");
+  const sessionMarker = normalized.match(/(?:^|\/)data\/sessions\/[^/]+\/(.+)$/);
+  return sessionMarker?.[1] ?? normalized.replace(/^data\/sessions\/[^/]+\//, "");
 }
 
 function producedSourcePaths(toolName: string, result: unknown): Array<{ path: string; sourceId?: string; kind: EvidenceSourceKind }> {
@@ -172,6 +175,39 @@ function producedSourcePaths(toolName: string, result: unknown): Array<{ path: s
     }];
   }
   return [];
+}
+
+function producedReadReceipts(toolName: string, result: unknown): Array<{ readId: string; path: string; sourceId?: string; kind?: EvidenceSourceKind }> {
+  const resultRecord = recordValue(result);
+  const details = recordValue(resultRecord?.details);
+  if (!details) return [];
+  if (toolName === "guideline_mcp_retrieve" && Array.isArray(details.chunkArchives)) {
+    return details.chunkArchives.flatMap((item: unknown) => {
+      const chunk = recordValue(item);
+      if (typeof chunk?.readId !== "string" || typeof chunk.path !== "string") return [];
+      return [{
+        readId: chunk.readId,
+        path: canonicalSourcePath(chunk.path),
+        ...(typeof chunk.sourceId === "string" ? { sourceId: chunk.sourceId } : {}),
+        kind: "guideline_mcp_retrieve" as const,
+      }];
+    });
+  }
+  if (typeof details.readId !== "string") return [];
+  const archive = recordValue(details.archive);
+  const rawPath = typeof details.sourcePath === "string" ? details.sourcePath : archive?.path;
+  if (typeof rawPath !== "string" || !rawPath) return [];
+  const kind: EvidenceSourceKind | undefined = toolName === "guideline_mcp_retrieve" || toolName === "guideline_mcp_read"
+    ? toolName
+    : toolName === "pubmed_read" ? "pubmed"
+      : toolName === "web_read" ? (details.provider === "library" ? "source_library" : "web")
+        : undefined;
+  return [{
+    readId: details.readId,
+    path: canonicalSourcePath(rawPath),
+    ...(typeof archive?.sourceId === "string" ? { sourceId: archive.sourceId } : {}),
+    ...(kind ? { kind } : {}),
+  }];
 }
 
 function toolResultText(result: unknown): string {
@@ -249,6 +285,7 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
   };
   const sourceKinds = new Map<string, { kind: EvidenceSourceKind; sourceId?: string }>();
   const sourceIdKinds = new Map<string, EvidenceSourceKind>();
+  const readKinds = new Map<string, { path: string; kind: EvidenceSourceKind; sourceId?: string }>();
   const seenEvidenceTargets = new Set<string>();
   const activeEvidenceAttempts = new Map<string, {
     first: boolean;
@@ -330,11 +367,13 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
       tools[name].calls += 1;
       if (name === "evidence_add") {
         const args = recordValue(data?.args) ?? {};
-        const sourcePath = canonicalSourcePath(args.source_path);
+        const readId = typeof args.read_id === "string" ? args.read_id : undefined;
+        const readSource = readId ? readKinds.get(`${record.session_id}:${readId}`) : undefined;
+        const sourcePath = canonicalSourcePath(args.source_path ?? readSource?.path);
         const spanSourceId = typeof args.source_span_id === "string" ? args.source_span_id.match(/^span_([a-f0-9]{16})_/)?.[1] : undefined;
         const pathSource = sourceKinds.get(`${record.session_id}:${sourcePath}`);
-        const sourceId = typeof args.source_id === "string" ? args.source_id : spanSourceId ? `src_${spanSourceId}` : pathSource?.sourceId;
-        const source = (sourceId ? sourceIdKinds.get(`${record.session_id}:${sourceId}`) : undefined) ?? pathSource?.kind ?? "unknown";
+        const sourceId = typeof args.source_id === "string" ? args.source_id : spanSourceId ? `src_${spanSourceId}` : readSource?.sourceId ?? pathSource?.sourceId;
+        const source = (sourceId ? sourceIdKinds.get(`${record.session_id}:${sourceId}`) : undefined) ?? readSource?.kind ?? pathSource?.kind ?? "unknown";
         const mode = args.read_id ? "read_id_anchors"
           : args.line_start !== undefined || args.line_end !== undefined ? "line_anchors"
             : args.source_span_id ? "source_span" : args.source_id ? "source_id_quote" : "source_path_quote";
@@ -385,6 +424,14 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
       for (const produced of producedSourcePaths(name, data?.result)) {
         sourceKinds.set(`${record.session_id}:${produced.path}`, { kind: produced.kind, ...(produced.sourceId ? { sourceId: produced.sourceId } : {}) });
         if (produced.sourceId) sourceIdKinds.set(`${record.session_id}:${produced.sourceId}`, produced.kind);
+      }
+      for (const receipt of producedReadReceipts(name, data?.result)) {
+        const pathSource = sourceKinds.get(`${record.session_id}:${receipt.path}`);
+        const kind = receipt.kind ?? pathSource?.kind ?? (receipt.path.startsWith("artifacts/") ? "attachment" : undefined);
+        if (!kind) continue;
+        const sourceId = receipt.sourceId ?? pathSource?.sourceId;
+        readKinds.set(`${record.session_id}:${receipt.readId}`, { path: receipt.path, kind, ...(sourceId ? { sourceId } : {}) });
+        if (sourceId) sourceIdKinds.set(`${record.session_id}:${sourceId}`, kind);
       }
       if (name === "evidence_add") {
         const qualifiedCallId = `${record.session_id}:${String(data?.tool_call_id ?? "")}`;

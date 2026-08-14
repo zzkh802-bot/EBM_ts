@@ -26,12 +26,21 @@ export type ReportWriteInput = {
   allowNoEvidence?: boolean;
 };
 
+export type ReportNormalization = {
+  contentChanged: boolean;
+  referencesRebuilt: boolean;
+  referenceNumbersCompacted: boolean;
+  referenceNumberMap: Array<{ from: number; to: number }>;
+  finalReferenceCount: number;
+};
+
 export type ReportRecord = {
   path: string;
   title: string;
   evidenceIds: string[];
   sha256: string;
   createdAt: string;
+  normalization: ReportNormalization;
 };
 
 export type ReportDraftRecord = {
@@ -40,6 +49,7 @@ export type ReportDraftRecord = {
   sha256: string;
   createdAt: string;
   error: string;
+  normalization: ReportNormalization;
 };
 
 function renderReferenceEntry(entry: string): string {
@@ -147,9 +157,14 @@ function normalizeReferences(references: ReportReference[]): NormalizedReportRef
       if (!existing.evidenceIds.includes(evidenceId)) existing.evidenceIds.push(evidenceId);
     }
   }
-  return [...byCitation.values()]
+  const merged = [...byCitation.values()]
     .map((reference) => ({ ...reference, evidenceIds: [...reference.evidenceIds].sort(), sourceNumbers: [...new Set(reference.sourceNumbers)].sort((a, b) => a - b) }))
     .sort((a, b) => a.number - b.number);
+  // Reference numbers are presentation indices, not stable source IDs. Once
+  // duplicate citations are merged, compact them to 1..N so reports cannot
+  // retain gaps such as [1], [2], [3], [6], [7]. remapBodyCitationNumbers
+  // uses sourceNumbers to update the body citations accordingly.
+  return merged.map((reference, index) => ({ ...reference, number: index + 1 }));
 }
 
 function remapBodyCitationNumbers(content: string, references: NormalizedReportReference[]): string {
@@ -168,6 +183,19 @@ function remapBodyCitationNumbers(content: string, references: NormalizedReportR
   return `${remappedBody}${suffix}`;
 }
 
+function normalizationSummary(original: string, finalContent: string, references: NormalizedReportReference[]): ReportNormalization {
+  const referenceNumberMap = references.flatMap((reference) => reference.sourceNumbers
+    .filter((from) => from !== reference.number)
+    .map((from) => ({ from, to: reference.number })));
+  return {
+    contentChanged: finalContent !== original,
+    referencesRebuilt: references.length > 0,
+    referenceNumbersCompacted: referenceNumberMap.length > 0,
+    referenceNumberMap,
+    finalReferenceCount: references.length,
+  };
+}
+
 function slug(value: string): string {
   const result = value.normalize("NFKC").toLowerCase()
     .replace(/[\p{P}\p{S}\s]+/gu, "-")
@@ -180,9 +208,11 @@ function slug(value: string): string {
 export async function writeReportDraft(input: ReportWriteInput, error: string): Promise<ReportDraftRecord> {
   const title = input.title.trim() || "report draft";
   let draftReferences: Array<{ number: number; citation: string }> = input.references ?? [];
+  let normalizedReferences: NormalizedReportReference[] = [];
   if (input.references?.length) {
     try {
-      draftReferences = normalizeReferences(input.references);
+      normalizedReferences = normalizeReferences(input.references);
+      draftReferences = normalizedReferences;
     } catch {
       draftReferences = input.references;
     }
@@ -193,6 +223,7 @@ export async function writeReportDraft(input: ReportWriteInput, error: string): 
       "## 参考文献\n\n<!-- 这里只是草稿预览：report_finalize/report_write 会根据 references 参数重新生成本节。修改引用时请同时修改 references 参数，不要只改这段预览。 -->\n\n",
     )
     : normalizeMarkdown(input.content));
+  const normalization = normalizationSummary(input.content, content, normalizedReferences);
   const sha256 = createHash("sha256").update(`${title}\n${content}`).digest("hex");
   const createdAt = formatBeijingTimestamp();
   const outDir = path.join(input.sessionDir, "reports", "drafts");
@@ -204,7 +235,7 @@ export async function writeReportDraft(input: ReportWriteInput, error: string): 
     const abs = path.join(outDir, name);
     try {
       await writeFile(abs, `${content}\n`, { encoding: "utf8", flag: "wx" });
-      return { path: rel, title, sha256, createdAt, error };
+      return { path: rel, title, sha256, createdAt, error, normalization };
     } catch (writeError) {
       if (!(writeError instanceof Error && "code" in writeError && writeError.code === "EEXIST")) throw writeError;
     }
@@ -217,6 +248,7 @@ export async function writeReport(input: ReportWriteInput): Promise<ReportRecord
   const references = normalizeReferences(input.references ?? []);
   const normalizedContent = normalizeMarkdown(input.content);
   const content = ensureReferenceSection(remapBodyCitationNumbers(normalizedContent, references), references);
+  const normalization = normalizationSummary(input.content, content, references);
   if (!content.trim()) throw new Error("report content is required");
   const evidenceIds = references.length
     ? [...new Set(references.flatMap((reference) => reference.evidenceIds))].sort()
@@ -282,7 +314,7 @@ export async function writeReport(input: ReportWriteInput): Promise<ReportRecord
       await writeFile(abs, archived, { encoding: "utf8", flag: "wx" });
       createdReport = true;
       await writeFile(metadataPath, serializedMetadata, { encoding: "utf8", flag: "wx" });
-      return { path: rel, title, evidenceIds, sha256, createdAt };
+      return { path: rel, title, evidenceIds, sha256, createdAt, normalization };
     } catch (error) {
       const alreadyExists = error instanceof Error && "code" in error && error.code === "EEXIST";
       if (!alreadyExists) {
@@ -303,17 +335,17 @@ export async function writeReport(input: ReportWriteInput): Promise<ReportRecord
         existingMetadata = undefined;
       }
       if (existing === archived && existingMetadata?.sha256 === sha256) {
-        return { path: rel, title, evidenceIds, sha256, createdAt: existingMetadata?.created_at ?? createdAt };
+        return { path: rel, title, evidenceIds, sha256, createdAt: existingMetadata?.created_at ?? createdAt, normalization };
       }
       if (existing === archived && !existingMetadata && !createdReport) {
         try {
           await writeFile(metadataPath, serializedMetadata, { encoding: "utf8", flag: "wx" });
-          return { path: rel, title, evidenceIds, sha256, createdAt };
+          return { path: rel, title, evidenceIds, sha256, createdAt, normalization };
         } catch (metadataError) {
           if (!(metadataError instanceof Error && "code" in metadataError && metadataError.code === "EEXIST")) throw metadataError;
           try {
             const recovered = JSON.parse(await readFile(metadataPath, "utf8")) as { sha256?: string; created_at?: string };
-            if (recovered.sha256 === sha256) return { path: rel, title, evidenceIds, sha256, createdAt: recovered.created_at ?? createdAt };
+            if (recovered.sha256 === sha256) return { path: rel, title, evidenceIds, sha256, createdAt: recovered.created_at ?? createdAt, normalization };
           } catch {
             // A concurrent writer may still be completing the sidecar; use a fresh suffix below.
           }

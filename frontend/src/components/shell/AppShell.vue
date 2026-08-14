@@ -4,6 +4,7 @@ import AppHeader from './AppHeader.vue'
 import MobileBottomNav from './MobileBottomNav.vue'
 import SessionDrawer from './SessionDrawer.vue'
 import RightDetailPanel from './RightDetailPanel.vue'
+import RunCompletionNotices from './RunCompletionNotices.vue'
 </script>
 
 <template>
@@ -12,6 +13,7 @@ import RightDetailPanel from './RightDetailPanel.vue'
     <AppHeader />
     <SessionDrawer />
     <RightDetailPanel />
+    <RunCompletionNotices />
     <RouterView />
     <MobileBottomNav />
   </main>
