@@ -15,6 +15,11 @@ data/pi-patient-intake/
 data/pi-patient-sessions/
 data/patient-records/
 data/benchmark_reports/
+data/agent-runs/
+data/attachments/
+data/internal-users.json
+data/internal-sessions.json
+data/session-owners.json
 data/source_library/guidelines/*
 !data/source_library/guidelines/README.md
 data/tmp/

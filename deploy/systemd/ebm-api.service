@@ -1,0 +1,41 @@
+# 循医研究 API 服务 — systemd 单元（模板）
+# 本机由 SIAT 网关承担 TLS，服务绑定 0.0.0.0:8787 供网关反代。
+# 当前实际部署为 nohup 直启（见 deploy/README.md）；此模板供后续接管服务生命周期时使用。
+# 拷贝到 /etc/systemd/system/ebm-api.service，按实际路径与用户调整后：
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now ebm-api
+# 建议用独立运行账号（非 root）运行；文件权限按 0006 安全边界执行。
+
+[Unit]
+Description=EBM Research API (xunyi.siat.ac.cn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ebm
+Group=ebm
+WorkingDirectory=/opt/ebm/EBM_ts
+Environment=NODE_ENV=production
+Environment=DP_XUNYI_TS_HOST=0.0.0.0
+Environment=DP_XUNYI_TS_PORT=8787
+EnvironmentFile=/opt/ebm/EBM_ts/.env
+ExecStart=/usr/bin/node /opt/ebm/EBM_ts/node_modules/tsx/dist/cli.mjs /opt/ebm/EBM_ts/scripts/api-server.ts
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+# 安全加固
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=/opt/ebm/EBM_ts/data
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

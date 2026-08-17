@@ -75,7 +75,7 @@ The development URLs are:
 
 For a production-like single-origin launch, use `npm start`. It builds the frontend once and serves the static files and API from `http://127.0.0.1:8787`.
 
-The production deployment keeps the public frontend behind Nginx while the Agent API runs on an internal loopback port. Deployment credentials and API keys are intentionally not stored in this repository.
+The production deployment (`https://xunyi.siat.ac.cn`) receives TLS from the SIAT gateway; the Node service binds `0.0.0.0:8787` and serves both the built frontend and the Agent API. Deployment credentials and API keys are intentionally not stored in this repository. See `deploy/README.md` for the verified topology and start/stop procedures.
 
 `npm run ebm` is the single launcher. It loads the ignored local `.env` and launches Pi's interactive TUI.
 
