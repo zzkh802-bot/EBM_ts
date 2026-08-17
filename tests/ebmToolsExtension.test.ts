@@ -49,7 +49,9 @@ describe("EBM Pi extension tools", () => {
     expect(schema?.required ?? []).not.toContain("source_path");
     expect(schema?.required ?? []).not.toContain("start_text");
     expect(schema?.required ?? []).not.toContain("end_text");
-    expect(tools.get("evidence_add")?.promptGuidelines?.join("\n")).toContain("Choose one locator mode");
+    expect(schema?.required ?? []).toContain("line_start");
+    expect(schema?.required ?? []).toContain("line_end");
+    expect(tools.get("evidence_add")?.promptGuidelines?.join("\n")).toContain("line_start and line_end are always required");
     expect(tools.get("evidence_add")?.promptGuidelines?.join("\n")).toContain("do not accept a whole-read fallback");
     expect(schema?.properties).not.toHaveProperty("source_id");
   });

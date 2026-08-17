@@ -187,18 +187,15 @@ export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Pro
     receipt = await resolveReadReceipt(input.sessionDir, input.readId);
     normalizedSourcePath = normalizeEvidenceSourcePath(input.sourcePath ?? receipt.sourcePath);
     if (receipt.sourcePath !== normalizedSourcePath) throw new Error("read_id does not match source_path");
-    // Line numbers are an optional narrowing hint. Models may copy a stale
-    // candidate range or a range from a different read, so do not reject the
-    // authoritative read_id solely because the hint falls outside it. The
-    // anchor match below remains bounded by the receipt either way.
-    if (lineStart !== undefined) {
-      lineStart = Math.max(receipt.lineStart, lineStart);
-      lineEnd = Math.min(receipt.lineEnd, lineEnd!);
-      if (lineStart > lineEnd) {
-        lineStart = receipt.lineStart;
-        lineEnd = receipt.lineEnd;
-      }
-    } else {
+    if (lineStart === undefined || lineEnd === undefined) {
+      throw new Error("line_start and line_end are required with read_id; copy the absolute source lines reported by that read");
+    }
+    // Line numbers are a narrowing hint that must stay inside the receipt.
+    // Models may copy a stale candidate range or a range from a different
+    // read, so clamp to the authoritative receipt instead of rejecting.
+    lineStart = Math.max(receipt.lineStart, lineStart);
+    lineEnd = Math.min(receipt.lineEnd, lineEnd);
+    if (lineStart > lineEnd) {
       lineStart = receipt.lineStart;
       lineEnd = receipt.lineEnd;
     }

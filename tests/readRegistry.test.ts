@@ -42,6 +42,8 @@ describe("read receipts", () => {
       relation: "supports",
       sourcePath: archive.path,
       readId: receipt.id,
+      lineStart: receipt.lineStart,
+      lineEnd: receipt.lineEnd,
       startText: "Use treatment",
       endText: "eligible.",
     });
@@ -78,6 +80,8 @@ describe("read receipts", () => {
       claim: "The source reports a decision-relevant finding.",
       relation: "supports",
       readId: receipt.id,
+      lineStart: receipt.lineStart,
+      lineEnd: receipt.lineEnd,
       startText: "A decision-relevant finding.",
       endText: "A second finding.",
     });
@@ -108,6 +112,8 @@ describe("read receipts", () => {
       relation: "supports",
       sourcePath: archive.path,
       readId: receipt.id,
+      lineStart: receipt.lineStart,
+      lineEnd: receipt.lineEnd,
       startText: "The long-term clinical benefit of treatment was confirmed.",
       endText: "The outcome improved.",
     });
@@ -116,7 +122,7 @@ describe("read receipts", () => {
     expect(evidence.matchMode).toBe("layout_normalized");
   });
 
-  it("allows optional line numbers to narrow a read_id range", async () => {
+  it("uses line numbers to narrow a read_id range", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-read-registry-"));
     const archive = await archiveSource({
       sessionDir,
@@ -233,6 +239,8 @@ describe("read receipts", () => {
       claim: "Treatment is used when eligible.",
       relation: "supports",
       readId: receipt.id,
+      lineStart: receipt.lineStart,
+      lineEnd: receipt.lineEnd,
       startText: "Use treatment",
       endText: "eligible.",
     });
@@ -290,6 +298,8 @@ describe("read receipts", () => {
       claim: "The abstract contains the evidence.",
       relation: "supports",
       readId: oldReceipt.id,
+      lineStart: oldReceipt.lineStart,
+      lineEnd: oldReceipt.lineEnd,
       startText: "Abstract evidence starts",
       endText: "Abstract evidence ends",
     })).rejects.toThrow(/不会自动把整个 read_id 范围保存/);
@@ -313,6 +323,8 @@ describe("read receipts", () => {
       claim: "Treatment is used when eligible.",
       relation: "supports",
       readId: receipt.id,
+      lineStart: receipt.lineStart,
+      lineEnd: receipt.lineEnd,
     })).rejects.toThrow(/read_id requires both start_text and end_text/);
   });
 
