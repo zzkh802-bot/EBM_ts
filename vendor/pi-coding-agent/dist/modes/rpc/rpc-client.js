@@ -5,6 +5,36 @@
  */
 import { spawn } from "node:child_process";
 import { attachJsonlLineReader, serializeJsonLine } from "./jsonl.js";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+// ============================================================================
+// Diagnostic redaction. Preserves non-sensitive error content (module load
+// failures, syntax errors, network timeouts, uncaught exceptions) so the
+// operator can act on it, while still masking credentials, authorization
+// headers, and signed URLs that legitimately appear in provider/tool stderr.
+// ============================================================================
+const SENSITIVE_PATTERNS = [
+    /(\bAuthorization\s*:\s*(?:Bearer|Basic)\s+)[^\s,;]+/gi,
+    /(\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|signature)\b\s*[:=]\s*)(?:"[^"]*"|'[^']*'|[^\s,;]+)/gi,
+    /([?&](?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|signature)=)[^&#\s]+/gi,
+    /\bhttps?:\/\/[^\s]*(?:webhook|\/hooks\/)[^\s]*/gi,
+];
+function redactDiagnostics(value) {
+    let result = value;
+    for (const pattern of SENSITIVE_PATTERNS) {
+        result = result.replace(pattern, "$1[redacted]");
+    }
+    return result;
+}
+function appendDiagnosticLog(label, text) {
+    const dir = process.env.EBM_DIAGNOSTICS_DIR;
+    if (!dir) return;
+    try {
+        mkdirSync(dir, { recursive: true });
+        appendFileSync(join(dir, "agent-stderr.log"), `---- ${new Date().toISOString()} [${label}] ----\n${text}\n`, { mode: 0o600 });
+    }
+    catch { /* diagnostics must never break RPC */ }
+}
 // ============================================================================
 // RPC Client
 // ============================================================================
@@ -45,12 +75,15 @@ export class RpcClient {
             stdio: ["pipe", "pipe", "pipe"],
         });
         this.process = childProcess;
-        // Preserve only the presence of child diagnostics. Provider and tool
-        // stderr may contain authorization headers or signed URLs and must not
-        // be mirrored into the host process or surfaced through RPC errors.
+        // Preserve actionable parts of child diagnostics. Authorization
+        // headers, signed URLs, and API-key forms are masked; everything else
+        // (module load failures, syntax errors, uncaught exceptions, network
+        // timeouts, etc.) is retained verbatim so the operator can act on it.
         childProcess.stderr?.on("data", (data) => {
-            if (data.length > 0)
-                this.stderr = "[redacted]";
+            if (data.length === 0) return;
+            const chunk = data.toString("utf8");
+            this.stderr = redactDiagnostics(this.stderr + chunk).slice(-2000);
+            appendDiagnosticLog("stderr", redactDiagnostics(chunk));
         });
         childProcess.once("exit", (code, signal) => {
             if (this.process !== childProcess)
