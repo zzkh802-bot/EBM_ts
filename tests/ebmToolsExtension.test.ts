@@ -359,6 +359,10 @@ describe("EBM Pi extension tools", () => {
     } as never);
     expect(handlers.has("session_compact")).toBe(true);
     expect([...tools.keys()].sort()).toEqual([
+      "clinicaltrials_read",
+      "clinicaltrials_search",
+      "europepmc_read",
+      "europepmc_search",
       "evidence_add",
       "evidence_list",
       "evidence_read",

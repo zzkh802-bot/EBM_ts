@@ -14,6 +14,8 @@ import { registerContextPruner } from "./contextPruner.js";
 import { registerEbmIdentity } from "./ebmIdentity.js";
 import { registerGuidelineTools } from "./guidelineTools.js";
 import { registerPubMedTools } from "./pubmedTools.js";
+import { registerEuropePmcTools } from "./europePmcTools.js";
+import { registerClinicalTrialsTools } from "./clinicalTrialsTools.js";
 import { registerReportTools } from "./reportTools.js";
 import { registerResearchRoundHint } from "./researchRoundHint.js";
 import { registerResearchFrameTools } from "./researchFrameTools.js";
@@ -171,6 +173,8 @@ export function registerEbmTools(pi: ExtensionAPI): void {
   if (retrievalPolicy !== "mcp_only") {
     registerWebTools(pi);
     registerPubMedTools(pi);
+    registerEuropePmcTools(pi);
+    registerClinicalTrialsTools(pi);
   }
   registerReportTools(pi);
   registerGuidelineTools(pi);
