@@ -2,16 +2,12 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { readClinicalTrial, searchClinicalTrials, type ClinicalTrialsError } from "../tools/clinicalTrials.js";
 import { upsertSourceLibraryFromArchive } from "../tools/sourceLibrary.js";
-import { archiveDetails } from "./archiveOutput.js";
+import { archiveDetails, archiveToolText } from "./archiveOutput.js";
 import { formatReadReceipt, registerArchiveReadReceipt } from "./readRegistry.js";
-import { piSessionDirectory } from "./sessionPath.js";
+import { piReadableSessionPath, piSessionDirectory } from "./sessionPath.js";
 
 function toolError(error: ClinicalTrialsError): Error {
   return new Error(JSON.stringify(error));
-}
-
-function compactStudyText(value: string): string {
-  return value.replace(/\s+/g, " ").trim().slice(0, 500);
 }
 
 export function registerClinicalTrialsTools(pi: Pick<ExtensionAPI, "registerTool" | "events">): void {
@@ -87,14 +83,14 @@ export function registerClinicalTrialsTools(pi: Pick<ExtensionAPI, "registerTool
         ...(signal ? { signal } : {}),
       });
       if (!result.ok) throw toolError(result.error);
-      const text = compactStudyText(result.archive.content.split("\n").slice(1).join("\n"));
-      const receipt = await registerArchiveReadReceipt({ sessionDir, archive: result.archive, lineStart: 1, lineEnd: Math.max(result.archive.content.split("\n").length - 1, 1) });
+      const output = archiveToolText(result.archive, piReadableSessionPath(ctx.cwd, sessionId, result.archive.path));
+      const receipt = await registerArchiveReadReceipt({ sessionDir, archive: result.archive, lineStart: output.visibleStart, lineEnd: output.visibleEnd });
       const sourceLibraryDir = process.env.SOURCE_LIBRARY_DIR || "data/source_library/guidelines";
       const library = await upsertSourceLibraryFromArchive({ sourceLibraryDir, archive: result.archive, provider: "clinicaltrials", sessionId, sourceStatus: "primary_trial" });
       const warningText = result.warnings.length ? `\n\nWarnings:\n${result.warnings.map((warning) => `- ${warning}`).join("\n")}` : "";
       pi.events.emit("ebm:source_archived", { sessionId, provider: "clinicaltrials", path: result.archive.path, kind: "read", sourceLibraryPath: library.path, sourceLibraryWritten: library.written });
       return {
-        content: [{ type: "text", text: `${result.nctId} study protocol archived: ${text}${formatReadReceipt(receipt)}${warningText}` }],
+        content: [{ type: "text", text: `${output.text}${formatReadReceipt(receipt)}${warningText}` }],
         details: {
           nctId: result.nctId,
           warnings: result.warnings,
@@ -103,7 +99,7 @@ export function registerClinicalTrialsTools(pi: Pick<ExtensionAPI, "registerTool
           readId: receipt.id,
           sourcePath: result.archive.path,
           sourceLines: [receipt.lineStart, receipt.lineEnd],
-          truncated: false,
+          truncated: output.truncated,
         },
       };
     },
