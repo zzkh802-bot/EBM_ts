@@ -11,11 +11,7 @@ function toolError(error: EuropePmcError): Error {
   return new Error(JSON.stringify(error));
 }
 
-function compactAbstractText(value: string): string {
-  return value.replace(/\s+/g, " ").trim().slice(0, 500);
-}
-
-function abstractPreview(archive: { content: string; bodyLineStart: number }): { text: string; startLine: number; endLine: number } {
+function abstractRange(archive: { content: string; bodyLineStart: number }): { startLine: number; endLine: number } {
   const sourceLines = archive.content.split("\n");
   const headingIndex = sourceLines.findIndex((line) => line.trim() === "## Abstract");
   let firstIndex = headingIndex >= 0 ? headingIndex + 1 : 0;
@@ -23,9 +19,7 @@ function abstractPreview(archive: { content: string; bodyLineStart: number }): {
   const nextHeadingIndex = sourceLines.findIndex((line, index) => index > firstIndex && /^##\s+/.test(line.trim()));
   let lastIndex = (nextHeadingIndex >= 0 ? nextHeadingIndex : sourceLines.length) - 1;
   while (lastIndex >= firstIndex && !sourceLines[lastIndex]!.trim()) lastIndex -= 1;
-  const selected = sourceLines.slice(firstIndex, lastIndex + 1);
   return {
-    text: compactAbstractText(selected.join(" ")),
     startLine: archive.bodyLineStart + firstIndex,
     endLine: archive.bodyLineStart + lastIndex,
   };
@@ -45,19 +39,22 @@ function renderSearchNavigation(
     return lines.join("\n");
   }
   const lines = [
-    "Europe PMC abstract results:",
+    `Europe PMC abstract results (complete abstracts inline below):`,
     "",
     ...(options.fullTextAvailable ? [`${options.fullTextAvailable} of the matched records are Open Access or in PMC; use europepmc_read to archive full text.`, ""] : []),
   ];
   archives.forEach((archive, index) => {
     const readablePath = ["data", "sessions", sessionDirectoryName, archive.path].join("/");
-    const preview = abstractPreview(archive);
+    const range = abstractRange(archive);
     lines.push(
       `${index + 1}. ${archive.title ?? archive.path}`,
-      `   Abstract lines: ${preview.startLine}-${preview.endLine}`,
-      `   Abstract preview: ${preview.text}`,
+      `   Abstract lines: ${range.startLine}-${range.endLine}`,
       `   Readable abstract path: ${readablePath}`,
-      "   Evidence use: call europepmc_read first, then choose read_id with the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary); prefer the matching absolute line_start/line_end when the read range is known, but omit line hints copied from another candidate/read. Or use the displayed source path with line_start/line_end.",
+      "   Evidence use: use evidence_add with source_path (the Readable abstract path above) and the matching absolute line_start/line_end, or the shortest distinctive continuous start_text/end_text. Prefer europepmc_read to archive the full text before citing a finding from these abstracts.",
+      "",
+      archive.content.trim(),
+      "",
+      "---",
       "",
     );
   });
