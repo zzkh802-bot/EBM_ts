@@ -10,6 +10,16 @@ const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const DEFAULT_BASE_URL = "https://cloud.infini-ai.com/maas/v1";
 const DEFAULT_MODEL = "kimi-k2.5";
 
+function visionApiKey(): string | undefined {
+  return process.env.XINQIONG_API_KEY?.trim() || process.env.VISION_API_KEY?.trim() || undefined;
+}
+function visionBaseUrl(): string {
+  return (process.env.XINQIONG_BASE_URL?.trim() || process.env.VISION_BASE_URL?.trim() || DEFAULT_BASE_URL).replace(/\/$/, "");
+}
+function visionModel(): string {
+  return process.env.XINQIONG_VISION_MODEL?.trim() || process.env.VISION_MODEL?.trim() || DEFAULT_MODEL;
+}
+
 /** Auxiliary visual interpretation for uploaded medical images; never a diagnosis. */
 export function registerMedicalImageTools(pi: Pick<ExtensionAPI, "registerTool">): void {
   pi.registerTool({
@@ -33,9 +43,9 @@ export function registerMedicalImageTools(pi: Pick<ExtensionAPI, "registerTool">
       if (!mediaType) throw new Error("医学图像仅支持 PNG、JPEG、WebP 或 GIF。");
       const bytes = new Uint8Array(await readFile(imagePath));
       const question = params.question?.trim().slice(0, 2_000) || "请用中文描述这张医学图像中可观察到的内容，并明确说明无法可靠判断的部分。";
-      const apiKey = process.env.XINQIONG_API_KEY?.trim();
-      if (!apiKey) throw new Error("医学图像理解服务未配置 XINQIONG_API_KEY。");
-      const baseUrl = (process.env.XINQIONG_BASE_URL?.trim() || DEFAULT_BASE_URL).replace(/\/$/, "");
+      const apiKey = visionApiKey();
+      if (!apiKey) throw new Error("医学图像理解服务未配置 XINQIONG_API_KEY 或 VISION_API_KEY。");
+      const baseUrl = visionBaseUrl();
       const timeoutController = new AbortController();
       const timeout = setTimeout(() => timeoutController.abort(new Error("医学图像服务请求超时")), 120_000);
       try {
@@ -44,7 +54,7 @@ export function registerMedicalImageTools(pi: Pick<ExtensionAPI, "registerTool">
           method: "POST",
           headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: process.env.XINQIONG_VISION_MODEL?.trim() || DEFAULT_MODEL,
+            model: visionModel(),
             messages: [{ role: "user", content: [
               { type: "image_url", image_url: { url: `data:${mediaType};base64,${Buffer.from(bytes).toString("base64")}` } },
               { type: "text", text: question },
