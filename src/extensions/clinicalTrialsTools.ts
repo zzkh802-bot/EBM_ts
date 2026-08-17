@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { readClinicalTrial, searchClinicalTrials, type ClinicalTrialsError } from "../tools/clinicalTrials.js";
@@ -8,6 +9,40 @@ import { piReadableSessionPath, piSessionDirectory } from "./sessionPath.js";
 
 function toolError(error: ClinicalTrialsError): Error {
   return new Error(JSON.stringify(error));
+}
+
+const INLINE_BUDGET_CHARS = 40_000;
+
+function renderInlineStudies(sessionDirectoryName: string, archives: Array<{ path: string; title?: string; content: string }>, nctIds: string[]): { text: string; inlined: number } {
+  const lines: string[] = [];
+  let budget = INLINE_BUDGET_CHARS;
+  let inlined = 0;
+  for (const [index, archive] of archives.entries()) {
+    const readablePath = ["data", "sessions", sessionDirectoryName, archive.path].join("/");
+    const block = [
+      `${index + 1}. ${archive.title ?? archive.path}`,
+      `   Readable study path: ${readablePath}`,
+      "   Evidence use: use evidence_add with source_path (the Readable study path above) and the matching absolute line_start/line_end, or the shortest distinctive continuous start_text/end_text.",
+      "",
+      archive.content.trim(),
+      "",
+      "---",
+      "",
+    ].join("\n");
+    if (budget - block.length < 0 && inlined > 0) break;
+    budget -= block.length;
+    lines.push(block);
+    inlined += 1;
+  }
+  if (inlined < archives.length) {
+    const remaining = archives.length - inlined;
+    lines.push(
+      `…${remaining} more study protocol(s) not shown inline (context budget). NCT IDs: ${nctIds.slice(inlined).join(", ")}`,
+      "Use clinicaltrials_read with an NCT ID to archive and read the full protocol.",
+      "",
+    );
+  }
+  return { text: lines.join("\n"), inlined };
 }
 
 export function registerClinicalTrialsTools(pi: Pick<ExtensionAPI, "registerTool" | "events">): void {
@@ -44,17 +79,20 @@ export function registerClinicalTrialsTools(pi: Pick<ExtensionAPI, "registerTool
         sourceLibraryPath: sourceLibraryWrites[index]?.path,
         sourceLibraryWritten: sourceLibraryWrites[index]?.written,
       }));
+      const inline = renderInlineStudies(path.basename(sessionDir), result.studyArchives, result.nctIds);
       const lines = [
-        `Search returned ${result.studyCount} matching clinical trial registrations on ClinicalTrials.gov.`,
+        `ClinicalTrials.gov search returned ${result.studyCount} matching trial registrations (${inline.inlined} full protocol(s) shown below).`,
         "",
-        ...(result.nctIds.length ? [`NCT IDs: ${result.nctIds.join(", ")}`, ""] : []),
-        "Use clinicaltrials_read with an NCT ID to archive the full study protocol as a citation-capable source.",
+        ...(result.nctIds.length ? [`All NCT IDs: ${result.nctIds.join(", ")}`, ""] : []),
+        ...(inline.inlined ? [] : ["Use clinicaltrials_read with an NCT ID to archive the full study protocol as a citation-capable source.", ""]),
+        ...(inline.text ? [inline.text] : []),
       ];
       return {
         content: [{ type: "text", text: lines.join("\n") }],
         details: {
           nctIds: result.nctIds,
           studyCount: result.studyCount,
+          inlinedStudies: inline.inlined,
           studyArchives: result.studyArchives.map((archive) => archiveDetails(archive)),
           sourceLibrary: sourceLibraryWrites,
           warnings: result.warnings,
