@@ -235,7 +235,7 @@ export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Pro
         // A stale line hint must not invalidate anchors that are unique within
         // the same receipt. This is still bounded and never becomes a whole
         // source fallback because read_id anchors remain mandatory.
-        located = locateEvidenceAnchors(source, input.startText!, input.endText!, receiptRange);
+        located = locateEvidenceAnchors(source, input.startText!, input.endText!, { ...receiptRange, widenLineWindow: false });
       } catch {
         throw error;
       }
@@ -274,7 +274,7 @@ async function locateAnchorsOrRange(
   readIdMode: boolean,
 ): Promise<ReturnType<typeof locateEvidenceAnchors>> {
   try {
-    return locateEvidenceAnchors(source, startText, endText, { lineStart, lineEnd });
+    return locateEvidenceAnchors(source, startText, endText, { lineStart, lineEnd, widenLineWindow: !readIdMode });
   } catch (error) {
     if (!(error instanceof Error)) throw error;
     if (readIdMode) {

@@ -68,7 +68,7 @@ describe("Markdown evidence ledger", () => {
         quote: "HIGH-VALUE CARE ADVICE 4: Clinicians should not prescribe antibiotics for patients with the common cold.",
       });
 
-      expect(node).toMatchObject({ quote: source, matchMode: "layout_normalized" });
+      expect(node).toMatchObject({ quote: "HIGH-VALUE CARE ADVICE 4:** Clinicians should not prescribe antibiotics for patients with the common cold.", matchMode: "layout_normalized" });
       expect(await verifyEvidence(dir, node)).toEqual({ ok: true, errors: [] });
     });
 
