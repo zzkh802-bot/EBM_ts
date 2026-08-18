@@ -5,9 +5,8 @@ import AppShell from './components/shell/AppShell.vue'
 import InternalLoginPage from './pages/InternalLoginPage.vue'
 import { authService } from './services/auth'
 import type { InternalUser } from './types/domain'
-import { usePreferencesStore, useSessionsStore, useUiStore } from './stores'
+import { useSessionsStore, useUiStore } from './stores'
 
-const preferences = usePreferencesStore()
 const sessions = useSessionsStore()
 const ui = useUiStore()
 const route = useRoute()
@@ -25,19 +24,13 @@ const hasConversation = computed(() =>
   route.path.startsWith('/clinician/evidence')
   && sessions.active.messages.some((message) => message.role === 'user'))
 
-const resolvedTheme = computed(() => 'light')
-
 const syncBody = () => {
   const body = document.body
   body.className = 'app-shell'
-  body.classList.toggle('theme-dark', resolvedTheme.value === 'dark')
-  body.classList.toggle('theme-light', resolvedTheme.value === 'light')
   body.classList.toggle('chat-mode', clinicianShell.value && moduleName.value === 'evidence' && hasConversation.value)
   body.classList.toggle('drawer-open', ui.sessionDrawerOpen)
   body.classList.toggle('citation-open', ui.detailOpen)
   body.dataset.module = clinicianShell.value ? moduleName.value : String(route.meta.shell || 'landing')
-  document.documentElement.dataset.theme = resolvedTheme.value
-  document.documentElement.style.colorScheme = resolvedTheme.value
 }
 
 const onKeydown = (event: KeyboardEvent) => {
@@ -45,10 +38,9 @@ const onKeydown = (event: KeyboardEvent) => {
 }
 const onAuthExpired = () => { if (authRequired.value) authUser.value = null }
 
-watch([moduleName, clinicianShell, hasConversation, resolvedTheme, () => ui.sessionDrawerOpen, () => ui.detailOpen], syncBody, { immediate: true })
+watch([moduleName, clinicianShell, hasConversation, () => ui.sessionDrawerOpen, () => ui.detailOpen], syncBody, { immediate: true })
 
 onMounted(() => {
-  preferences.applyTheme()
   syncBody()
   document.addEventListener('keydown', onKeydown)
   window.addEventListener('ebm-auth-expired', onAuthExpired)

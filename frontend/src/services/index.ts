@@ -1,7 +1,6 @@
 export * from './agent'
 export * from './health'
 export * from './workspace'
-export * from './patientIntake'
 export * from './http'
 export * from './auth'
 export * from './feedback'

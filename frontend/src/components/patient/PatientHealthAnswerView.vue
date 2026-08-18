@@ -67,3 +67,48 @@ const urgent = computed(() => ['urgent', 'emergency'].includes(props.answer.safe
     </details>
   </article>
 </template>
+
+<style scoped>
+.patient-health-answer {
+  display: grid;
+  gap: 14px;
+  width: min(100%, 720px);
+  padding: 18px;
+  border: 1px solid rgba(176, 120, 58, .2);
+  border-radius: 12px 12px 12px 3px;
+  background: rgba(255, 253, 247, .82);
+  box-shadow: 0 12px 28px rgba(112, 86, 48, .07);
+}
+.patient-answer-summary { display: grid; gap: 10px; }
+.patient-answer-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--jade); font-family: var(--mono); font-size: 10px; letter-spacing: .08em; }
+.patient-answer-meta strong { padding: 4px 7px; border: 1px solid rgba(176, 120, 58, .24); border-radius: 999px; color: var(--jade); font-size: 10px; font-weight: 600; letter-spacing: 0; }
+.patient-health-answer h2 { margin: 0; color: var(--ink); font-family: var(--reading); font-size: 20px; font-weight: 600; letter-spacing: 0; line-height: 1.55; }
+.patient-answer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.patient-action-card, .patient-risk-card { padding: 13px; border: 1px solid var(--line); border-radius: 9px; background: rgba(255, 255, 255, .5); }
+.patient-action-card header, .patient-risk-card header { display: flex; align-items: center; gap: 8px; }
+.patient-action-card header > span, .patient-risk-card header > span { display: grid; width: 20px; height: 20px; place-items: center; border-radius: 50%; background: rgba(176, 120, 58, .11); color: var(--jade); font-family: var(--mono); font-size: 11px; font-weight: 700; }
+.patient-risk-card header > span { background: rgba(200, 154, 69, .14); color: var(--amber); }
+.patient-health-answer h3 { margin: 0; color: var(--ink); font-size: 13px; font-weight: 650; }
+.patient-action-card ol, .patient-risk-card ul, .patient-follow-up ul { display: grid; gap: 7px; padding-left: 1.25em; margin: 11px 0 0; }
+.patient-action-card li, .patient-risk-card li, .patient-follow-up li { color: var(--ink-soft); font-family: var(--reading); font-size: 13px; line-height: 1.65; }
+.patient-risk-card { border-color: rgba(200, 154, 69, .25); background: rgba(255, 250, 239, .7); }
+.patient-urgent-banner { display: grid; gap: 5px; padding: 12px 13px; border-left: 3px solid var(--danger); background: rgba(176, 79, 69, .08); color: var(--ink-soft); }
+.patient-urgent-banner strong { color: var(--danger); font-size: 13px; }
+.patient-urgent-banner span { font-family: var(--reading); font-size: 13px; line-height: 1.65; }
+.patient-care-timing { padding: 12px 13px; border-left: 2px solid var(--jade); background: rgba(176, 120, 58, .065); }
+.patient-care-timing > span, .patient-follow-up header span { display: block; color: var(--jade); font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: .08em; }
+.patient-care-timing p { margin: 6px 0 0; color: var(--ink-soft); font-family: var(--reading); font-size: 13px; line-height: 1.7; }
+.patient-follow-up { padding-top: 2px; }
+.patient-follow-up header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.patient-follow-up header small { color: var(--ink-faint); font-size: 11px; }
+.patient-uncertainty { padding-top: 11px; border-top: 1px solid var(--line); color: var(--ink-faint); }
+.patient-uncertainty summary { cursor: pointer; font-size: 11px; }
+.patient-uncertainty p { margin: 8px 0 0; color: var(--ink-faint); font-family: var(--reading); font-size: 12px; line-height: 1.7; }
+.safety-prompt_medical_review .patient-answer-meta strong { border-color: rgba(200, 154, 69, .32); color: var(--amber); }
+.safety-urgent .patient-answer-meta strong, .safety-emergency .patient-answer-meta strong { border-color: rgba(176, 79, 69, .32); color: var(--danger); }
+
+@media (max-width: 860px) {
+  .patient-health-answer { width: 100%; padding: 15px; }
+  .patient-answer-grid { grid-template-columns: 1fr; }
+}
+</style>

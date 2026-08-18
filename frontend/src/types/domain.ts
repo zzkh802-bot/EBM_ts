@@ -85,6 +85,7 @@ export interface RuntimeConfig {
 
 export interface InternalUser {
   id: string
+  username?: string
   display_name?: string
 }
 
@@ -155,9 +156,14 @@ export interface PatientMessage {
   pending?: boolean
   failed?: boolean
   health?: PatientHealthAnswer
+  trace?: TraceItem[]
+  progressUpdates?: ResearchProgressUpdate[]
+  tools?: Array<Record<string, unknown>>
+  runStartedAt?: string
+  runCompletedAt?: string
 }
 
-export type PatientConversationMode = 'visit_preparation' | 'free_chat'
+export type PatientConversationMode = 'free_chat'
 export const PATIENT_FREE_CHAT_TURN_LIMIT = 5
 export type PatientSafetyLevel = 'routine' | 'clarification_needed' | 'prompt_medical_review' | 'urgent' | 'emergency'
 
@@ -176,41 +182,14 @@ export interface PatientHealthAnswer {
   }
 }
 
-export type PatientSex = 'female' | 'male' | 'unspecified'
-export type PregnancyStatus = 'yes' | 'no' | 'unsure' | 'not_applicable'
-
-export interface PatientProfile {
-  id: string
-  name: string
-  sex: PatientSex
-  age?: number
-  allergies: string
-  pregnancy: PregnancyStatus
-  memory: string
-  createdAt: string
-  updatedAt: string
-}
-
 export interface PatientIntakeSession {
   id: string
   title: string
-  mode: PatientConversationMode
-  profileId: string | null
-  thinkingEnabled: boolean
   serverStarted: boolean
   researchSessionId?: string
   createdAt: string
   updatedAt: string
   messages: PatientMessage[]
-  visitSummary?: string
-  reportPath?: string
-}
-
-export interface PatientIntakeResponse {
-  contract_version: string
-  session_id: string
-  reply: string
-  report_path?: string
 }
 
 export interface Session {

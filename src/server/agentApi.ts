@@ -895,9 +895,9 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
   if (request.method === "POST" && pathname === "/api/v1/auth/login") {
     const body = await readJsonBody(request);
     const clientKey = request.socket.remoteAddress ?? "unknown";
-    const login = isRecord(body) ? auth.login(body.user_id, body.password, clientKey) : undefined;
+    const login = isRecord(body) ? auth.login(body.username ?? body.user_id, body.password, clientKey) : undefined;
     if (auth.enabled && !login) {
-      sendJson(response, 401, { ok: false, contract_version: CONTRACT_VERSION, error: { code: "invalid_credentials", message: "用户 ID 或密码不正确。" } });
+      sendJson(response, 401, { ok: false, contract_version: CONTRACT_VERSION, error: { code: "invalid_credentials", message: "用户名或用户 ID、密码不正确。" } });
       return;
     }
     if (!auth.enabled) {
@@ -912,7 +912,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
     const body = await readJsonBody(request);
     const clientKey = request.socket.remoteAddress ?? "unknown";
     const result = isRecord(body)
-      ? await auth.register(body.display_name, body.password, body.invite_key, clientKey)
+      ? await auth.register(body.username, body.display_name, body.password, body.invite_key, clientKey)
       : { ok: false as const, code: "invalid_password" as const };
     if (!auth.enabled) {
       sendJson(response, 503, { ok: false, contract_version: CONTRACT_VERSION, error: { code: "registration_disabled", message: "当前服务未启用内部注册。" } });
@@ -923,6 +923,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse,
       const messages: Record<typeof result.code, string> = {
         invalid_invite: "注册邀请码不正确。",
         invalid_password: "密码长度需为 6–256 个字符。",
+        invalid_username: "用户名需为 3–32 个字符，可使用中文、字母、数字、下划线、连字符或句点。",
+        username_taken: "该用户名已被使用，请换一个。",
         storage_error: "用户信息保存失败，请联系项目管理员。",
       };
       sendJson(response, status, { ok: false, contract_version: CONTRACT_VERSION, error: { code: result.code, message: messages[result.code] } });
