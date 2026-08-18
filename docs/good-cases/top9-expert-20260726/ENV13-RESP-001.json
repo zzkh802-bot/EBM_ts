@@ -1,0 +1,622 @@
+{
+  "selection": {
+    "rank": 4,
+    "case_id": "ENV13-RESP-001",
+    "department": "呼吸内科",
+    "question_type": "treatment",
+    "title": "结核性胸膜炎激素治疗",
+    "summary": "标准抗结核治疗基础上加用全身激素的症状、胸水、复发与安全性",
+    "question": "在接受标准抗结核治疗的结核性胸膜炎患者中，加用全身糖皮质激素相比不加用激素，对发热和胸痛缓解、胸水吸收、胸膜增厚粘连、治愈、复发和不良反应的影响如何？",
+    "metrics": {
+      "status": "succeeded",
+      "duration_sec": 112.477,
+      "report_chars": 3146,
+      "heading_count": 17,
+      "citation_count": 4,
+      "mcp_tool_calls": 11,
+      "evidence_add_calls": 5,
+      "report_write_calls": 1,
+      "policy_isolated": true,
+      "full_report_returned": true
+    },
+    "run_id": "95467caf-273d-48c0-b2d0-7967583bfa9a",
+    "retrieval_policy": "mcp_only",
+    "json": "ENV13-RESP-001.json",
+    "markdown": "ENV13-RESP-001.md",
+    "research_mode": "expert",
+    "audience_mode": "clinician",
+    "raw_json": "raw/ENV13-RESP-001.json"
+  },
+  "benchmark_result": {
+    "case_id": "ENV13-RESP-001",
+    "question": "在接受标准抗结核治疗的结核性胸膜炎患者中，加用全身糖皮质激素相比不加用激素，对发热和胸痛缓解、胸水吸收、胸膜增厚粘连、治愈、复发和不良反应的影响如何？",
+    "attempt": 1,
+    "run_id": "95467caf-273d-48c0-b2d0-7967583bfa9a",
+    "status": "succeeded",
+    "started_at": "2026-07-26T11:37:17.162Z",
+    "completed_at": "2026-07-26T11:39:09.639Z",
+    "duration_sec": 112.477,
+    "retrieval_policy": "mcp_only",
+    "research_mode": "expert",
+    "audience_mode": "clinician",
+    "policy_isolated": true,
+    "tool_names": [
+      "research_frame_init",
+      "guideline_mcp_search",
+      "guideline_mcp_read",
+      "guideline_mcp_retrieve",
+      "read",
+      "evidence_add",
+      "research_frame_update",
+      "research_frame_scratchpad_append",
+      "report_write"
+    ],
+    "forbidden_tools": [],
+    "mcp_tool_calls": 11,
+    "evidence_add_calls": 5,
+    "report_write_calls": 1,
+    "answer_chars": 3146,
+    "full_report_returned": true,
+    "error": null
+  },
+  "api_response": {
+    "contract_version": "dp-xunyi-agent/v2",
+    "run_id": "95467caf-273d-48c0-b2d0-7967583bfa9a",
+    "status": "succeeded",
+    "created_at": "2026-07-26T11:37:17.330Z",
+    "started_at": "2026-07-26T11:37:17.330Z",
+    "completed_at": "2026-07-26T11:39:07.882Z",
+    "session_id": "019f9e37-1682-70d5-9238-6909b01de286",
+    "message": "正式报告已完成并写入。请查阅：\n\n**报告文件**：`reports/全身糖皮质激素辅助治疗结核性胸膜炎的循证评价.md`\n\n---\n\n### 核心结论摘要\n\n**不推荐常规使用全身糖皮质激素**。基于本次可及的中国指南证据：\n\n1. **仅限严重毒性症状**：糖皮质激素仅推荐用于伴高热等严重毒性症状或高热持续不退的结核性胸膜炎患者（泼尼松20~30 mg/d，1~2周后每周递减5 mg，总疗程4~8周），且**必须在充分有效抗结核治疗前提下使用**。\n\n2. **发热缓解有依据**：指南支持激素可帮助控制严重发热症状。但有效抗结核治疗后发热大多已在1周内自行消退。\n\n3. **胸痛、胸水吸收、胸膜增厚、治愈率、复发率——证据缺口**：本次可及的MCP指南库中**无任何指南层面证据**评价激素对这些结局的影响。胸膜增厚粘连被描述为结核性胸膜炎的自然病程并发症，但激素能否预防或减轻——缺乏数据。\n\n4. **安全风险明确**：泼尼松的禁忌证包括严重高血压、糖尿病、消化道溃疡、未控制的感染等；不良反应以并发感染为主，且糖皮质激素使用者本身即为结核病的易感人群。\n\n**建议**：如需使用激素，应在有效抗结核治疗基础上，严格筛选无禁忌证的患者，短期使用并逐渐减量（4~8周）。对胸水吸收和远期预后的证据缺口应向患者充分说明。",
+    "agent_answer": "正式报告已完成并写入。请查阅：\n\n**报告文件**：`reports/全身糖皮质激素辅助治疗结核性胸膜炎的循证评价.md`\n\n---\n\n### 核心结论摘要\n\n**不推荐常规使用全身糖皮质激素**。基于本次可及的中国指南证据：\n\n1. **仅限严重毒性症状**：糖皮质激素仅推荐用于伴高热等严重毒性症状或高热持续不退的结核性胸膜炎患者（泼尼松20~30 mg/d，1~2周后每周递减5 mg，总疗程4~8周），且**必须在充分有效抗结核治疗前提下使用**。\n\n2. **发热缓解有依据**：指南支持激素可帮助控制严重发热症状。但有效抗结核治疗后发热大多已在1周内自行消退。\n\n3. **胸痛、胸水吸收、胸膜增厚、治愈率、复发率——证据缺口**：本次可及的MCP指南库中**无任何指南层面证据**评价激素对这些结局的影响。胸膜增厚粘连被描述为结核性胸膜炎的自然病程并发症，但激素能否预防或减轻——缺乏数据。\n\n4. **安全风险明确**：泼尼松的禁忌证包括严重高血压、糖尿病、消化道溃疡、未控制的感染等；不良反应以并发感染为主，且糖皮质激素使用者本身即为结核病的易感人群。\n\n**建议**：如需使用激素，应在有效抗结核治疗基础上，严格筛选无禁忌证的患者，短期使用并逐渐减量（4~8周）。对胸水吸收和远期预后的证据缺口应向患者充分说明。",
+    "patient_summary": "正式报告已完成并写入。请查阅：\n\n**报告文件**：`reports/全身糖皮质激素辅助治疗结核性胸膜炎的循证评价.md`\n\n---\n\n### 核心结论摘要\n\n**不推荐常规使用全身糖皮质激素**。基于本次可及的中国指南证据：\n\n1. **仅限严重毒性症状**：糖皮质激素仅推荐用于伴高热等严重毒性症状或高热持续不退的结核性胸膜炎患者（泼尼松20~30 mg/d，1~2周后每周递减5 mg，总疗程4~8周），且**必须在充分有效抗结核治疗前提下使用**。\n\n2. **发热缓解有依据**：指南支持激素可帮助控制严重发热症状。但有效抗结核治疗后发热大多已在1周内自行消退。\n\n3. **胸痛、胸水吸收、胸膜增厚、治愈率、复发率——证据缺口**：本次可及的MCP指南库中**无任何指南层面证据**评价激素对这些结局的影响。胸膜增厚粘连被描述为结核性胸膜炎的自然病程并发症，但激素能否预防或减轻——缺乏数据。\n\n4. **安全风险明确**：泼尼松的禁忌证包括严重高血压、糖尿病、消化道溃疡、未控制的感染等；不良反应以并发感染为主，且糖皮质激素使用者本身即为结核病的易感人群。\n\n**建议**：如需使用激素，应在有效抗结核治疗基础上，严格筛选无禁忌证的患者，短期使用并逐渐减量（4~8周）。对胸水吸收和远期预后的证据缺口应向患者充分说明。",
+    "report_markdown": "## 临床问题与决策背景\n\n**PICO框架**\n\n- **P（患者）**：接受标准抗结核化疗的结核性胸膜炎患者\n- **I（干预）**：加用全身糖皮质激素（口服泼尼松等）\n- **C（对照）**：不加用糖皮质激素，仅标准抗结核化疗\n- **O（结局）**：发热缓解、胸痛缓解、胸水吸收、胸膜增厚粘连、治愈率、复发率、不良反应\n\n**临床决策**：在标准抗结核治疗基础上，是否应常规加用全身糖皮质激素以改善结核性胸膜炎患者的近期症状和远期预后？\n\n## 标准抗结核化疗方案\n\n结核性胸膜炎属于肺结核的范畴，其标准抗结核化疗方案不同于普通肺结核。根据内科治疗指南，结核性胸膜炎的推荐方案为**2HRZE/10HRE**（每日方案），即强化期2个月异烟肼+利福平+吡嗪酰胺+乙胺丁醇，巩固期10个月异烟肼+利福平+乙胺丁醇，总疗程12个月；间歇方案为2H₃R₃Z₃E₃/10H₃R₃E₃\n[1]。中国肺结核基层诊疗指南（2018年）也指出，结核性胸膜炎可适当延长疗程，强化期3个月、巩固期6~9个月，总疗程9~12个月 [2]。抗结核化疗是结核性胸膜炎治疗的基石，糖皮质激素仅为辅助对症治疗选项。\n\n## 主要疗效结局\n\n### 1. 发热缓解\n\n现有指南证据一致指出，有效抗结核治疗后肺结核所致的发热大多在1周内消退 [2]。对于少数发热不退者，可应用小剂量非类固醇类退热剂（如布洛芬）。\n\n**糖皮质激素的角色**：中国肺结核基层诊疗指南（2018年）推荐，急性血行播散性肺结核或**伴有高热等严重毒性症状或高热持续不退者**，可在抗结核药物治疗基础上使用类固醇糖皮质激素，一般给予泼尼松每日20~30 mg [2]。内科治疗指南进一步明确用法：泼尼松口服每日20 mg顿服，1~2周后每周递减5 mg，用药时间4~8周 [3]。\n\n**关键限定条件**：指南强调糖皮质激素**必须在充分有效抗结核药物的前提下使用** [2,3]。换言之，激素仅被定位为严重毒性症状时的对症治疗手段，而非常规辅助用药。\n\n**证据级别**：上述推荐来自中国医学会官方指南和临床治疗共识，未提供具体的GRADE推荐强度分级。\n\n### 2. 胸痛缓解\n\n在本次可及的指南资料中，**未见任何指南直接评价或推荐糖皮质激素用于结核性胸膜炎的胸痛缓解**。胸痛作为结核性胸膜炎的常见症状（病灶累及胸膜所致），其管理主要依赖有效抗结核治疗后的症状自发改善，必要时使用非甾体抗炎药对症处理。\n\n**证据缺口**：缺乏指南级别的证据支持加用全身糖皮质激素可额外加速胸痛缓解。\n\n### 3. 胸水吸收\n\n本次可及的指南资料中，**未见任何指南对比评价加用与不加用糖皮质激素对结核性胸膜炎胸水吸收速度或吸收率的影响**。渗出性胸膜炎的胸水吸收主要依赖有效抗结核治疗。\n\n**证据缺口**：缺乏关于激素促进胸水吸收的高质量指南证据。\n\n### 4. 胸膜增厚粘连\n\n中国肺结核基层诊疗指南（2018年）在结核性胸膜炎的分类描述中指出，渗出性胸膜炎\"吸收缓慢者常合并胸膜增厚粘连，也可演变为胸膜结核瘤及脓胸\" [2]，胸膜增厚粘连是结核性胸膜炎的自然病程并发症。\n\n然而，**在本次可及的指南资料中，未见任何指南推荐或反对使用糖皮质激素来预防或减轻胸膜增厚粘连**。这是一个重要的临床问题，但目前缺乏高质量的指南层面的证据支持。\n\n**证据缺口**：糖皮质激素对胸膜增厚粘连的预防/减轻作用，缺乏指南证据。\n\n### 5. 治愈率\n\n内科治疗指南列出了肺结核的治愈标准：症状、体征消失，血沉恢复至正常范围，痰找结核菌2次以上阴性，胸部X线摄片病灶完全吸收或已钙化 [3]。但**未见指南直接比较加用与不加用糖皮质激素对结核性胸膜炎治愈率的影响**。\n\n### 6. 复发率\n\n**未见任何可及的指南资料涉及糖皮质激素对结核性胸膜炎复发率的影响**。这是一个重要的远期预后指标，但目前缺乏指南层面的证据。\n\n## 关键安全结局\n\n### 糖皮质激素的禁忌证\n\n根据中国基层常见疾病合理用药指南（2020年），泼尼松用于结核病治疗的禁忌证包括 [4]：\n\n- 严重高血压\n- 胃与十二指肠溃疡或新近胃肠吻合术后\n- 精神病\n- 糖尿病\n- 白内障、青光眼\n- 骨质疏松症\n- 对泼尼松或肾上腺皮质激素类药物过敏\n- **未能用抗感染药物控制的病毒、细菌和真菌感染者**\n\n### 主要不良反应\n\n- **并发感染**（为主要不良反应）\n- 较大剂量易引起糖尿病、消化道溃疡\n- 类库欣综合征症状\n- 对下丘脑-垂体-肾上腺轴的抑制作用\n\n### 对结核病本身的潜在风险\n\n糖皮质激素使用者被中国指南列为结核病的易感人群 [2]，提示在结核活动期使用激素需高度警惕病情加重的风险。这也是指南反复强调\"必须在充分有效抗结核药物前提下使用\"的核心原因。\n\n## 管理策略总结\n\n| 要素 | 推荐内容 | 证据来源 |\n|------|----------|----------|\n| 基础治疗 | 标准抗结核化疗2HRZE/10HRE（总疗程12个月）或9~12个月 | [1,2] |\n| 激素适应证 | 仅限高热等严重毒性症状或高热持续不退者 | [2,3] |\n| 激素用法 | 泼尼松20~30 mg/d（或20 mg/d）顿服，1~2周后每周递减5 mg，总疗程4~8周 | [2,3] |\n| 关键前提 | 必须在充分有效抗结核药物治疗下使用 | [2,3] |\n\n## 证据缺口与不确定性\n\n1. **胸痛缓解**：无指南证据评价激素对结核性胸膜炎胸痛的作用\n2. **胸水吸收速度**：无指南证据比较加用/不加用激素对胸水吸收的影响\n3. **胸膜增厚粘连的预防**：指南仅描述其为自然病程并发症，未评估激素的预防效果\n4. **治愈率和复发率**：无指南证据支持激素可改善远期预后\n5. **无针对结核性胸膜炎的专门激素使用指南**：现有推荐主要来自肺结核总体治疗框架\n6. **推荐强度不明确**：指南未使用GRADE等系统对激素用于结核性胸膜炎的推荐进行分级\n\n## 结论与建议\n\n1. **不推荐常规使用**：基于现有中国指南证据，全身糖皮质激素不应作为结核性胸膜炎的常规辅助治疗药物。其使用应严格限于伴有高热或严重毒性症状且经有效抗结核治疗后仍持续不退者。\n\n2. **使用前提绝对必要**：如需使用糖皮质激素，必须确保患者正在接受充分有效的标准抗结核化疗，并已排除未能控制的感染。\n\n3. **严格筛查禁忌证**：用药前需评估患者是否存在高血压、糖尿病、消化道溃疡、骨质疏松、未控制的感染等禁忌情况。\n\n4. **短期使用并逐渐减量**：推荐泼尼松起始剂量20~30 mg/d，1~2周后每周递减5 mg，总疗程控制在4~8周。\n\n5. **证据缺口告知**：对于胸水吸收速度、胸膜增厚粘连预防、远期治愈率和复发率等关键临床问题，目前可及的指南资料尚未提供基于高质量证据的推荐，需要更多高质量的临床研究来回答这些问题。\n\n\n## 参考文献\n\n1. [1] 内科治疗指南——呼吸系统疾病·肺结核病（结核性胸膜炎治疗方案）. GitHub medical-books, 2019-03-24.\n2. [2] 中华医学会等. 肺结核基层诊疗指南（2018年）. 中华全科医师杂志, 2018.\n3. [3] 内科治疗指南——呼吸系统疾病·肺结核病（糖皮质激素应用）. GitHub medical-books, 2019-03-24.\n4. [4] 中华医学会等. 基层常见疾病合理用药指南——泼尼松. 2020.",
+    "agent_trace": [
+      {
+        "kind": "run.queued",
+        "label": "任务已创建",
+        "detail": "等待 Pi Agent 进程启动",
+        "timestamp": "2026-07-26T11:37:17.330Z"
+      },
+      {
+        "kind": "run.started",
+        "label": "任务已启动",
+        "detail": "expert 模式",
+        "timestamp": "2026-07-26T11:37:17.330Z"
+      },
+      {
+        "kind": "pi.session",
+        "label": "Pi 会话已创建",
+        "detail": "019f9e37-1682-70d5-9238-6909b01de286",
+        "timestamp": "2026-07-26T11:37:18.783Z"
+      },
+      {
+        "kind": "agent.started",
+        "label": "Pi Agent 已启动",
+        "timestamp": "2026-07-26T11:37:18.796Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：research_frame_init",
+        "timestamp": "2026-07-26T11:37:23.208Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：research_frame_init",
+        "timestamp": "2026-07-26T11:37:23.215Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:37:24.879Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:37:24.881Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:37:26.766Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:37:29.107Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:37:31.977Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:37:31.977Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:37:33.327Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:37:35.669Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:37:39.129Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:37:39.130Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-26T11:37:39.131Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:37:39.521Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:37:39.739Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-26T11:37:43.814Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:37:47.329Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:37:47.330Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:37:48.637Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_search",
+        "timestamp": "2026-07-26T11:37:51.443Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:37:53.753Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_read",
+        "timestamp": "2026-07-26T11:37:54.096Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-26T11:37:55.233Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-26T11:37:55.237Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：guideline_mcp_retrieve",
+        "timestamp": "2026-07-26T11:38:01.227Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：guideline_mcp_retrieve",
+        "timestamp": "2026-07-26T11:38:06.932Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-26T11:38:11.429Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-26T11:38:11.430Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-26T11:38:11.430Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-26T11:38:11.432Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-26T11:38:11.432Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-26T11:38:11.432Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-26T11:38:13.927Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-26T11:38:13.928Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:38:23.861Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:38:23.863Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:38:23.863Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:38:23.864Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:38:23.864Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:38:23.867Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:38:23.869Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:38:23.870Z"
+      },
+      {
+        "kind": "tool.failed",
+        "label": "工具失败：evidence_add",
+        "timestamp": "2026-07-26T11:38:23.871Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:38:23.872Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-26T11:38:25.641Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-26T11:38:25.642Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：read",
+        "timestamp": "2026-07-26T11:38:27.318Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：read",
+        "timestamp": "2026-07-26T11:38:27.319Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：evidence_add",
+        "timestamp": "2026-07-26T11:38:30.178Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：evidence_add",
+        "timestamp": "2026-07-26T11:38:30.180Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：research_frame_update",
+        "timestamp": "2026-07-26T11:38:39.225Z"
+      },
+      {
+        "kind": "tool.failed",
+        "label": "工具失败：research_frame_update",
+        "timestamp": "2026-07-26T11:38:39.227Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：research_frame_scratchpad_append",
+        "timestamp": "2026-07-26T11:38:43.767Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：research_frame_scratchpad_append",
+        "timestamp": "2026-07-26T11:38:43.769Z"
+      },
+      {
+        "kind": "tool.started",
+        "label": "调用工具：report_write",
+        "timestamp": "2026-07-26T11:39:02.742Z"
+      },
+      {
+        "kind": "tool.completed",
+        "label": "工具完成：report_write",
+        "timestamp": "2026-07-26T11:39:02.751Z"
+      },
+      {
+        "kind": "run.completed",
+        "label": "任务完成",
+        "detail": "已收到 Pi Agent 最终回答",
+        "timestamp": "2026-07-26T11:39:07.882Z"
+      }
+    ],
+    "tools": [
+      {
+        "name": "research_frame_init",
+        "status": "running"
+      },
+      {
+        "name": "research_frame_init",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_search",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "running"
+      },
+      {
+        "name": "guideline_mcp_retrieve",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "error"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "read",
+        "status": "running"
+      },
+      {
+        "name": "read",
+        "status": "completed"
+      },
+      {
+        "name": "evidence_add",
+        "status": "running"
+      },
+      {
+        "name": "evidence_add",
+        "status": "completed"
+      },
+      {
+        "name": "research_frame_update",
+        "status": "running"
+      },
+      {
+        "name": "research_frame_update",
+        "status": "error"
+      },
+      {
+        "name": "research_frame_scratchpad_append",
+        "status": "running"
+      },
+      {
+        "name": "research_frame_scratchpad_append",
+        "status": "completed"
+      },
+      {
+        "name": "report_write",
+        "status": "running"
+      },
+      {
+        "name": "report_write",
+        "status": "completed"
+      }
+    ],
+    "summary": {
+      "research_mode": "expert",
+      "audience_mode": "clinician",
+      "deep_think": false,
+      "search_enabled": true,
+      "retrieval_policy": "mcp_only",
+      "max_iterations": 12,
+      "max_iterations_is_advisory": true,
+      "request_timeout_seconds": 600
+    }
+  }
+}

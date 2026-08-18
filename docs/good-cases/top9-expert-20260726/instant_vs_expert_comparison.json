@@ -1,0 +1,325 @@
+{
+  "expert_mean_duration_sec": 108.29,
+  "expert_mean_report_chars": 4301.78,
+  "expert_mean_mcp_tool_calls": 7.33,
+  "expert_mean_evidence_add_calls": 7.33,
+  "instant_mean_duration_sec": 121.44,
+  "instant_mean_report_chars": 3801.56,
+  "cases": [
+    {
+      "case_id": "ENV13-CARD-001",
+      "department": "心血管内科",
+      "title": "房颤卒中预防与抗凝选择",
+      "instant": {
+        "run_id": "cec571d1-bc65-4729-8084-baaeda38e365",
+        "status": "succeeded",
+        "duration_sec": 109.64,
+        "report_chars": 2628,
+        "headings": 10,
+        "citations": 7,
+        "mcp_tool_calls": 12,
+        "evidence_add_calls": 8,
+        "report_write_calls": 1
+      },
+      "expert": {
+        "run_id": "768f8934-716f-4cf1-8f7f-19650ebb59cf",
+        "status": "succeeded",
+        "duration_sec": 138.407,
+        "report_chars": 3876,
+        "headings": 17,
+        "citations": 5,
+        "mcp_tool_calls": 6,
+        "evidence_add_calls": 9,
+        "report_write_calls": 2
+      },
+      "delta": {
+        "duration_sec": 28.767,
+        "report_chars": 1248,
+        "headings": 7,
+        "citations": -2,
+        "mcp_tool_calls": -6,
+        "evidence_add_calls": 1
+      }
+    },
+    {
+      "case_id": "ENV13-HEME-001",
+      "department": "血液内科",
+      "title": "AML 巩固治疗剂量选择",
+      "instant": {
+        "run_id": "be9b304b-0b7b-4966-b53b-66d221f2f8b6",
+        "status": "succeeded",
+        "duration_sec": 93.13,
+        "report_chars": 3006,
+        "headings": 12,
+        "citations": 3,
+        "mcp_tool_calls": 6,
+        "evidence_add_calls": 6,
+        "report_write_calls": 1
+      },
+      "expert": {
+        "run_id": "5fba90ad-3572-4c18-ad2a-40bb4dc4a354",
+        "status": "succeeded",
+        "duration_sec": 116.307,
+        "report_chars": 4710,
+        "headings": 18,
+        "citations": 2,
+        "mcp_tool_calls": 7,
+        "evidence_add_calls": 6,
+        "report_write_calls": 1
+      },
+      "delta": {
+        "duration_sec": 23.177,
+        "report_chars": 1704,
+        "headings": 6,
+        "citations": -1,
+        "mcp_tool_calls": 1,
+        "evidence_add_calls": 0
+      }
+    },
+    {
+      "case_id": "ENV13-ONC-001",
+      "department": "肿瘤科",
+      "title": "化疗患者 G-CSF 预防",
+      "instant": {
+        "run_id": "cde33712-3810-4938-afaf-16db868ca93c",
+        "status": "succeeded",
+        "duration_sec": 111.157,
+        "report_chars": 3578,
+        "headings": 11,
+        "citations": 2,
+        "mcp_tool_calls": 9,
+        "evidence_add_calls": 9,
+        "report_write_calls": 1
+      },
+      "expert": {
+        "run_id": "27f9ee7c-35e1-4ceb-b0c8-bbbf2b557ed9",
+        "status": "succeeded",
+        "duration_sec": 83.195,
+        "report_chars": 4388,
+        "headings": 11,
+        "citations": 1,
+        "mcp_tool_calls": 6,
+        "evidence_add_calls": 5,
+        "report_write_calls": 1
+      },
+      "delta": {
+        "duration_sec": -27.962,
+        "report_chars": 810,
+        "headings": 0,
+        "citations": -1,
+        "mcp_tool_calls": -3,
+        "evidence_add_calls": -4
+      }
+    },
+    {
+      "case_id": "ENV13-RESP-001",
+      "department": "呼吸内科",
+      "title": "结核性胸膜炎激素治疗",
+      "instant": {
+        "run_id": "23bf337e-6367-436b-a66c-1a4a81e30ccc",
+        "status": "succeeded",
+        "duration_sec": 150.187,
+        "report_chars": 2704,
+        "headings": 12,
+        "citations": 3,
+        "mcp_tool_calls": 12,
+        "evidence_add_calls": 8,
+        "report_write_calls": 1
+      },
+      "expert": {
+        "run_id": "95467caf-273d-48c0-b2d0-7967583bfa9a",
+        "status": "succeeded",
+        "duration_sec": 112.477,
+        "report_chars": 3146,
+        "headings": 17,
+        "citations": 4,
+        "mcp_tool_calls": 11,
+        "evidence_add_calls": 5,
+        "report_write_calls": 1
+      },
+      "delta": {
+        "duration_sec": -37.71,
+        "report_chars": 442,
+        "headings": 5,
+        "citations": 1,
+        "mcp_tool_calls": -1,
+        "evidence_add_calls": -3
+      }
+    },
+    {
+      "case_id": "MCP-D03-C01",
+      "department": "感染内科",
+      "title": "社区获得性肺炎经验治疗",
+      "instant": {
+        "run_id": "bbb31ed5-e781-4266-9246-2e8b1888008f",
+        "status": "succeeded",
+        "duration_sec": 89.023,
+        "report_chars": 3973,
+        "headings": 16,
+        "citations": 5,
+        "mcp_tool_calls": 9,
+        "evidence_add_calls": 5,
+        "report_write_calls": 1
+      },
+      "expert": {
+        "run_id": "75018e11-a0e7-4bfc-8077-61d443e8fb71",
+        "status": "succeeded",
+        "duration_sec": 90.172,
+        "report_chars": 4846,
+        "headings": 20,
+        "citations": 7,
+        "mcp_tool_calls": 7,
+        "evidence_add_calls": 8,
+        "report_write_calls": 1
+      },
+      "delta": {
+        "duration_sec": 1.149,
+        "report_chars": 873,
+        "headings": 4,
+        "citations": 2,
+        "mcp_tool_calls": -2,
+        "evidence_add_calls": 3
+      }
+    },
+    {
+      "case_id": "MCP-D07-C05",
+      "department": "精神/心理科",
+      "title": "自伤与自杀风险危机干预",
+      "instant": {
+        "run_id": "b0eed71d-64b3-4761-aa10-b139c5cc56de",
+        "status": "succeeded",
+        "duration_sec": 98.191,
+        "report_chars": 4394,
+        "headings": 12,
+        "citations": 9,
+        "mcp_tool_calls": 11,
+        "evidence_add_calls": 8,
+        "report_write_calls": 1
+      },
+      "expert": {
+        "run_id": "b8bbed03-d404-4731-8baf-5c45defc1784",
+        "status": "succeeded",
+        "duration_sec": 105.468,
+        "report_chars": 3441,
+        "headings": 11,
+        "citations": 3,
+        "mcp_tool_calls": 8,
+        "evidence_add_calls": 7,
+        "report_write_calls": 1
+      },
+      "delta": {
+        "duration_sec": 7.277,
+        "report_chars": -953,
+        "headings": -1,
+        "citations": -6,
+        "mcp_tool_calls": -3,
+        "evidence_add_calls": -1
+      }
+    },
+    {
+      "case_id": "MCP-D09-C04",
+      "department": "小儿内科",
+      "title": "儿童哮喘长期随访",
+      "instant": {
+        "run_id": "70a92409-e666-4f0b-b9ab-2ff4355bee34",
+        "status": "succeeded",
+        "duration_sec": 183.267,
+        "report_chars": 5600,
+        "headings": 12,
+        "citations": 5,
+        "mcp_tool_calls": 8,
+        "evidence_add_calls": 7,
+        "report_write_calls": 1
+      },
+      "expert": {
+        "run_id": "e5716dce-478c-40d9-abc0-cf02302f9637",
+        "status": "succeeded",
+        "duration_sec": 86.551,
+        "report_chars": 3774,
+        "headings": 13,
+        "citations": 3,
+        "mcp_tool_calls": 6,
+        "evidence_add_calls": 10,
+        "report_write_calls": 1
+      },
+      "delta": {
+        "duration_sec": -96.716,
+        "report_chars": -1826,
+        "headings": 1,
+        "citations": -2,
+        "mcp_tool_calls": -2,
+        "evidence_add_calls": 3
+      }
+    },
+    {
+      "case_id": "MCP-D26-C05",
+      "department": "生殖医学科",
+      "title": "反复流产病因筛查",
+      "instant": {
+        "run_id": "24d78e30-a15d-437a-a5aa-2ff458268db2",
+        "status": "succeeded",
+        "duration_sec": 124.665,
+        "report_chars": 5085,
+        "headings": 21,
+        "citations": 5,
+        "mcp_tool_calls": 9,
+        "evidence_add_calls": 13,
+        "report_write_calls": 1
+      },
+      "expert": {
+        "run_id": "ffdcf9ae-5acb-414e-ab92-f1afce10e827",
+        "status": "succeeded",
+        "duration_sec": 107.414,
+        "report_chars": 5399,
+        "headings": 14,
+        "citations": 4,
+        "mcp_tool_calls": 7,
+        "evidence_add_calls": 7,
+        "report_write_calls": 1
+      },
+      "delta": {
+        "duration_sec": -17.251,
+        "report_chars": 314,
+        "headings": -7,
+        "citations": -1,
+        "mcp_tool_calls": -2,
+        "evidence_add_calls": -6
+      }
+    },
+    {
+      "case_id": "ENV13-RENAL-001",
+      "department": "肾内科",
+      "title": "IgA 肾病激素联合治疗",
+      "instant": {
+        "run_id": "88c2b42f-d0aa-46a3-9b90-bc3a2782f55d",
+        "status": "succeeded",
+        "duration_sec": 133.68,
+        "report_chars": 3246,
+        "headings": 7,
+        "citations": 2,
+        "mcp_tool_calls": 14,
+        "evidence_add_calls": 7,
+        "report_write_calls": 1
+      },
+      "expert": {
+        "run_id": "e0bf57ad-a553-4922-8f86-1863943fc55d",
+        "status": "succeeded",
+        "duration_sec": 134.599,
+        "report_chars": 5136,
+        "headings": 12,
+        "citations": 2,
+        "mcp_tool_calls": 8,
+        "evidence_add_calls": 9,
+        "report_write_calls": 1
+      },
+      "delta": {
+        "duration_sec": 0.919,
+        "report_chars": 1890,
+        "headings": 5,
+        "citations": 0,
+        "mcp_tool_calls": -6,
+        "evidence_add_calls": 2
+      }
+    }
+  ]
+}
