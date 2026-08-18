@@ -32,7 +32,7 @@ const DEFAULT_STREAM_STALL_TIMEOUT_MS = 90_000;
 export type AgentRunStatus = "queued" | "running" | "cancelling" | "succeeded" | "failed" | "cancelled";
 export type ResearchStage = "idle" | "planning" | "retrieving" | "tooling" | "generating" | "network_wait";
 export type ThinkingLevel = "off" | "low" | "medium" | "high";
-export type AudienceMode = "clinician" | "public";
+export type AudienceMode = "clinician" | "public" | "patient";
 export type RetrievalPolicy = "all" | "mcp_only";
 export type ResponseMode = "auto" | "report" | "answer";
 export type ResearchMode = "quick" | "expert";
@@ -291,7 +291,8 @@ export class AgentRunStore {
       run.status = "succeeded";
       run.stage = "idle";
       run.completedAt = new Date().toISOString();
-      run.message = result.message.trim() || "Agent 已完成，但没有生成可展示的文本。";
+      const visibleMessage = run.input.audienceMode === "patient" ? hideQuickAnswerReferences(result.message) : result.message;
+      run.message = visibleMessage.trim() || "Agent 已完成，但没有生成可展示的文本。";
       this.addTrace(run, trace("run.completed", "任务完成", "已收到最终回答"));
       void this.persist(run);
     } catch (error) {
@@ -807,7 +808,7 @@ export function createPiRpcExecutor(input: {
       createClient: async () => {
         const args = [
           "--approve",
-          "--session-dir", path.join(rootDir, "data", "pi-sessions"),
+          "--session-dir", path.join(rootDir, request.audienceMode === "patient" ? "data/pi-patient-research-sessions" : "data/pi-sessions"),
           "--no-extensions",
           "--extension", path.join(rootDir, ".pi", "extensions", "ebm-providers.ts"),
           "--extension", path.join(rootDir, ".pi", "extensions", "ebm-tools.ts"),
@@ -821,15 +822,15 @@ export function createPiRpcExecutor(input: {
         if (request.sessionId) args.push("--session", request.sessionId);
         else args.push("--name", request.userId ? `${request.userId}__${sessionWorkspaceLabel(request.question)}` : sessionWorkspaceLabel(request.question));
         return factory(await buildPiRpcClientOptions(rootDir, {
-          runtimeDirectory: "data/pi-agent",
-          sessionDirectory: "data/pi-sessions",
+          runtimeDirectory: request.audienceMode === "patient" ? "data/pi-patient-research" : "data/pi-agent",
+          sessionDirectory: request.audienceMode === "patient" ? "data/pi-patient-research-sessions" : "data/pi-sessions",
           workspaceDirectory: "data/sessions",
           provider: request.provider,
           model: request.model,
           args,
           extraEnv: {
             PI_SKIP_VERSION_CHECK: "1",
-            PI_CODING_AGENT_DIR: path.join(rootDir, "data", "pi-agent"),
+            PI_CODING_AGENT_DIR: path.join(rootDir, request.audienceMode === "patient" ? "data/pi-patient-research" : "data/pi-agent"),
             EBM_RETRIEVAL_POLICY: request.retrievalPolicy,
             EBM_RESEARCH_MODE: request.researchMode ?? "expert",
             EBM_MAX_ITERATIONS: String(request.maxIterations),
@@ -1187,8 +1188,9 @@ async function validateAgentRunInput(value: unknown, runtimeConfig: RuntimeConfi
   const uploadedAttachments = userId && attachments && Array.isArray(attachmentIds)
     ? await attachments.resolveMany(userId, attachmentIds as string[], typeof value.session_id === "string" ? value.session_id : undefined)
     : [];
-  const audienceMode = enumValue(value.audience_mode, ["clinician", "public"] as const, "audience_mode", "clinician");
-  const researchMode = enumValue(value.research_mode, ["quick", "expert"] as const, "research_mode", "expert");
+  const audienceMode = enumValue(value.audience_mode, ["clinician", "public", "patient"] as const, "audience_mode", "clinician");
+  const requestedResearchMode = enumValue(value.research_mode, ["quick", "expert"] as const, "research_mode", "expert");
+  const researchMode = audienceMode === "patient" ? "quick" : requestedResearchMode;
   const requestedThinkingLevel = enumValue(value.thinking_level, ["off", "low", "medium", "high"] as const, "thinking_level", "high");
   // Workflow limits are server-owned. Quick mode always uses low thinking; expert mode preserves the user choice.
   const thinkingLevel: ThinkingLevel = researchMode === "quick" ? "low" : requestedThinkingLevel;
@@ -1198,9 +1200,9 @@ async function validateAgentRunInput(value: unknown, runtimeConfig: RuntimeConfi
   // Two minutes is a quick-mode performance target, not a destructive cutoff.
   // Keep a generous fail-safe only for a genuinely stalled request.
   const requestTimeoutSeconds = researchMode === "quick" ? 600 : 3_600;
-  // This endpoint runs the clinician research workflow. Keep audience_mode in
-  // the wire contract for compatibility, but do not mistake it for the future
-  // patient intake workflow: that flow will have its own no-tool endpoint.
+  // Patient requests use the same bounded quick retrieval path, but their
+  // archived sessions are labelled separately and their references never
+  // leave the server-facing response.
   const retrievalPolicy = enumValue(value.retrieval_policy, ["all", "mcp_only"] as const, "retrieval_policy", "all");
   const sessionId = optionalString(value.session_id, "session_id", 200);
   const provider = optionalString(value.provider, "provider", 80) ?? runtimeConfig.default_provider;
@@ -1385,8 +1387,9 @@ async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks:
   hooks.setSessionId(sessionId);
   addTrace(trace("runtime.session", request.sessionId ? "研究会话已恢复" : "研究会话已创建", sessionId));
   await initializePiSessionDirectory(rootDir, sessionId, {
-    sessionName: sessionWorkspaceLabel(request.question),
+    sessionName: request.audienceMode === "patient" ? `患者端健康问答 ${sessionWorkspaceLabel(request.question)}` : sessionWorkspaceLabel(request.question),
     firstPrompt: request.question,
+    audienceMode: request.audienceMode,
     ...(request.userId ? { userId: request.userId } : {}),
   });
   if (request.runId) {
@@ -1448,9 +1451,10 @@ async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks:
       const modelError = traceEvents.findLast((event) => event.kind === "model.error")?.detail;
       throw new Error(modelError || "研究引擎完成后未返回可展示的回答。");
     }
-    const message = request.researchMode === "quick"
+    const quickMessage = request.researchMode === "quick"
       ? await formatQuickAnswerReferences(piSessionDirectory(rootDir, sessionId), rawMessage)
       : rawMessage;
+    const message = request.audienceMode === "patient" ? hideQuickAnswerReferences(quickMessage) : quickMessage;
     const report = (await readFinalReportRevisions(rootDir, sessionId))
       .filter((candidate) => reportsBefore.get(candidate.path) !== candidate.revision)
       .sort((left, right) => right.modified - left.modified)[0];
@@ -1599,6 +1603,14 @@ export async function formatQuickAnswerReferences(sessionDir: string, answer: st
   return `${withoutManualReferences}\n\n## 参考文献\n\n${bibliography}`;
 }
 
+/** Patient answers retain source traceability in their private archive but never expose citations. */
+export function hideQuickAnswerReferences(answer: string): string {
+  return answer
+    .replace(/\n{2,}(?:#{1,6}\s*|\*\*\s*)(?:参考文献|references?)(?:\s*\*\*)?\s*\n[\s\S]*$/i, "")
+    .replace(/\s*\[(?:\d{1,3}(?:\s*,\s*\d{1,3})*)\]/g, "")
+    .trim();
+}
+
 /** Resolve an occasional read receipt accidentally emitted as a quick citation. */
 async function quickReferenceSourceIds(sessionDir: string, rawIds: string): Promise<string[]> {
   const resolved: string[] = [];
@@ -1635,7 +1647,9 @@ async function replaceAsync(text: string, pattern: RegExp, replace: (match: stri
 export function buildAgentPrompt(input: AgentRunInput, attachmentContext = ""): string {
   if (input.researchMode === "quick") {
     return [
-      "你是循医的快速循证问答服务。使用专业、规范、审慎的中文，直接回答当前临床问题。",
+      input.audienceMode === "patient"
+        ? "你是循医的患者健康问答服务。使用自然、耐心、容易理解的中文，直接回答用户的日常健康问题。不要给出个人诊断、处方、具体剂量或替代线下就医的结论；说清需要立即就医或尽快评估的警示情况。不要提及文献、指南、循证、检索、引用、来源、模型或任何内部流程。"
+        : "你是循医的快速循证问答服务。使用专业、规范、审慎的中文，直接回答当前临床问题。",
       "把读者视为第一次接触这个问题的人：第一句话就写面向读者的实质性判断，不以‘现在我已掌握充分证据’、‘以下是分析’或类似元话语开场；随后用一个完整自然段说明最重要的理由和不确定性，再围绕这个问题进行连贯的分析论证。借用专家模式的论证链：当前要决定什么 → 已读证据直接说明什么 → 它不能说明什么 → 对当前人的条件性含义。以权威指南和高质量综述为主证据，必要时用关键随机试验补强；说明证据如何支持结论、适用人群和会改变结论的重要限制。严格区分直接证据与间接证据：间接人群、疾病或结局的来源只能作为旁证并明确说明，不能写成对本题的直接证明。不要把分析写成无限制的碎片化要点、文献清单或速查卡片。不要用‘循证问题’、‘问题界定’、‘核心结论’作标题。仅在确能帮助阅读时使用 2–4 个描述性小标题；每节应是有推理推进的完整段落。默认不用表格；除非安全警示或行动步骤本身需要逐项核对，否则不要连续堆叠多组列表。",
       "首次出现必要的英文缩写时，先写完整中文名称并在括号中给出缩写；之后只保留真正有助于理解的缩写。不要把机构、评分、试验或统计术语的缩写串成行话，不假定读者知道它们；若一个术语不能帮助当前决定，就不要写入。语气平实、尊重且不居高临下：不得把少数或未直接读取的来源概括成‘所有指南一致’，也不说‘最强适应证’或‘肯定安全’这类超过已读证据边界的判断。不要把尚未提供的检查值、风险评分、用药史或功能状态补成既定事实，也不要把群体研究直接变成具体个人的医嘱。快速模式是缩短检索而非缩短解释；篇幅按问题的风险和复杂性安排，优先把结论为何成立、对谁适用、下一步如何做讲清楚。",
       "遵循 quick-ebm-answer skill 的限时策略，并以完整 EBM 五步法作为内部检查：界定决策与背景/前景问题；只有 PICO 的相关要素确能界定干预比较时才使用，绝不要求完整 PICO，也不把背景、病因、诊断、风险或单臂问题强套为 PICO；检索最直接的权威证据；轻量评价真实性、临床重要性、伤害与适用性；给出条件性应用建议，并只在相关时说明监测或重新评估触发条件。不要把这些步骤机械展示成模板。",

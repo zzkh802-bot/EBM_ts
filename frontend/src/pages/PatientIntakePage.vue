@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import PatientProfileDialog from '../components/patient/PatientProfileDialog.vue'
 import PatientReportView from '../components/patient/PatientReportView.vue'
 import PatientSessionRail from '../components/patient/PatientSessionRail.vue'
-import { patientIntakeService, type IntakeRequest } from '../services'
+import { agentService, patientIntakeService, type IntakeRequest } from '../services'
 import { usePatientIntakeStore } from '../stores'
 import { PATIENT_FREE_CHAT_TURN_LIMIT, type PatientProfile } from '../types/domain'
 import { copyText } from '../utils/browser'
@@ -20,9 +20,9 @@ const profileDialogOpen = ref(false)
 
 const freeChat = computed(() => intake.active.mode === 'free_chat')
 const freeChatComplete = computed(() => freeChat.value && intake.userTurnCount >= PATIENT_FREE_CHAT_TURN_LIMIT)
-const pageTitle = computed(() => freeChat.value ? '问一个简单的健康问题。' : '把想说的，慢慢说清楚。')
+const pageTitle = computed(() => freeChat.value ? '问一个日常健康问题。' : '把想说的，慢慢说清楚。')
 const pageSubtitle = computed(() => freeChat.value
-  ? `这个窗口不读取档案、不生成病例，${PATIENT_FREE_CHAT_TURN_LIMIT} 轮后自动结束。`
+  ? `会快速检索可靠信息，用容易理解的方式回答；${PATIENT_FREE_CHAT_TURN_LIMIT} 轮后自动结束。`
   : '不需要使用医学术语；不确定的地方也可以如实说。')
 
 const profilePayload = (): IntakeRequest['profile'] => {
@@ -65,9 +65,20 @@ const ask = async () => {
   intake.add({ id: pendingId, role: 'assistant', content: '我在认真看你刚才说的内容…', createdAt: nowIso(), pending: true })
   busy.value = true
   try {
-    const result = await patientIntakeService.message(requestBody(message))
-    intake.markServerStarted()
-    intake.patch(pendingId, { content: result.reply, pending: false })
+    if (freeChat.value) {
+      const result = await agentService.run({
+        question: message,
+        ...(intake.active.researchSessionId ? { session_id: intake.active.researchSessionId } : {}),
+        audience_mode: 'patient', thinking_level: 'low', research_mode: 'quick', search_enabled: true, response_mode: 'answer',
+      }, new AbortController().signal)
+      if (result.session_id) intake.setResearchSessionId(result.session_id)
+      intake.markServerStarted()
+      intake.patch(pendingId, { content: result.agent_answer || result.message || '这次没有生成回答，请重试。', pending: false })
+    } else {
+      const result = await patientIntakeService.message(requestBody(message))
+      intake.markServerStarted()
+      intake.patch(pendingId, { content: result.reply, pending: false })
+    }
   } catch (reason) {
     intake.patch(userId, { failed: true })
     intake.patch(pendingId, { content: '这次没有连上服务。你写下的内容仍保留在这里，可以稍后再试。', pending: false })
@@ -123,7 +134,7 @@ const newFreeChat = () => intake.create('free_chat')
           <p>{{ freeChat ? `无记忆问答 · ${intake.userTurnCount}/${PATIENT_FREE_CHAT_TURN_LIMIT} 轮` : `就诊准备 · ${intake.activeProfile?.name || '待选择档案'}` }}</p>
           <h1>{{ pageTitle }}</h1>
           <span>{{ pageSubtitle }}</span>
-          <button class="patient-thinking-toggle" type="button" :aria-pressed="intake.active.thinkingEnabled" :disabled="busy" @click="intake.setThinkingEnabled(!intake.active.thinkingEnabled)">
+          <button v-if="!freeChat" class="patient-thinking-toggle" type="button" :aria-pressed="intake.active.thinkingEnabled" :disabled="busy" @click="intake.setThinkingEnabled(!intake.active.thinkingEnabled)">
             思考 {{ intake.active.thinkingEnabled ? 'medium' : '关闭' }}
           </button>
         </header>
@@ -134,13 +145,19 @@ const newFreeChat = () => intake.create('free_chat')
           </article>
         </div>
         <p v-if="error" class="patient-error">{{ error }}</p>
+        <div v-if="freeChat && !intake.active.messages.some(message => message.role === 'user')" class="patient-examples" aria-label="常见问题示例">
+          <span>你可以这样问：</span>
+          <button type="button" :disabled="busy" @click="draft = '感冒、发烧时在家应该先注意什么？'">感冒发烧怎么处理？</button>
+          <button type="button" :disabled="busy" @click="draft = '孩子流鼻血时，第一步应该怎么做？'">孩子流鼻血怎么办？</button>
+          <button type="button" :disabled="busy" @click="draft = '最近睡不好，哪些情况需要去医院看看？'">睡不好要不要就医？</button>
+        </div>
         <div v-if="freeChatComplete" class="free-chat-finished">
-          <strong>本次 {{ PATIENT_FREE_CHAT_TURN_LIMIT }} 轮问答已结束</strong><span>这段内容不会写入任何档案。需要继续时，可以新建一个自由问答窗口。</span><button type="button" @click="newFreeChat">新建自由问答</button>
+          <strong>本次 {{ PATIENT_FREE_CHAT_TURN_LIMIT }} 轮问答已结束</strong><span>这段内容不会写入个人就诊档案。需要继续时，可以新建一个健康问答窗口。</span><button type="button" @click="newFreeChat">新建健康问答</button>
         </div>
         <form v-else class="patient-composer" @submit.prevent="ask">
           <textarea v-model="draft" :disabled="busy" :placeholder="freeChat ? '例如：家里有人流鼻血，第一步应该怎么做？' : '例如：我最近总觉得胸口闷，不太知道该怎么和医生说…'" aria-label="输入内容" @keydown.ctrl.enter.prevent="ask" />
           <footer>
-            <span>{{ freeChat ? '回答不保存到档案；不能替代现场诊疗。' : '原话保留在这次准备中；档案记忆由你确认。' }}</span>
+            <span>{{ freeChat ? '回答不展示参考文献；不能替代现场诊疗。' : '原话保留在这次准备中；档案记忆由你确认。' }}</span>
             <button type="submit" :disabled="busy || !draft.trim()">{{ busy ? '整理中…' : freeChat ? '提问' : '继续说' }}</button>
           </footer>
         </form>
@@ -159,8 +176,8 @@ const newFreeChat = () => intake.create('free_chat')
         </template>
       </aside>
       <aside v-else class="free-chat-note">
-        <strong>这个窗口不会留下什么</strong>
-        <p>不读取任何人的档案，不写入长期记忆，也不生成就诊报告。每个窗口最多 {{ PATIENT_FREE_CHAT_TURN_LIMIT }} 轮。</p>
+        <strong>这是一个健康问答窗口</strong>
+        <p>不读取任何人的就诊档案，也不生成就诊报告。每个窗口最多 {{ PATIENT_FREE_CHAT_TURN_LIMIT }} 轮。</p>
       </aside>
     </div>
     <PatientProfileDialog :open="profileDialogOpen" :profiles="intake.profiles" :selected-id="intake.active.profileId" @close="profileDialogOpen = false" @select="chooseProfile" @save="saveProfile" />

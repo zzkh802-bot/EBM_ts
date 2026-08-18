@@ -9,7 +9,7 @@ const props = defineProps<{
   markdown: string
   audience: AudienceMode
 }>()
-const nodes = computed(() => projectReport(parseReport(props.markdown), props.audience))
+const nodes = computed(() => projectReport(parseReport(props.markdown), props.audience === 'patient' ? 'public' : props.audience))
 const references = computed(() => extractReferences(props.markdown))
 const referenceEntries = computed(() => Object.values(references.value).sort((a, b) => Number(a.number) - Number(b.number)))
 </script>

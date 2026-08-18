@@ -30,19 +30,19 @@ describe('医生工作台入口与新建问题', () => {
     expect(router.currentRoute.value.path).toBe('/clinician')
   })
 
-  it('默认将患者端标记为开发中，并拦截直接路由', async () => {
+  it('默认开放患者端健康问答入口', async () => {
     const router = routerFor()
     await router.push('/')
     await router.isReady()
     const wrapper = mount(EntryPage, { global: { plugins: [router] } })
 
     const patientEntry = wrapper.get<HTMLButtonElement>('.entry-choice.patient')
-    expect(patientEntry.element.disabled).toBe(true)
-    expect(patientEntry.text()).toContain('正在开发')
+    expect(patientEntry.element.disabled).toBe(false)
+    expect(patientEntry.text()).toContain('开始提问')
 
     await router.push('/patient/intake')
     await flushPromises()
-    expect(router.currentRoute.value.path).toBe('/')
+    expect(router.currentRoute.value.path).toBe('/patient/intake')
   })
 
   it('点击新建临床问题只回到首页，不提前创建研究记录', async () => {

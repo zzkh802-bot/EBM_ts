@@ -6,7 +6,7 @@ import { newId, nowIso, safeRead, safeWrite, STORAGE_KEYS } from '../utils/core'
 const welcome = (mode: PatientConversationMode): PatientMessage => ({
   id: newId('patient-welcome'), role: 'assistant', createdAt: nowIso(),
   content: mode === 'free_chat'
-    ? `你好，这里可以进行最多 ${PATIENT_FREE_CHAT_TURN_LIMIT} 轮的简单健康问答。本窗口不会读取档案，也不会记住这次内容。你想了解什么？`
+    ? `你好，这里可以进行最多 ${PATIENT_FREE_CHAT_TURN_LIMIT} 轮的日常健康问答。本窗口不会读取你的就诊档案；连续提问时会结合本窗口已经说过的内容。你想了解什么？`
     : '你好。我们可以一起把这次想和医生说的事情理清楚。你可以从“最近哪里不舒服”，或“这次最想请医生帮忙解决什么”开始。',
 })
 
@@ -14,7 +14,7 @@ const createSession = (mode: PatientConversationMode, profileId: string | null):
   const now = nowIso()
   return {
     id: newId(mode === 'free_chat' ? 'free-chat' : 'intake'),
-    title: mode === 'free_chat' ? '自由问答' : '新的就诊准备',
+    title: mode === 'free_chat' ? '健康问答' : '新的就诊准备',
     mode, profileId: mode === 'free_chat' ? null : profileId, thinkingEnabled: true,
     serverStarted: false, createdAt: now, updatedAt: now, messages: [welcome(mode)],
   }
@@ -43,7 +43,7 @@ const titleFrom = (message: string) => {
 
 export const usePatientIntakeStore = defineStore('patientIntake', () => {
   const storedSessions = safeRead<StoredPatientSession[]>(STORAGE_KEYS.patientIntake, [])
-  const sessions = ref<PatientIntakeSession[]>(storedSessions.length ? storedSessions.map(normalizeSession) : [createSession('visit_preparation', null)])
+  const sessions = ref<PatientIntakeSession[]>(storedSessions.length ? storedSessions.map(normalizeSession) : [createSession('free_chat', null)])
   const profiles = ref<PatientProfile[]>(safeRead<PatientProfile[]>(STORAGE_KEYS.patientProfiles, []))
   const savedActive = safeRead(STORAGE_KEYS.patientIntakeActive, '')
   const activeSessionId = ref(sessions.value.some((session) => session.id === savedActive) ? savedActive : sessions.value[0]!.id)
@@ -67,7 +67,7 @@ export const usePatientIntakeStore = defineStore('patientIntake', () => {
   }
   const add = (message: PatientMessage) => {
     active.value.messages.push(message)
-    if (message.role === 'user' && ['新的就诊准备', '自由问答'].includes(active.value.title)) active.value.title = titleFrom(message.content)
+    if (message.role === 'user' && ['新的就诊准备', '健康问答'].includes(active.value.title)) active.value.title = titleFrom(message.content)
     active.value.updatedAt = nowIso()
   }
   const patch = (id: string, change: Partial<PatientMessage>) => {
@@ -76,6 +76,7 @@ export const usePatientIntakeStore = defineStore('patientIntake', () => {
     active.value.updatedAt = nowIso()
   }
   const markServerStarted = () => { active.value.serverStarted = true; active.value.updatedAt = nowIso() }
+  const setResearchSessionId = (sessionId: string) => { active.value.researchSessionId = sessionId; active.value.updatedAt = nowIso() }
   const setSummary = (summary: string, reportPath?: string) => {
     active.value.visitSummary = summary
     if (reportPath) active.value.reportPath = reportPath
@@ -98,6 +99,6 @@ export const usePatientIntakeStore = defineStore('patientIntake', () => {
   }
   return {
     profiles, sessions, activeSessionId, active, activeProfile, userTurnCount,
-    create, select, add, patch, markServerStarted, setSummary, setThinkingEnabled, assignProfile, saveProfile,
+    create, select, add, patch, markServerStarted, setResearchSessionId, setSummary, setThinkingEnabled, assignProfile, saveProfile,
   }
 })

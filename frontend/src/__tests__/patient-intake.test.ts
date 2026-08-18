@@ -14,7 +14,7 @@ describe('患者就诊准备状态', () => {
     localStorage.setItem(STORAGE_KEYS.sessions, JSON.stringify([{ id: 'clinician-1', messages: [] }]))
     const intake = usePatientIntakeStore()
     expect(intake.active.serverStarted).toBe(false)
-    expect(intake.active.messages[0]?.content).toContain('把这次想和医生说的事情理清楚')
+    expect(intake.active.messages[0]?.content).toContain('日常健康问答')
     intake.markServerStarted()
     intake.setSummary('## 此次就诊想解决什么\n\n头痛')
     await nextTick()
@@ -26,7 +26,7 @@ describe('患者就诊准备状态', () => {
     const intake = usePatientIntakeStore()
     const self = intake.saveProfile({ name: '我', sex: 'female', age: 31, allergies: '青霉素', pregnancy: 'no', memory: '长期服用左甲状腺素' })
     const mother = intake.saveProfile({ name: '妈妈', sex: 'female', age: 62, allergies: '', pregnancy: 'not_applicable', memory: '偏好把问题写下来' })
-    intake.assignProfile(self.id)
+    intake.create('visit_preparation', self.id)
     const selfSession = intake.active.id
     intake.create('visit_preparation', mother.id)
     expect(intake.active.profileId).toBe(mother.id)

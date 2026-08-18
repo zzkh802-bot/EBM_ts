@@ -23,13 +23,13 @@ const profileLine = computed(() => {
     </button>
     <div class="patient-session-actions">
       <button type="button" :disabled="busy" @click="emit('newVisit')">＋ 新建就诊准备</button>
-      <button type="button" :disabled="busy" @click="emit('freeChat')">自由问答 · {{ PATIENT_FREE_CHAT_TURN_LIMIT }}轮</button>
+      <button type="button" :disabled="busy" @click="emit('freeChat')">健康问答 · {{ PATIENT_FREE_CHAT_TURN_LIMIT }}轮</button>
     </div>
     <section>
       <header>最近会话</header>
       <button v-for="session in visibleSessions" :key="session.id" class="patient-session-item" :class="{ active: session.id === intake.activeSessionId }" type="button" :disabled="busy" @click="intake.select(session.id)">
         <span>{{ session.mode === 'free_chat' ? '问答' : session.visitSummary ? '报告' : '准备' }}</span>
-        <span><strong>{{ session.title }}</strong><small>{{ session.mode === 'free_chat' ? `${session.messages.filter(item => item.role === 'user' && !item.failed).length}/${PATIENT_FREE_CHAT_TURN_LIMIT} 轮 · 不记忆` : session.visitSummary ? '已生成就诊说明' : '继续补充信息' }}</small></span>
+        <span><strong>{{ session.title }}</strong><small>{{ session.mode === 'free_chat' ? `${session.messages.filter(item => item.role === 'user' && !item.failed).length}/${PATIENT_FREE_CHAT_TURN_LIMIT} 轮 · 快速问答` : session.visitSummary ? '已生成就诊说明' : '继续补充信息' }}</small></span>
       </button>
     </section>
   </aside>

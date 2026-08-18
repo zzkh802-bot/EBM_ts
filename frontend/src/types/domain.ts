@@ -1,5 +1,5 @@
 export type ThinkingLevel = 'off' | 'low' | 'medium' | 'high'
-export type AudienceMode = 'clinician' | 'public'
+export type AudienceMode = 'clinician' | 'public' | 'patient'
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type ResearchSessionStatus = 'draft' | 'active' | 'complete'
 
@@ -179,6 +179,7 @@ export interface PatientIntakeSession {
   profileId: string | null
   thinkingEnabled: boolean
   serverStarted: boolean
+  researchSessionId?: string
   createdAt: string
   updatedAt: string
   messages: PatientMessage[]

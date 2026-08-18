@@ -14,7 +14,7 @@ const router = useRouter()
     <section class="entry-stage" aria-labelledby="entry-title">
       <p class="entry-kicker">CHOOSE YOUR SPACE</p>
       <h1 id="entry-title">你想从哪里开始？</h1>
-      <p class="entry-lede">为就医前的表达做准备，或进入临床循证工作台。</p>
+      <p class="entry-lede">问一个日常健康问题，或进入临床循证工作台。</p>
       <div class="entry-choices">
         <button class="entry-choice clinician" type="button" @click="router.push('/clinician')">
           <span class="entry-choice-icon" aria-hidden="true">⌁</span>
@@ -30,10 +30,10 @@ const router = useRouter()
           @click="router.push('/patient/intake')"
         >
           <span class="entry-choice-icon" aria-hidden="true">↗</span>
-          <span class="entry-choice-overline">就医前准备</span>
+          <span class="entry-choice-overline">健康快速问答</span>
           <strong>我是患者</strong>
-          <p>耐心说清楚这次的困扰，整理一份可以带给医生的就诊说明。</p>
-          <em>{{ PATIENT_INTAKE_ENABLED ? '开始准备' : '正在开发' }}</em>
+          <p>用容易理解的方式解答日常健康疑问，必要时提示何时该线下就医。</p>
+          <em>{{ PATIENT_INTAKE_ENABLED ? '开始提问' : '暂未开放' }}</em>
         </button>
       </div>
     </section>

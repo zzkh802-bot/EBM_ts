@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildAgentPrompt, createAgentApiServer, formatQuickAnswerReferences, type AgentExecutor, type AgentRunInput, type AgentRunResponse, type RuntimeConfig } from "../src/server/agentApi.js";
+import { buildAgentPrompt, createAgentApiServer, formatQuickAnswerReferences, hideQuickAnswerReferences, type AgentExecutor, type AgentRunInput, type AgentRunResponse, type RuntimeConfig } from "../src/server/agentApi.js";
 import { buildPatientIntakePrompt, type PatientIntakeInput } from "../src/server/patientIntake.js";
 import { archiveSource } from "../src/tools/archive.js";
 import { addEvidence } from "../src/tools/evidence.js";
@@ -457,6 +457,29 @@ describe("循医研究服务 API", () => {
         (value) => value.status === "succeeded",
       );
       expect(received[1]).toMatchObject({ researchMode: "expert", thinkingLevel: "medium", responseMode: "report", maxIterations: 48, requestTimeoutSeconds: 3600 });
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
+  });
+
+  it("forces patient health questions onto quick mode and hides rendered references", async () => {
+    let received: AgentRunInput | undefined;
+    const { api, baseUrl } = await startApi(async (input) => { received = input; return { message: "先补充水分并休息。[1]\n\n## 参考文献\n\n1. 隐藏来源" }; });
+    try {
+      const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: "孩子流鼻血时第一步怎么做？", audience_mode: "patient", research_mode: "expert", thinking_level: "high" }),
+      });
+      const accepted = await created.json() as { run_id: string };
+      const result = await eventually(
+        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
+        (value) => value.status === "succeeded",
+      );
+      expect(received).toMatchObject({ audienceMode: "patient", researchMode: "quick", thinkingLevel: "low", responseMode: "answer" });
+      expect(result.agent_answer).not.toContain("参考文献");
+      expect(hideQuickAnswerReferences("正文[1, 2]\n\n## 参考文献\n\n1. 来源")).toBe("正文");
+      expect(buildAgentPrompt({ ...promptInput({ audienceMode: "patient", researchMode: "quick", thinkingLevel: "low", responseMode: "answer" }) })).toContain("患者健康问答服务");
     } finally {
       api.server.close();
       await once(api.server, "close");

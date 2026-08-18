@@ -76,7 +76,7 @@ function safeUserDirectoryPart(value: string | undefined): string | undefined {
   return /^u-[a-z0-9_-]{4,64}$/.test(normalized) ? normalized : undefined;
 }
 
-async function annotateSessionIdentity(cwd: string, sessionId: string, workspace: string, label: string, userId?: string): Promise<void> {
+async function annotateSessionIdentity(cwd: string, sessionId: string, workspace: string, label: string, userId?: string, audienceMode?: "clinician" | "public" | "patient"): Promise<void> {
   const metadataFile = path.join(workspace, ".metadata", "session.json");
   let metadata: Record<string, unknown> = {};
   try { metadata = JSON.parse(await readFile(metadataFile, "utf8")) as Record<string, unknown>; } catch { /* initialize below */ }
@@ -88,6 +88,7 @@ async function annotateSessionIdentity(cwd: string, sessionId: string, workspace
     sessionId,
     directory: path.basename(workspace),
     displayName: typeof metadata.displayName === "string" ? metadata.displayName : label,
+    ...(audienceMode ? { audience_mode: audienceMode } : {}),
     ...(userId ? { user_id: userId } : existingUserId ? { user_id: existingUserId } : {}),
   };
   if (JSON.stringify(metadata) !== JSON.stringify(nextMetadata)) await writeFile(metadataFile, `${JSON.stringify(nextMetadata, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
@@ -151,6 +152,7 @@ export function initializePiSessionDirectory(cwd: string, sessionId: string, inp
   sessionName?: string;
   firstPrompt: string;
   userId?: string;
+  audienceMode?: "clinician" | "public" | "patient";
 }): Promise<string> {
   validateSessionId(sessionId);
   const key = cacheKey(cwd, sessionId);
@@ -167,6 +169,7 @@ async function initializePiSessionDirectoryUnlocked(cwd: string, sessionId: stri
   sessionName?: string;
   firstPrompt: string;
   userId?: string;
+  audienceMode?: "clinician" | "public" | "patient";
 }): Promise<string> {
   validateSessionId(sessionId);
   const existingMapping = mappedWorkspace(cwd, sessionId);
@@ -174,7 +177,7 @@ async function initializePiSessionDirectoryUnlocked(cwd: string, sessionId: stri
   const userDirectoryPart = safeUserDirectoryPart(input.userId);
   if (input.userId && !userDirectoryPart) throw new Error("invalid user id for session workspace");
   if (existingMapping) {
-    await annotateSessionIdentity(cwd, sessionId, existingMapping, label, userDirectoryPart);
+    await annotateSessionIdentity(cwd, sessionId, existingMapping, label, userDirectoryPart, input.audienceMode);
     return existingMapping;
   }
 
@@ -192,7 +195,7 @@ async function initializePiSessionDirectoryUnlocked(cwd: string, sessionId: stri
     await writeFile(metadataFile, `${JSON.stringify({ sessionId, directory: sessionId, displayName: label, createdAt: formatBeijingTimestamp(), ...(userDirectoryPart ? { user_id: userDirectoryPart } : {}) }, null, 2)}\n`, { encoding: "utf8", mode: 0o600, flag: "wx" }).catch(async (error) => {
       if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
     });
-    await annotateSessionIdentity(cwd, sessionId, safeLegacy, label, userDirectoryPart);
+    await annotateSessionIdentity(cwd, sessionId, safeLegacy, label, userDirectoryPart, input.audienceMode);
     workspaceCache.set(cacheKey(cwd, sessionId), safeLegacy);
     return safeLegacy;
   }
@@ -230,7 +233,7 @@ async function initializePiSessionDirectoryUnlocked(cwd: string, sessionId: stri
   await mkdir(workspaceMetadataDir, { recursive: true, mode: 0o700 });
   await mkdir(mappingsDir, { recursive: true, mode: 0o700 });
 
-  const metadata = { sessionId, directory, displayName: label, createdAt: formatBeijingTimestamp(), ...(userDirectoryPart ? { user_id: userDirectoryPart } : {}) };
+  const metadata = { sessionId, directory, displayName: label, createdAt: formatBeijingTimestamp(), ...(input.audienceMode ? { audience_mode: input.audienceMode } : {}), ...(userDirectoryPart ? { user_id: userDirectoryPart } : {}) };
   await writeFile(path.join(workspaceMetadataDir, "session.json"), `${JSON.stringify(metadata, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
   const targetMapping = mappingPath(cwd, sessionId);
   try {
