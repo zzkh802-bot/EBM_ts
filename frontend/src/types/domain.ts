@@ -118,6 +118,7 @@ export interface AgentRunResponse {
   report_markdown?: string
   report_path?: string
   patient_summary?: string
+  patient_health?: PatientHealthAnswer
   agent_trace?: TraceItem[]
   progress_updates?: ResearchProgressUpdate[]
   tools?: Array<Record<string, unknown>>
@@ -153,10 +154,28 @@ export interface PatientMessage {
   createdAt: string
   pending?: boolean
   failed?: boolean
+  health?: PatientHealthAnswer
 }
 
 export type PatientConversationMode = 'visit_preparation' | 'free_chat'
 export const PATIENT_FREE_CHAT_TURN_LIMIT = 5
+export type PatientSafetyLevel = 'routine' | 'clarification_needed' | 'prompt_medical_review' | 'urgent' | 'emergency'
+
+export interface PatientHealthAnswer {
+  contract_version: 'xunyi-patient-health/v1' | string
+  status: 'answered' | 'clarification_needed'
+  bottom_line: string
+  actions: string[]
+  red_flags: string[]
+  when_to_seek_care: string
+  follow_up_questions: string[]
+  uncertainty: string
+  safety: {
+    level: PatientSafetyLevel
+    needs_urgent_care: boolean
+  }
+}
+
 export type PatientSex = 'female' | 'male' | 'unspecified'
 export type PregnancyStatus = 'yes' | 'no' | 'unsure' | 'not_applicable'
 

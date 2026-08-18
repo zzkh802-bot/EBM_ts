@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildAgentPrompt, createAgentApiServer, formatQuickAnswerReferences, hideQuickAnswerReferences, type AgentExecutor, type AgentRunInput, type AgentRunResponse, type RuntimeConfig } from "../src/server/agentApi.js";
+import { buildAgentPrompt, createAgentApiServer, formatQuickAnswerReferences, hideQuickAnswerReferences, normalizePatientHealthAnswer, type AgentExecutor, type AgentRunInput, type AgentRunResponse, type RuntimeConfig } from "../src/server/agentApi.js";
 import { buildPatientIntakePrompt, type PatientIntakeInput } from "../src/server/patientIntake.js";
 import { archiveSource } from "../src/tools/archive.js";
 import { addEvidence } from "../src/tools/evidence.js";
@@ -478,12 +478,42 @@ describe("循医研究服务 API", () => {
       );
       expect(received).toMatchObject({ audienceMode: "patient", researchMode: "quick", thinkingLevel: "low", responseMode: "answer" });
       expect(result.agent_answer).not.toContain("参考文献");
+      expect(result.patient_health).toMatchObject({
+        contract_version: "xunyi-patient-health/v1",
+        bottom_line: "先补充水分并休息。",
+        safety: { level: "routine", needs_urgent_care: false },
+      });
       expect(hideQuickAnswerReferences("正文[1, 2]\n\n## 参考文献\n\n1. 来源")).toBe("正文");
       expect(buildAgentPrompt({ ...promptInput({ audienceMode: "patient", researchMode: "quick", thinkingLevel: "low", responseMode: "answer" }) })).toContain("患者健康问答服务");
     } finally {
       api.server.close();
       await once(api.server, "close");
     }
+  });
+
+  it("normalizes patient answers into a safe health contract", () => {
+    const answer = normalizePatientHealthAnswer(JSON.stringify({
+      contract_version: "xunyi-patient-health/v1",
+      status: "answered",
+      bottom_line: "多数轻症可以先观察，但不能仅凭这段描述确定原因。",
+      actions: ["记录症状变化"],
+      red_flags: ["出现呼吸困难时立即就医"],
+      when_to_seek_care: "出现呼吸困难请立即就医。",
+      follow_up_questions: ["症状持续了多久？"],
+      uncertainty: "还缺少持续时间和既往病史。",
+      safety: { level: "urgent", needs_urgent_care: true },
+    }));
+    expect(answer).toMatchObject({
+      contract_version: "xunyi-patient-health/v1",
+      bottom_line: "多数轻症可以先观察，但不能仅凭这段描述确定原因。",
+      actions: ["记录症状变化"],
+      red_flags: ["出现呼吸困难时立即就医"],
+      safety: { level: "urgent", needs_urgent_care: true },
+    });
+    expect(normalizePatientHealthAnswer("结论先说：目前无法确定。\n\n何时就医\n症状加重时尽快就医。" )).toMatchObject({
+      bottom_line: "结论先说：目前无法确定。",
+      when_to_seek_care: "症状加重时尽快就医。",
+    });
   });
 
   it("classifies malformed route encoding as a client error", async () => {

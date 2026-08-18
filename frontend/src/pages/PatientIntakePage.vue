@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import PatientProfileDialog from '../components/patient/PatientProfileDialog.vue'
+import PatientHealthAnswerView from '../components/patient/PatientHealthAnswerView.vue'
 import PatientReportView from '../components/patient/PatientReportView.vue'
 import PatientSessionRail from '../components/patient/PatientSessionRail.vue'
 import { agentService, patientIntakeService, type IntakeRequest } from '../services'
@@ -9,6 +10,7 @@ import { usePatientIntakeStore } from '../stores'
 import { PATIENT_FREE_CHAT_TURN_LIMIT, type PatientProfile } from '../types/domain'
 import { copyText } from '../utils/browser'
 import { newId, nowIso } from '../utils/core'
+import { normalizePatientHealthAnswer } from '../utils/patientHealth'
 
 const router = useRouter()
 const intake = usePatientIntakeStore()
@@ -73,7 +75,13 @@ const ask = async () => {
       }, new AbortController().signal)
       if (result.session_id) intake.setResearchSessionId(result.session_id)
       intake.markServerStarted()
-      intake.patch(pendingId, { content: result.agent_answer || result.message || '这次没有生成回答，请重试。', pending: false })
+      const answerText = result.agent_answer || result.message || ''
+      const health = normalizePatientHealthAnswer(result.patient_health, answerText)
+      intake.patch(pendingId, {
+        content: health?.bottom_line || answerText || '这次没有生成回答，请重试。',
+        ...(health ? { health } : {}),
+        pending: false,
+      })
     } else {
       const result = await patientIntakeService.message(requestBody(message))
       intake.markServerStarted()
@@ -141,7 +149,8 @@ const newFreeChat = () => intake.create('free_chat')
         <div ref="feed" class="patient-feed">
           <article v-for="message in intake.active.messages" :key="message.id" class="patient-message" :class="message.role">
             <span v-if="message.role === 'assistant'" class="patient-speaker">循医</span>
-            <p :class="{ pending: message.pending }">{{ message.content }}</p>
+            <PatientHealthAnswerView v-if="message.role === 'assistant' && message.health && !message.pending" :answer="message.health" />
+            <p v-else :class="{ pending: message.pending }">{{ message.content }}</p>
           </article>
         </div>
         <p v-if="error" class="patient-error">{{ error }}</p>

@@ -24,6 +24,7 @@ import { resolveReadReceipt } from "../tools/readRegistry.js";
 
 const CONTRACT_VERSION = "xunyi-research/v1";
 const PATIENT_CONTRACT_VERSION = "xunyi-patient/v1";
+const PATIENT_HEALTH_CONTRACT_VERSION = "xunyi-patient-health/v1";
 const MAX_REQUEST_BYTES = 1_048_576;
 const MAX_TRACE_EVENTS = 240;
 const MAX_TOOL_EVENTS = 160;
@@ -104,12 +105,30 @@ type AccountConnection = {
 export type AgentExecutionResult = {
   sessionId?: string;
   message: string;
+  patientHealth?: PatientHealthAnswer;
   reportMarkdown?: string;
   reportPath?: string;
   agentTrace?: AgentTraceEvent[];
   progressUpdates?: ResearchProgressUpdate[];
   tools?: Array<Record<string, unknown>>;
   stderr?: string;
+};
+
+export type PatientSafetyLevel = "routine" | "clarification_needed" | "prompt_medical_review" | "urgent" | "emergency";
+
+export type PatientHealthAnswer = {
+  contract_version: typeof PATIENT_HEALTH_CONTRACT_VERSION;
+  status: "answered" | "clarification_needed";
+  bottom_line: string;
+  actions: string[];
+  red_flags: string[];
+  when_to_seek_care: string;
+  follow_up_questions: string[];
+  uncertainty: string;
+  safety: {
+    level: PatientSafetyLevel;
+    needs_urgent_care: boolean;
+  };
 };
 
 export type AgentExecutionHooks = {
@@ -141,6 +160,7 @@ export type AgentRunResponse = {
   report_markdown?: string;
   report_path?: string;
   patient_summary?: string;
+  patient_health?: PatientHealthAnswer;
   agent_trace: AgentTraceEvent[];
   progress_updates: ResearchProgressUpdate[];
   tools: Array<Record<string, unknown>>;
@@ -158,6 +178,7 @@ type InternalRun = {
   completedAt?: string;
   sessionId?: string;
   message: string;
+  patientHealth?: PatientHealthAnswer;
   reportMarkdown?: string;
   reportPath?: string;
   agentTrace: AgentTraceEvent[];
@@ -178,6 +199,7 @@ type PersistedRun = {
   completedAt?: string;
   sessionId?: string;
   message: string;
+  patientHealth?: PatientHealthAnswer;
   reportMarkdown?: string;
   reportPath?: string;
   agentTrace: AgentTraceEvent[];
@@ -292,7 +314,12 @@ export class AgentRunStore {
       run.stage = "idle";
       run.completedAt = new Date().toISOString();
       const visibleMessage = run.input.audienceMode === "patient" ? hideQuickAnswerReferences(result.message) : result.message;
-      run.message = visibleMessage.trim() || "Agent 已完成，但没有生成可展示的文本。";
+      if (run.input.audienceMode === "patient") {
+        run.patientHealth = normalizePatientHealthAnswer(visibleMessage);
+        run.message = renderPatientHealthAnswer(run.patientHealth);
+      } else {
+        run.message = visibleMessage.trim() || "Agent 已完成，但没有生成可展示的文本。";
+      }
       this.addTrace(run, trace("run.completed", "任务完成", "已收到最终回答"));
       void this.persist(run);
     } catch (error) {
@@ -360,6 +387,7 @@ export class AgentRunStore {
       ...(completed ? {
         agent_answer: run.message,
         patient_summary: run.message,
+        ...(run.input.audienceMode === "patient" ? { patient_health: run.patientHealth ?? normalizePatientHealthAnswer(run.message) } : {}),
         ...(run.reportMarkdown ? { report_markdown: run.reportMarkdown } : {}),
         ...(run.reportPath ? { report_path: run.reportPath } : {}),
       } : {}),
@@ -485,6 +513,7 @@ export class AgentRunStore {
       ...(run.completedAt ? { completedAt: run.completedAt } : {}),
       ...(run.sessionId ? { sessionId: run.sessionId } : {}),
       message: run.message,
+      ...(run.patientHealth ? { patientHealth: run.patientHealth } : {}),
       ...(run.reportMarkdown ? { reportMarkdown: run.reportMarkdown } : {}),
       ...(run.reportPath ? { reportPath: run.reportPath } : {}),
       agentTrace: [...run.agentTrace],
@@ -506,6 +535,7 @@ export class AgentRunStore {
       ...(p.completedAt ? { completedAt: p.completedAt } : {}),
       ...(p.sessionId ? { sessionId: p.sessionId } : {}),
       message: p.message,
+      ...(p.patientHealth ? { patientHealth: p.patientHealth } : {}),
       ...(p.reportMarkdown ? { reportMarkdown: p.reportMarkdown } : {}),
       ...(p.reportPath ? { reportPath: p.reportPath } : {}),
       agentTrace: [...p.agentTrace],
@@ -534,6 +564,7 @@ export class AgentRunStore {
       ...(completed ? {
         agent_answer: p.message,
         patient_summary: p.message,
+        ...(p.input.audienceMode === "patient" ? { patient_health: p.patientHealth ?? normalizePatientHealthAnswer(p.message) } : {}),
         ...(p.reportMarkdown ? { report_markdown: p.reportMarkdown } : {}),
         ...(p.reportPath ? { report_path: p.reportPath } : {}),
       } : {}),
@@ -1603,6 +1634,113 @@ export async function formatQuickAnswerReferences(sessionDir: string, answer: st
   return `${withoutManualReferences}\n\n## 参考文献\n\n${bibliography}`;
 }
 
+export function normalizePatientHealthAnswer(raw: string): PatientHealthAnswer {
+  const source = removePatientReferenceMarkers(raw.trim());
+  const parsed = parsePatientJson(source);
+  const value = isRecord(parsed) && isRecord(parsed.answer) ? parsed.answer : parsed;
+  const object = isRecord(value) ? value : {};
+  const fallbackBody = source.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  const bottomLine = cleanPatientText(stringValue(object.bottom_line) || stringValue(object.bottomLine) || firstPatientParagraph(fallbackBody))
+    || "目前还不能仅凭这些信息确定具体原因。";
+  const actions = cleanPatientList(stringList(object.actions).concat(sectionList(fallbackBody, ["现在可以做什么", "建议", "处理"]))).slice(0, 6);
+  const redFlags = cleanPatientList(stringList(object.red_flags).concat(sectionList(fallbackBody, ["需要警惕", "红旗信号", "危险信号"]))).slice(0, 6);
+  const providedWhenToSeekCare = cleanPatientText(
+    stringValue(object.when_to_seek_care) || stringValue(object.whenToSeekCare) || sectionText(fallbackBody, ["何时就医", "什么时候需要就医"]),
+  );
+  const whenToSeekCare = providedWhenToSeekCare || "如果症状持续、加重或影响日常生活，建议尽快咨询医生；出现明显危险信号时立即就医。";
+  const followUpQuestions = cleanPatientList(stringList(object.follow_up_questions).concat(sectionList(fallbackBody, ["还需要补充什么", "需要补充的信息"]))).slice(0, 5);
+  const uncertainty = cleanPatientText(
+    stringValue(object.uncertainty) || sectionText(fallbackBody, ["不确定性", "目前不能确定"]),
+  ) || "仅凭当前描述不能确定具体原因，是否需要检查取决于症状、持续时间和个人情况。";
+  const requestedLevel = patientSafetyLevel(object.safety && isRecord(object.safety) ? object.safety.level : object.safety_level);
+  const urgentLanguage = /立即就医|马上就医|急诊|拨打\s*120|呼叫急救|危及生命/.test(`${bottomLine}\n${providedWhenToSeekCare}\n${redFlags.join("\n")}`);
+  const level = urgentLanguage && (requestedLevel === "emergency" || /拨打\s*120|呼叫急救|危及生命/.test(`${bottomLine}\n${whenToSeekCare}`))
+    ? "emergency"
+    : urgentLanguage
+      ? "urgent"
+      : requestedLevel ?? (followUpQuestions.length && !actions.length ? "clarification_needed" : "routine");
+  const requestedUrgency = object.safety && isRecord(object.safety) ? object.safety.needs_urgent_care : object.needs_urgent_care;
+  return {
+    contract_version: PATIENT_HEALTH_CONTRACT_VERSION,
+    status: object.status === "clarification_needed" || (!actions.length && followUpQuestions.length) ? "clarification_needed" : "answered",
+    bottom_line: bottomLine,
+    actions,
+    red_flags: redFlags,
+    when_to_seek_care: whenToSeekCare,
+    follow_up_questions: followUpQuestions,
+    uncertainty,
+    safety: { level, needs_urgent_care: typeof requestedUrgency === "boolean" ? requestedUrgency || urgentLanguage : urgentLanguage },
+  };
+}
+
+function renderPatientHealthAnswer(answer: PatientHealthAnswer): string {
+  const sections = [answer.bottom_line];
+  if (answer.actions.length) sections.push(`现在可以做什么\n${answer.actions.map((item) => `- ${item}`).join("\n")}`);
+  if (answer.red_flags.length) sections.push(`需要警惕\n${answer.red_flags.map((item) => `- ${item}`).join("\n")}`);
+  sections.push(`何时就医\n${answer.when_to_seek_care}`);
+  if (answer.follow_up_questions.length) sections.push(`还需要补充什么\n${answer.follow_up_questions.map((item) => `- ${item}`).join("\n")}`);
+  sections.push(`目前的不确定性\n${answer.uncertainty}`);
+  return sections.join("\n\n").trim();
+}
+
+function parsePatientJson(value: string): unknown {
+  const candidate = value.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
+  for (const text of [candidate, candidate.slice(candidate.indexOf("{"), candidate.lastIndexOf("}") + 1)]) {
+    if (!text || !text.startsWith("{") || !text.endsWith("}")) continue;
+    try { return JSON.parse(text) as unknown; } catch { /* use the readable fallback below */ }
+  }
+  return undefined;
+}
+
+function firstPatientParagraph(value: string): string {
+  return value
+    .split(/\n\s*\n/)
+    .map((part) => part.replace(/^#{1,6}\s+/, "").trim())
+    .find((part) => part && !/^\*{0,2}(现在可以做什么|建议|需要警惕|红旗信号|危险信号|何时就医|什么时候需要就医|还需要补充什么|需要补充的信息|不确定性)\*{0,2}$/.test(part))
+    ?.replace(/^\s*[-*]\s+/, "") || "";
+}
+
+function sectionText(value: string, labels: string[]): string {
+  const labelPattern = labels.map((label) => escapeRegExp(label)).join("|");
+  const match = new RegExp(`(?:^|\\n)\\s*(?:#{1,6}\\s*)?(?:\\*{0,2})?(?:${labelPattern})(?:\\*{0,2})?\\s*\\n([\\s\\S]*?)(?=\\n\\s*(?:#{1,6}\\s*)?(?:\\*{0,2})?(?:现在可以做什么|建议|需要警惕|红旗信号|危险信号|何时就医|什么时候需要就医|还需要补充什么|需要补充的信息|不确定性|目前的不确定性)(?:\\*{0,2})?\\s*\\n|$)`, "i").exec(value);
+  return match?.[1]?.trim() || "";
+}
+
+function sectionList(value: string, labels: string[]): string[] {
+  const section = sectionText(value, labels);
+  if (!section) return [];
+  const items = section.split(/\r?\n/).map((line) => line.replace(/^\s*(?:[-*]|\d+[.)])\s+/, "").trim()).filter(Boolean);
+  return items.length > 1 ? items : section.split(/[。；;]/).map((item) => item.trim()).filter(Boolean);
+}
+
+function stringValue(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean) : [];
+}
+
+function cleanPatientText(value: string): string {
+  return removePatientReferenceMarkers(value).replace(/\s+/g, " ").trim();
+}
+
+function cleanPatientList(values: string[]): string[] {
+  return [...new Set(values.map(cleanPatientText).filter(Boolean))];
+}
+
+function removePatientReferenceMarkers(value: string): string {
+  return value.replace(/<ref\s+source_ids="[^"]+"\s*\/?>(?:<\/ref>)?/gi, "").replace(/\s*\[(?:\d{1,3}(?:\s*,\s*\d{1,3})*)\]/g, "").trim();
+}
+
+function patientSafetyLevel(value: unknown): PatientSafetyLevel | undefined {
+  return value === "routine" || value === "clarification_needed" || value === "prompt_medical_review" || value === "urgent" || value === "emergency" ? value : undefined;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /** Patient answers retain source traceability in their private archive but never expose citations. */
 export function hideQuickAnswerReferences(answer: string): string {
   return answer
@@ -1652,6 +1790,9 @@ export function buildAgentPrompt(input: AgentRunInput, attachmentContext = ""): 
         : "你是循医的快速循证问答服务。使用专业、规范、审慎的中文，直接回答当前临床问题。",
       "把读者视为第一次接触这个问题的人：第一句话就写面向读者的实质性判断，不以‘现在我已掌握充分证据’、‘以下是分析’或类似元话语开场；随后用一个完整自然段说明最重要的理由和不确定性，再围绕这个问题进行连贯的分析论证。借用专家模式的论证链：当前要决定什么 → 已读证据直接说明什么 → 它不能说明什么 → 对当前人的条件性含义。以权威指南和高质量综述为主证据，必要时用关键随机试验补强；说明证据如何支持结论、适用人群和会改变结论的重要限制。严格区分直接证据与间接证据：间接人群、疾病或结局的来源只能作为旁证并明确说明，不能写成对本题的直接证明。不要把分析写成无限制的碎片化要点、文献清单或速查卡片。不要用‘循证问题’、‘问题界定’、‘核心结论’作标题。仅在确能帮助阅读时使用 2–4 个描述性小标题；每节应是有推理推进的完整段落。默认不用表格；除非安全警示或行动步骤本身需要逐项核对，否则不要连续堆叠多组列表。",
       "首次出现必要的英文缩写时，先写完整中文名称并在括号中给出缩写；之后只保留真正有助于理解的缩写。不要把机构、评分、试验或统计术语的缩写串成行话，不假定读者知道它们；若一个术语不能帮助当前决定，就不要写入。语气平实、尊重且不居高临下：不得把少数或未直接读取的来源概括成‘所有指南一致’，也不说‘最强适应证’或‘肯定安全’这类超过已读证据边界的判断。不要把尚未提供的检查值、风险评分、用药史或功能状态补成既定事实，也不要把群体研究直接变成具体个人的医嘱。快速模式是缩短检索而非缩短解释；篇幅按问题的风险和复杂性安排，优先把结论为何成立、对谁适用、下一步如何做讲清楚。",
+      ...(input.audienceMode === "patient" ? [
+        "患者端最终输出格式覆盖前面的普通段落要求：只输出一个合法 JSON 对象，不要输出 Markdown 代码围栏、标题或 JSON 以外的解释。字段必须包含 bottom_line（面向患者的一句明确但有条件的结论）、actions（现在可以做的 0-6 条安全行动）、red_flags（需要警惕的 0-6 条情况）、when_to_seek_care（何时就医的一段话）、follow_up_questions（仍需补充的 0-5 个问题）、uncertainty（当前不能确定什么的一段话）、status（answered 或 clarification_needed）、safety（包含 level 和 needs_urgent_care；level 只能是 routine、clarification_needed、prompt_medical_review、urgent、emergency）。不得确诊、开具或调整个体化处方、给出缺少年龄/孕哺/过敏/合并用药等信息时的具体剂量。涉及急症时把立即就医写入 red_flags 和 when_to_seek_care；不要因为普通风险提示就把 needs_urgent_care 写成 true。需要引用时可在 JSON 字符串中紧跟实际读取来源加入 <ref source_ids=\"src_...\" />，不要写编号、参考文献、链接或内部工具名。"
+      ] : []),
       "遵循 quick-ebm-answer skill 的限时策略，并以完整 EBM 五步法作为内部检查：界定决策与背景/前景问题；只有 PICO 的相关要素确能界定干预比较时才使用，绝不要求完整 PICO，也不把背景、病因、诊断、风险或单臂问题强套为 PICO；检索最直接的权威证据；轻量评价真实性、临床重要性、伤害与适用性；给出条件性应用建议，并只在相关时说明监测或重新评估触发条件。不要把这些步骤机械展示成模板。",
       "快速模式目标是在两分钟内给出可靠的临床决策摘要：本地来源检查后，可将相互独立的检索或阅读合并为一批并发调用，每批最多 8 个；通常完成 1 批发现和 1 批读取/核验后即作答。仅当新的资料可能改变结论时再补一批定向检索；不要为凑轮次重复检索。第 8 个研究轮次的收束提醒到达后，必须基于现有已读来源立即作答，即使证据仍有缺口。当前快速模式规则覆盖本会话中先前任何专家模式的流程指令。",
       "不要调用 evidence_add、report_write、report_finalize、研究框架或其他研究写入工具；不要生成正式报告，也不要输出内部工具、路径、read_id 或逐段定位。",
