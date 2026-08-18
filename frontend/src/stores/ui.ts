@@ -14,6 +14,7 @@ export type RunCompletionNotice = {
 
 export const useUiStore = defineStore('ui', () => {
   const sessionDrawerOpen = ref(false)
+  const themeMenuOpen = ref(false)
   const detailOpen = ref(false)
   const detailTitle = ref('')
   const detailKind = ref<DetailKind>('citation')
@@ -38,9 +39,10 @@ export const useUiStore = defineStore('ui', () => {
   const closeTopLayer = () => {
     if (detailOpen.value) detailOpen.value = false
     else if (sessionDrawerOpen.value) sessionDrawerOpen.value = false
+    else if (themeMenuOpen.value) themeMenuOpen.value = false
   }
   return {
-    sessionDrawerOpen, detailOpen, detailTitle, detailKind, detailPayload,
+    sessionDrawerOpen, themeMenuOpen, detailOpen, detailTitle, detailKind, detailPayload,
     completionNotices, openDetail, openCitation, notifyRunCompleted, dismissRunNotice, closeTopLayer,
   }
 })
