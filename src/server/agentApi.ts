@@ -801,7 +801,7 @@ export function createPiRpcExecutor(input: {
 
   const execute = async (request: AgentRunInput, hooks: AgentExecutionHooks): Promise<AgentExecutionResult> => {
     if (hooks.signal.aborted) throw abortError();
-    const runtimeKey = [request.provider, request.model, request.researchMode ?? "expert", request.retrievalPolicy, request.maxIterations].join("\0");
+    const runtimeKey = [request.provider, request.model, request.audienceMode, request.researchMode ?? "expert", request.retrievalPolicy, request.maxIterations].join("\0");
     return pool.run({
       ...(request.sessionId ? { requestedSessionId: request.sessionId } : {}),
       runtimeKey,
