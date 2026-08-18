@@ -357,6 +357,7 @@ const handlePrimaryAction = () => {
           <div class="hero-title">从临床问题，走到可追溯的判断。</div>
           <p>将文献、指南与临床证据编织成一份可复核的研究记录。</p>
         </div>
+
       </section>
 
       <form class="ask-bar" aria-label="循医输入区" @submit.prevent="submit()">
@@ -423,7 +424,7 @@ const handlePrimaryAction = () => {
           <span v-if="runtimeConfigError" class="runtime-error">{{ runtimeConfigError }}</span>
         </div>
         <button class="send-button" :class="{ 'queue-mode': run.busy && question.trim() }" type="button" :aria-label="primaryActionLabel" @click="handlePrimaryAction">
-          <svg v-if="!run.busy" width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          <svg v-if="!run.busy" width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
           <span v-else-if="question.trim()" aria-hidden="true">＋</span>
           <span v-else>■</span>
           <span class="send-label">{{ primaryActionLabel }}</span>
@@ -669,7 +670,7 @@ const handlePrimaryAction = () => {
         </div>
       </section>
       <div class="workspace-trust-note">
-        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.8 8 7 10 4.2-2 7-5.4 7-10V6l-7-3Zm-3 9 2 2 4-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.8 8 7 10 4.2-2 7-5.4 7-10V6l-7-3Zm-3 9 2 2 4-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
         <span>AI 结果用于循证辅助，不替代医生诊断与临床决策。</span>
       </div>
     </aside>
@@ -677,21 +678,21 @@ const handlePrimaryAction = () => {
 </template>
 
 <style scoped>
-.research-mode-buttons { display: inline-flex; overflow: hidden; border: 1px solid rgba(49, 123, 107, .26); border-radius: 6px; }
+.research-mode-buttons { display: inline-flex; overflow: hidden; border: 1px solid var(--accent-border, rgba(49, 86, 200, .26)); border-radius: 6px; }
 .research-mode-buttons button { border: 0; padding: 6px 10px; background: transparent; color: var(--ink-soft, #56636f); cursor: pointer; }
-.research-mode-buttons button + button { border-left: 1px solid rgba(49, 123, 107, .18); }
-.research-mode-buttons button.active { background: rgba(49, 123, 107, .14); color: var(--jade, #08766d); font-weight: 700; }
+.research-mode-buttons button + button { border-left: 1px solid var(--accent-border, rgba(49, 86, 200, .18)); }
+.research-mode-buttons button.active { background: var(--accent-soft, rgba(49, 86, 200, .14)); color: var(--jade, #3156c8); font-weight: 700; }
 .research-mode-buttons button:disabled { cursor: not-allowed; opacity: .58; }
 .attachment-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 8px 0 0; color: var(--ink-faint, #7d888d); font-size: 12px; }
-.attachment-tray > button { padding: 5px 8px; border: 1px solid rgba(49, 123, 107, .24); border-radius: 5px; background: rgba(255, 255, 255, .72); color: var(--ink-soft, #56636f); cursor: pointer; }
+.attachment-tray > button { padding: 5px 8px; border: 1px solid var(--accent-border, rgba(49, 86, 200, .24)); border-radius: 5px; background: rgba(255, 255, 255, .72); color: var(--ink-soft, #56636f); cursor: pointer; }
 .attachment-tray > button:disabled { cursor: not-allowed; opacity: .55; }
-.attachment-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 260px; padding: 4px 6px; border-radius: 5px; background: rgba(49, 123, 107, .1); color: var(--ink-soft, #56636f); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 260px; padding: 4px 6px; border-radius: 5px; background: var(--accent-soft, rgba(49, 86, 200, .1)); color: var(--ink-soft, #56636f); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment-chip button { border: 0; background: transparent; color: inherit; cursor: pointer; }
 .attachment-error { color: #a43d36; }
 .attachment-original-viewer { display: grid; gap: 12px; margin-bottom: 16px; }
 .attachment-original-viewer img { display: block; max-width: 100%; max-height: 720px; margin: 0 auto; border: 1px solid var(--line, #d9e2de); border-radius: 8px; object-fit: contain; background: #f6f8f7; }
 .attachment-original-viewer iframe { width: 100%; min-height: 720px; border: 1px solid var(--line, #d9e2de); border-radius: 8px; background: #fff; }
 .attachment-original-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
-.attachment-original-actions a { color: var(--jade, #08766d); font-size: 12px; text-decoration: none; }
+.attachment-original-actions a { color: var(--jade, #3156c8); font-size: 12px; text-decoration: none; }
 .attachment-original-actions a:hover { text-decoration: underline; }
 </style>

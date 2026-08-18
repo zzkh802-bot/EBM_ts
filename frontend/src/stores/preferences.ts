@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import type { ModeSnapshot, ResearchMode, RuntimeConfig, ThemeMode, ThinkingLevel } from '../types/domain'
+import type { ModeSnapshot, ResearchMode, RuntimeConfig, ThinkingLevel } from '../types/domain'
 import { safeRead, safeWrite, STORAGE_KEYS } from '../utils/core'
 
 export const defaultModes: ModeSnapshot = {
@@ -21,16 +21,11 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const storedRuntime = safeRead<{ provider?: string; model?: string }>(STORAGE_KEYS.runtime, {})
   const provider = ref(storedRuntime.provider || '')
   const model = ref(storedRuntime.model || '')
-  const themeMode = ref<ThemeMode>('light')
   const snapshot = computed<ModeSnapshot>(() => ({
     // The only shipped workspace is for clinicians. Keep the API field so a future
     // patient-facing surface can opt into its own policy without reviving a UI toggle.
     audienceMode: 'clinician', thinkingLevel: thinkingLevel.value, researchMode: researchMode.value, searchEnabled: searchEnabled.value,
   }))
-  const applyTheme = () => {
-    document.documentElement.dataset.theme = 'light'
-    document.documentElement.style.colorScheme = 'light'
-  }
   watch(snapshot, (value) => safeWrite(STORAGE_KEYS.modes, value), { deep: true })
   watch([provider, model], () => safeWrite(STORAGE_KEYS.runtime, { provider: provider.value, model: model.value }))
   const applyRuntimeConfig = (config: RuntimeConfig) => {
@@ -39,5 +34,5 @@ export const usePreferencesStore = defineStore('preferences', () => {
     provider.value = config.default_provider
     model.value = config.default_model
   }
-  return { thinkingLevel, researchMode, searchEnabled, provider, model, themeMode, snapshot, applyTheme, applyRuntimeConfig }
+  return { thinkingLevel, researchMode, searchEnabled, provider, model, snapshot, applyRuntimeConfig }
 })

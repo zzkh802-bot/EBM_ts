@@ -17,7 +17,7 @@ describe('本地工作台状态', () => {
     localStorage.setItem('dp_xunyi_theme_mode_v1', '"dark"')
     localStorage.setItem('dp_xunyi_sessions_v1', JSON.stringify([{ id: 'retired-session', messages: [] }]))
     localStorage.setItem('dp_xunyi_active_session_v1', '"retired-session"')
-    expect(usePreferencesStore().themeMode).toBe('light')
+    expect('themeMode' in usePreferencesStore()).toBe(false)
     expect(useSessionsStore().activeSessionId).not.toBe('retired-session')
   })
 })

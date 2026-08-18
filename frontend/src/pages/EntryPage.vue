@@ -37,6 +37,8 @@ const router = useRouter()
         </button>
       </div>
     </section>
-    <footer class="entry-foot">循医不会替代医生的判断；它帮助每一次沟通更清楚。</footer>
+    <footer class="entry-foot">
+      循医不会替代医生的判断；它帮助每一次沟通更清楚。
+    </footer>
   </main>
 </template>

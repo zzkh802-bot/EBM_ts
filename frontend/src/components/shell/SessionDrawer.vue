@@ -83,12 +83,12 @@ const statusLabel = (status: 'draft' | 'active' | 'complete') => ({ draft: '待�
     </section>
     <nav class="drawer-nav" aria-label="循医抽屉导航">
       <button class="drawer-new-question" type="button" @click="createSession">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" /></svg>
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
         新建临床问题
       </button>
     </nav>
     <label class="drawer-search">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m20 20-4.3-4.3M18 11a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" /></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m20 20-4.3-4.3M18 11a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
       <span class="sr-only">搜索研究记录</span>
       <input v-model="query" type="search" placeholder="搜索临床问题或研究记录" aria-label="搜索临床问题或研究记录">
     </label>

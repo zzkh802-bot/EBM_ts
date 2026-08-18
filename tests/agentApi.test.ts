@@ -69,11 +69,12 @@ describe("循医研究服务 API", () => {
       const denied = await fetch(`${baseUrl}/api/v1/agent-runs`);
       expect(denied.status).toBe(401);
       const registration = await fetch(`${baseUrl}/api/v1/auth/register`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ display_name: "同名标注员", password: "test-pass-1", invite_key: "shared-test-key" }),
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "annotator-1", display_name: "同名标注员", password: "test-pass-1", invite_key: "shared-test-key" }),
       });
       expect(registration.status).toBe(201);
-      const registered = await registration.json() as { user: { id: string } };
+      const registered = await registration.json() as { user: { id: string; username: string } };
       expect(registered.user.id).toMatch(/^u-[23456789abcdefghjkmnpqrstuvwxyz]{8}$/);
+      expect(registered.user.username).toBe("annotator-1");
       const cookie = registration.headers.get("set-cookie");
       expect(cookie).toContain("ebm_internal_session=");
       const sessionCookie = cookie!.split(";")[0]!;
@@ -85,11 +86,15 @@ describe("循医研究服务 API", () => {
       const own = await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`, { headers: { cookie: sessionCookie } });
       expect(own.status).toBe(200);
       const secondRegistration = await fetch(`${baseUrl}/api/v1/auth/register`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ display_name: "另一位", password: "test-pass-2", invite_key: "shared-test-key" }),
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "annotator-2", display_name: "另一位", password: "test-pass-2", invite_key: "shared-test-key" }),
       });
       expect(secondRegistration.status).toBe(201);
+      const duplicateUsername = await fetch(`${baseUrl}/api/v1/auth/register`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "ANNOTATOR-1", display_name: "重复用户名", password: "test-pass-3", invite_key: "shared-test-key" }),
+      });
+      expect(duplicateUsername.status).toBe(400);
       const otherRegistration = await fetch(`${baseUrl}/api/v1/auth/register`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ display_name: "同名标注员", password: "test-pass-2", invite_key: "shared-test-key" }),
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ username: "annotator-3", display_name: "同名标注员", password: "test-pass-2", invite_key: "shared-test-key" }),
       });
       expect(otherRegistration.status).toBe(201);
       const otherCookie = otherRegistration.headers.get("set-cookie")!.split(";")[0]!;
@@ -104,7 +109,7 @@ describe("循医研究服务 API", () => {
   it("keeps a valid login session across a backend restart", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-auth-session-"));
     const first = new InternalAuthStore("restart-test-key", rootDir);
-    const registration = await first.register("重启测试", "test-pass-1", "restart-test-key", "test-client");
+    const registration = await first.register("restart-user", "重启测试", "test-pass-1", "restart-test-key", "test-client");
     expect(registration.ok).toBe(true);
     if (!registration.ok) return;
     await new Promise((resolve) => setTimeout(resolve, 30));
@@ -113,15 +118,18 @@ describe("循医研究服务 API", () => {
     expect(restarted.authenticate(request)?.id).toBe(registration.user.id);
   });
 
-  it("uses the generated user ID as the login identity", async () => {
+  it("accepts both a unique username and the generated user ID for login", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-auth-id-login-"));
     const auth = new InternalAuthStore("id-login-key", rootDir);
-    const registration = await auth.register("只记 ID", "test-pass-1", "id-login-key", "test-client");
+    const registration = await auth.register("only-id-user", "只记 ID", "test-pass-1", "id-login-key", "test-client");
     expect(registration.ok).toBe(true);
     if (!registration.ok) return;
     expect(registration.user.id).toMatch(/^u-[23456789abcdefghjkmnpqrstuvwxyz]{8}$/);
-    const login = auth.login(registration.user.id, "test-pass-1", "test-client");
-    expect(login?.user.id).toBe(registration.user.id);
+    expect(registration.user.username).toBe("only-id-user");
+    const usernameLogin = auth.login("ONLY-ID-USER", "test-pass-1", "test-client");
+    expect(usernameLogin?.user.id).toBe(registration.user.id);
+    const idLogin = auth.login(registration.user.id, "test-pass-1", "test-client");
+    expect(idLogin?.user.id).toBe(registration.user.id);
   });
 
   it("delegates clinician report structure to the writing skill independently of thinking level", () => {

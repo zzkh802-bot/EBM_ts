@@ -8,17 +8,18 @@ const COOKIE_NAME = "ebm_internal_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1_000;
 const PASSWORD_MIN_LENGTH = 6;
 const USER_ID_PATTERN = /^u-[23456789abcdefghjkmnpqrstuvwxyz]{8}$/;
+const USERNAME_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N}_.-]{2,31}$/u;
 const ID_ALPHABET = "23456789abcdefghjkmnpqrstuvwxyz";
 
-export type InternalUser = { id: string; display_name?: string };
+export type InternalUser = { id: string; username?: string; display_name?: string };
 
 type Session = { user: InternalUser; expiresAt: number };
 type LoginAttempts = { count: number; resetAt: number };
-type StoredUser = { id: string; display_name?: string; salt: string; password_hash: string; created_at: string };
+type StoredUser = { id: string; username?: string; display_name?: string; salt: string; password_hash: string; created_at: string };
 type UserFile = { version: 1; users: StoredUser[] };
 export type RegistrationResult =
   | { ok: true; token: string; user: InternalUser }
-  | { ok: false; code: "invalid_invite" | "invalid_password" | "storage_error" };
+  | { ok: false; code: "invalid_invite" | "invalid_password" | "invalid_username" | "username_taken" | "storage_error" };
 
 /** Persistent account registry plus short-lived sessions for the internal annotation beta. */
 export class InternalAuthStore {
@@ -41,15 +42,18 @@ export class InternalAuthStore {
 
   get enabled(): boolean { return Boolean(this.accessKey); }
 
-  async register(displayNameValue: unknown, passwordValue: unknown, inviteValue: unknown, clientKey = "unknown"): Promise<RegistrationResult> {
+  async register(usernameValue: unknown, displayNameValue: unknown, passwordValue: unknown, inviteValue: unknown, clientKey = "unknown"): Promise<RegistrationResult> {
     if (!this.allowAttempt(clientKey)) return { ok: false, code: "invalid_invite" };
     if (!this.accessKey || !constantTimeEqual(inviteValue, this.accessKey)) return { ok: false, code: "invalid_invite" };
     if (typeof passwordValue !== "string" || passwordValue.length < PASSWORD_MIN_LENGTH || passwordValue.length > 256) return { ok: false, code: "invalid_password" };
+    const username = normalizeUsername(usernameValue);
+    if (!username) return { ok: false, code: "invalid_username" };
+    if (this.userByUsername(username)) return { ok: false, code: "username_taken" };
     const id = this.newUserId();
     const displayName = normalizeDisplayName(displayNameValue);
     const salt = randomBytes(16).toString("hex");
     const stored: StoredUser = {
-      id, ...(displayName ? { display_name: displayName } : {}), salt,
+      id, username, ...(displayName ? { display_name: displayName } : {}), salt,
       password_hash: hashPassword(passwordValue, salt), created_at: new Date().toISOString(),
     };
     this.users.set(id, stored);
@@ -60,11 +64,10 @@ export class InternalAuthStore {
     return { ok: true, ...this.issueSession(toPublicUser(stored)) };
   }
 
-  login(userIdValue: unknown, passwordValue: unknown, clientKey = "unknown"): { token: string; user: InternalUser } | undefined {
-    if (!this.allowAttempt(clientKey)) return undefined;
-    const userId = normalizeUserId(userIdValue);
-    if (!userId || typeof passwordValue !== "string") return undefined;
-    const stored = this.users.get(userId);
+  login(usernameOrIdValue: unknown, passwordValue: unknown, clientKey = "unknown"): { token: string; user: InternalUser } | undefined {
+    if (!this.allowAttempt(clientKey) || typeof passwordValue !== "string") return undefined;
+    const username = normalizeUsername(usernameOrIdValue);
+    const stored = (username ? this.userByUsername(username) : undefined) ?? this.users.get(normalizeUserId(usernameOrIdValue) ?? "");
     if (!stored || !verifyPassword(passwordValue, stored.salt, stored.password_hash)) return undefined;
     return this.issueSession(toPublicUser(stored));
   }
@@ -99,6 +102,10 @@ export class InternalAuthStore {
   }
 
   clearCookie(secure: boolean): string { return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure ? "; Secure" : ""}`; }
+
+  private userByUsername(username: string): StoredUser | undefined {
+    return [...this.users.values()].find((user) => user.username === username);
+  }
 
   private issueSession(user: InternalUser): { token: string; user: InternalUser } {
     const token = randomBytes(32).toString("base64url");
@@ -189,6 +196,12 @@ export function normalizeUserId(value: unknown): string | undefined {
   return USER_ID_PATTERN.test(userId) ? userId : undefined;
 }
 
+export function normalizeUsername(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const username = value.normalize("NFKC").trim().toLowerCase();
+  return USERNAME_PATTERN.test(username) ? username : undefined;
+}
+
 function normalizeDisplayName(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const displayName = value.trim().replace(/\s+/g, " ");
@@ -196,7 +209,7 @@ function normalizeDisplayName(value: unknown): string | undefined {
 }
 
 function toPublicUser(user: StoredUser): InternalUser {
-  return { id: user.id, ...(user.display_name ? { display_name: user.display_name } : {}) };
+  return { id: user.id, ...(user.username ? { username: user.username } : {}), ...(user.display_name ? { display_name: user.display_name } : {}) };
 }
 
 function hashPassword(password: string, salt: string): string { return scryptSync(password, salt, 32).toString("hex"); }
@@ -216,7 +229,9 @@ function isPersistedSession(value: unknown): value is { token_hash: string; user
 function isStoredUser(value: unknown): value is StoredUser {
   if (!value || typeof value !== "object") return false;
   const user = value as Partial<StoredUser>;
-  return typeof user.id === "string" && USER_ID_PATTERN.test(user.id) && typeof user.salt === "string" && typeof user.password_hash === "string" && typeof user.created_at === "string";
+  return typeof user.id === "string" && USER_ID_PATTERN.test(user.id)
+    && (user.username === undefined || normalizeUsername(user.username) === user.username)
+    && typeof user.salt === "string" && typeof user.password_hash === "string" && typeof user.created_at === "string";
 }
 
 function randomReadable(length: number): string {

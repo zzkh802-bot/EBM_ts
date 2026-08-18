@@ -30,18 +30,23 @@ onMounted(async () => {
       <button class="icon-button" type="button" aria-label="打开用户与历史列表" @click="ui.sessionDrawerOpen = true">
         <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
       </button>
-      <svg class="dp-logo-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect class="dp-logo-sheet" x="14" y="8" width="36" height="48" rx="8" /><path class="dp-logo-check" d="M22 22l7 7 14-15" /><path class="dp-logo-pulse" d="M19 38h8l4-10 6 19 5-12h7" /><circle class="dp-logo-node" cx="50" cy="48" r="5" /></svg>
-      <div class="brand-copy">
-        <span>循医</span>
-        <small>{{ workspaceLabel }}</small>
-      </div>
+      <button class="brand-home" type="button" aria-label="返回主页" title="返回主页" @click="router.push('/')">
+        <svg class="dp-logo-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect class="dp-logo-sheet" x="14" y="8" width="36" height="48" rx="8" /><path class="dp-logo-check" d="M22 22l7 7 14-15" /><path class="dp-logo-pulse" d="M19 38h8l4-10 6 19 5-12h7" /><circle class="dp-logo-node" cx="50" cy="48" r="5" /></svg>
+        <span class="brand-copy">
+          <span>循医</span>
+          <small>{{ workspaceLabel }}</small>
+        </span>
+      </button>
     </div>
     <div class="top-actions">
+      <button class="icon-button" type="button" aria-label="返回主页" title="返回主页" @click="router.push('/')">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 11.2 12 4l8 7.2M6 10v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </button>
       <span class="service-status" :class="{ offline: serviceStatus === '离线', checking: serviceStatus === '检测中' }" :title="`循医服务：${serviceStatus}`">
         <i aria-hidden="true" />{{ serviceStatus }}
       </span>
       <button class="icon-button" type="button" aria-label="新建临床问题" @click="router.push('/clinician')">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 7v6m-3-3h6M7.5 19.5 4 21l1.2-3.7A8 8 0 1 1 7.5 19.5Z" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 7v6m-3-3h6M7.5 19.5 4 21l1.2-3.7A8 8 0 1 1 7.5 19.5Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
       </button>
     </div>
   </div>
