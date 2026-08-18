@@ -21,18 +21,22 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const storedRuntime = safeRead<{ provider?: string; model?: string }>(STORAGE_KEYS.runtime, {})
   const provider = ref(storedRuntime.provider || '')
   const model = ref(storedRuntime.model || '')
-  const themeMode = ref<ThemeMode>('light')
+  const rawTheme = safeRead<ThemeMode>(STORAGE_KEYS.theme, 'system')
+  const themeMode = ref<ThemeMode>(['light', 'dark', 'system'].includes(rawTheme) ? rawTheme as ThemeMode : 'system')
   const snapshot = computed<ModeSnapshot>(() => ({
     // The only shipped workspace is for clinicians. Keep the API field so a future
     // patient-facing surface can opt into its own policy without reviving a UI toggle.
     audienceMode: 'clinician', thinkingLevel: thinkingLevel.value, researchMode: researchMode.value, searchEnabled: searchEnabled.value,
   }))
   const applyTheme = () => {
-    document.documentElement.dataset.theme = 'light'
-    document.documentElement.style.colorScheme = 'light'
+    const dark = themeMode.value === 'dark' ||
+      (themeMode.value === 'system' && matchMedia('(prefers-color-scheme: dark)').matches)
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+    document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
   }
   watch(snapshot, (value) => safeWrite(STORAGE_KEYS.modes, value), { deep: true })
   watch([provider, model], () => safeWrite(STORAGE_KEYS.runtime, { provider: provider.value, model: model.value }))
+  watch(themeMode, (value) => { safeWrite(STORAGE_KEYS.theme, value); applyTheme() })
   const applyRuntimeConfig = (config: RuntimeConfig) => {
     const selected = config.models.find((item) => item.available && item.provider === provider.value && item.model === model.value)
     if (selected) return
