@@ -305,9 +305,41 @@ describe("read receipts", () => {
     })).rejects.toThrow(/不会自动把整个 read_id 范围保存/);
   });
 
-  it("requires anchors when read_id mode is selected", async () => {
+  it("uses a tight read_id line range without copied anchors", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-read-registry-"));
-    const archive = await archiveSource({ sessionDir, kind: "read", title: "Receipt anchors", content: "Use treatment when eligible." });
+    const archive = await archiveSource({ sessionDir, kind: "read", title: "Tight receipt range", content: "Context line.\nUse treatment when eligible.\nFollow-up line." });
+    const source = await readFile(path.join(sessionDir, archive.path), "utf8");
+    const receipt = await registerReadReceipt({
+      sessionDir,
+      sourcePath: archive.path,
+      source,
+      lineStart: archive.bodyLineStart,
+      lineEnd: archive.bodyLineStart + archive.lines - 1,
+    });
+
+    const evidence = await addEvidenceFromAnchors({
+      sessionDir,
+      question: "When should treatment be used?",
+      claim: "Treatment is used when eligible.",
+      relation: "supports",
+      readId: receipt.id,
+      lineStart: archive.bodyLineStart + 1,
+      lineEnd: archive.bodyLineStart + 1,
+    });
+
+    expect(evidence.quote).toBe("Use treatment when eligible.");
+    expect(evidence.matchMode).toBe("read_id_range");
+    expect((await readEvidence(sessionDir, evidence.id)).verification).toEqual({ ok: true, errors: [] });
+  });
+
+  it("requires anchors for a broad read_id range", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-read-registry-"));
+    const archive = await archiveSource({
+      sessionDir,
+      kind: "read",
+      title: "Broad receipt range",
+      content: Array.from({ length: 13 }, (_, index) => `Evidence line ${index + 1}.`).join("\n"),
+    });
     const source = await readFile(path.join(sessionDir, archive.path), "utf8");
     const receipt = await registerReadReceipt({
       sessionDir,
@@ -319,13 +351,13 @@ describe("read receipts", () => {
 
     await expect(addEvidenceFromAnchors({
       sessionDir,
-      question: "When should treatment be used?",
-      claim: "Treatment is used when eligible.",
+      question: "What does the source say?",
+      claim: "The source has evidence.",
       relation: "supports",
       readId: receipt.id,
       lineStart: receipt.lineStart,
       lineEnd: receipt.lineEnd,
-    })).rejects.toThrow(/read_id requires both start_text and end_text/);
+    })).rejects.toThrow(/tight range of no more than 12 source lines/);
   });
 
   it("appends a receipt to the built-in read result without numbering its body", async () => {

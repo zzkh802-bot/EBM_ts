@@ -6,6 +6,7 @@ export type ResearchSessionStatus = 'draft' | 'active' | 'complete'
 export interface ModeSnapshot {
   audienceMode: AudienceMode
   thinkingLevel: ThinkingLevel
+  researchMode?: ResearchMode
   searchEnabled: boolean
 }
 
@@ -29,12 +30,14 @@ export interface ResearchProgressUpdate {
 export type AgentRunStatus = 'queued' | 'running' | 'cancelling' | 'succeeded' | 'failed' | 'cancelled'
 export type AgentStage = 'idle' | 'planning' | 'retrieving' | 'tooling' | 'generating' | 'network_wait'
 export type ResponseMode = 'auto' | 'report' | 'answer'
+export type ResearchMode = 'quick' | 'expert'
 
 export interface AgentRunRequest {
   question: string
   session_id?: string
   audience_mode: AudienceMode
   thinking_level: ThinkingLevel
+  research_mode?: ResearchMode
   search_enabled: boolean
   response_mode?: ResponseMode
   provider?: string

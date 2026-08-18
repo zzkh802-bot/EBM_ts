@@ -77,6 +77,25 @@ describe("source archive", () => {
     expect(await readFile(path.join(sessionDir, first.path), "utf8")).toContain("first revision");
   });
 
+  it("publishes concurrent same-title read archives only after each directory is complete", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
+    const records = await Promise.all(Array.from({ length: 12 }, (_, index) => archiveSource({
+      sessionDir,
+      kind: "read" as const,
+      title: "Concurrent source",
+      content: `PMID: ${10000000 + index}\n\nRevision ${index}.`,
+      resources: [{ path: "assets/source.txt", bytes: new TextEncoder().encode(`resource-${index}`) }],
+    })));
+
+    expect(new Set(records.map((record) => record.archiveDir)).size).toBe(records.length);
+    for (const record of records) {
+      const directory = path.join(sessionDir, record.archiveDir!);
+      expect(await readFile(path.join(directory, "full.md"), "utf8")).toContain(record.content);
+      expect(await readFile(path.join(directory, "toc.md"), "utf8")).toContain("# Source Index");
+      expect(await readFile(path.join(directory, "assets", "source.txt"), "utf8")).toBe(`resource-${record.content.match(/Revision (\d+)/)![1]}`);
+    }
+  });
+
   it("preserves selected source resources beside full Markdown with a hash manifest", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-archive-"));
     const record = await archiveSource({

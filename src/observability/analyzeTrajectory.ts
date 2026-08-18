@@ -46,7 +46,7 @@ export type EvidenceAttemptAnalysis = EvidenceAttemptBreakdown & {
   retry_success_rate: number;
   by_source: Partial<Record<EvidenceSourceKind, EvidenceAttemptBreakdown>>;
   /** source_span/source_id_quote/source_path_quote are retained only to read historical traces. */
-  by_input_mode: Partial<Record<"read_id_anchors" | "line_anchors" | "source_span" | "source_id_quote" | "source_path_quote", EvidenceAttemptBreakdown>>;
+  by_input_mode: Partial<Record<"read_id_anchors" | "read_id_range" | "line_anchors" | "source_span" | "source_id_quote" | "source_path_quote", EvidenceAttemptBreakdown>>;
   failure_reasons: Partial<Record<"input_contract" | "source_path" | "quote_not_located" | "quote_ambiguous" | "quote_quality" | "provenance_bounds" | "other", number>>;
 };
 
@@ -290,7 +290,7 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
   const activeEvidenceAttempts = new Map<string, {
     first: boolean;
     source: EvidenceSourceKind;
-    mode: "read_id_anchors" | "line_anchors" | "source_span" | "source_id_quote" | "source_path_quote";
+    mode: "read_id_anchors" | "read_id_range" | "line_anchors" | "source_span" | "source_id_quote" | "source_path_quote";
     question: string;
     claim: string;
   }>();
@@ -374,7 +374,7 @@ export function analyzeTrajectory(records: TrajectoryRecord[]): TrajectoryAnalys
         const pathSource = sourceKinds.get(`${record.session_id}:${sourcePath}`);
         const sourceId = typeof args.source_id === "string" ? args.source_id : spanSourceId ? `src_${spanSourceId}` : readSource?.sourceId ?? pathSource?.sourceId;
         const source = (sourceId ? sourceIdKinds.get(`${record.session_id}:${sourceId}`) : undefined) ?? readSource?.kind ?? pathSource?.kind ?? "unknown";
-        const mode = args.read_id ? "read_id_anchors"
+        const mode = args.read_id ? (typeof args.start_text === "string" && typeof args.end_text === "string" ? "read_id_anchors" : "read_id_range")
           : args.line_start !== undefined || args.line_end !== undefined ? "line_anchors"
             : args.source_span_id ? "source_span" : args.source_id ? "source_id_quote" : "source_path_quote";
         const question = String(args.question ?? "").trim();

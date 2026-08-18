@@ -176,6 +176,71 @@ describe("archived web tools", () => {
     }
   });
 
+  it("atomically replaces a same-URL source when the new canonical body is shorter", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "ebm-source-library-"));
+    const sourceUrl = "https://pubmed.ncbi.nlm.nih.gov/28626858/";
+    await upsertSourceLibraryFromArchive({
+      sourceLibraryDir: root,
+      provider: "pubmed",
+      archive: {
+        path: "sources/read/old/full.md", documentId: "doc_old", sourceId: "src_old", sha256: "sha-old", chars: 2000, lines: 30, bodyLineStart: 6,
+        title: "Antibiotics for acute bronchitis", sourceUrl,
+        content: "PMID: 28626858\n\nAn older, longer cached rendering of the same canonical record.",
+      },
+    });
+    await upsertSourceLibraryFromArchive({
+      sourceLibraryDir: root,
+      provider: "pubmed",
+      archive: {
+        path: "sources/read/current/full.md", documentId: "doc_current", sourceId: "src_current", sha256: "sha-current", chars: 1000, lines: 20, bodyLineStart: 6,
+        title: "Antibiotics for acute bronchitis", sourceUrl,
+        content: "PMID: 28626858\n\nCurrent canonical abstract.",
+      },
+    });
+
+    const [entry] = (await readdir(root, { withFileTypes: true })).filter((item) => item.isDirectory());
+    const content = await readFile(path.join(root, entry!.name, "full.md"), "utf8");
+    const metadata = JSON.parse(await readFile(path.join(root, entry!.name, "metadata.json"), "utf8")) as { pmid: string; sha256: string };
+    expect(content).toContain("PMID: 28626858");
+    expect(content).not.toContain("older, longer cached");
+    expect(metadata).toMatchObject({ pmid: "28626858", sha256: "sha-current" });
+  });
+
+  it("refuses to store a PubMed body under a different PMID URL", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "ebm-source-library-"));
+    await expect(upsertSourceLibraryFromArchive({
+      sourceLibraryDir: root,
+      provider: "pubmed",
+      archive: {
+        path: "sources/read/mismatch/full.md", documentId: "doc_mismatch", sourceId: "src_mismatch", sha256: "sha-mismatch", chars: 1000, lines: 10, bodyLineStart: 6,
+        title: "Antibiotics for acute bronchitis", sourceUrl: "https://pubmed.ncbi.nlm.nih.gov/28626858/",
+        content: "PMID: 24585130\n\nMismatched abstract.",
+      },
+    })).rejects.toThrow(/body PMID disagrees/i);
+    expect((await readdir(root)).filter((name) => name !== "")).toHaveLength(0);
+  });
+
+  it("serializes concurrent source-library upserts so metadata and bodies cannot cross", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "ebm-source-library-"));
+    const archive = (pmid: string) => ({
+      path: `sources/read/${pmid}/full.md`, documentId: `doc_${pmid}`, sourceId: `src_${pmid}`, sha256: `sha-${pmid}`,
+      chars: 1000, lines: 10, bodyLineStart: 6, title: "Same displayed title",
+      sourceUrl: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`, content: `PMID: ${pmid}\n\nAbstract ${pmid}.`,
+    });
+    await Promise.all([
+      upsertSourceLibraryFromArchive({ sourceLibraryDir: root, provider: "pubmed", archive: archive("11111111") }),
+      upsertSourceLibraryFromArchive({ sourceLibraryDir: root, provider: "pubmed", archive: archive("22222222") }),
+    ]);
+
+    const dirs = (await readdir(root, { withFileTypes: true })).filter((entry) => entry.isDirectory());
+    expect(dirs).toHaveLength(2);
+    for (const entry of dirs) {
+      const metadata = JSON.parse(await readFile(path.join(root, entry.name, "metadata.json"), "utf8")) as { pmid: string };
+      const content = await readFile(path.join(root, entry.name, "full.md"), "utf8");
+      expect(content).toContain(`PMID: ${metadata.pmid}`);
+    }
+  });
+
   it("searches the local source library with Chinese guideline terms", async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), "ebm-source-library-"));
     const entry = path.join(root, "chinese-aml-2023");
@@ -323,6 +388,30 @@ describe("archived web tools", () => {
 
     expect(result).toMatchObject({ ok: true, provider: "library" });
     expect(mock.calls).toHaveLength(0);
+  });
+
+  it("does not materialize a stale PubMed library record under a different PMID", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-web-"));
+    const libraryDir = await mkdtemp(path.join(os.tmpdir(), "ebm-library-"));
+    await mkdir(path.join(libraryDir, "antibiotics-acute-bronchitis"), { recursive: true });
+    await writeFile(path.join(libraryDir, "antibiotics-acute-bronchitis", "metadata.json"), JSON.stringify({
+      title: "Antibiotics for acute bronchitis",
+      source_url: "https://pubmed.ncbi.nlm.nih.gov/28626858/",
+    }));
+    await writeFile(path.join(libraryDir, "antibiotics-acute-bronchitis", "full.md"), "# Antibiotics for acute bronchitis\n\nPMID: 24585130\n\nStale abstract.");
+    const mock = mockFetch([new Response("# Antibiotics for acute bronchitis\n\nPMID: 28626858\n\nCurrent abstract.")]);
+
+    const result = await readWeb({
+      sessionDir,
+      url: "https://pubmed.ncbi.nlm.nih.gov/28626858/",
+      fetcher: mock.fetcher,
+      sourceLibraryDir: libraryDir,
+    });
+
+    expect(result).toMatchObject({ ok: true, provider: "jina" });
+    if (!result.ok) return;
+    expect(await readFile(path.join(sessionDir, result.archive.path), "utf8")).toContain("PMID: 28626858");
+    expect(mock.calls).toHaveLength(1);
   });
 
   it("materializes an internal mcp source URL from the library without outbound URL access", async () => {

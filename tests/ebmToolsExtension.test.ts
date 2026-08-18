@@ -53,6 +53,7 @@ describe("EBM Pi extension tools", () => {
     expect(schema?.required ?? []).toContain("line_end");
     expect(tools.get("evidence_add")?.promptGuidelines?.join("\n")).toContain("line_start and line_end are always required");
     expect(tools.get("evidence_add")?.promptGuidelines?.join("\n")).toContain("do not accept a whole-read fallback");
+    expect(tools.get("evidence_add")?.promptGuidelines?.join("\n")).toContain("no more than 12 source lines");
     expect(schema?.properties).not.toHaveProperty("source_id");
   });
 
@@ -66,7 +67,8 @@ describe("EBM Pi extension tools", () => {
     expect(output).toContain("PMID: unknown");
     expect(output).toContain("Abstract preview: Result line one. Result line two.");
     expect(output).toContain("Readable abstract path: data/sessions/session-1/sources/read/trial/full.md");
-    expect(output).toContain("choose read_id with the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary)");
+    expect(output).toContain("choose read_id with matching absolute line_start/line_end");
+    expect(output).toContain("no more than 12 source lines");
     expect(output).not.toContain("Navigation/context only");
     expect(output).not.toContain("10.1000/test");
     expect(output).not.toContain("Evidence source_path:");
@@ -120,7 +122,7 @@ describe("EBM Pi extension tools", () => {
     expect(search?.description).toContain("document-level candidates");
     expect(search?.description).toContain("does not return citation-ready evidence");
     expect(search?.promptGuidelines?.join(" ")).toContain("document candidates only");
-    expect(retrieve?.description).toContain("citation-capable quote source");
+    expect(retrieve).toBeUndefined();
   });
 
   it("renders copy-ready verbatim material without asking the model to calculate line ranges", () => {
@@ -369,7 +371,6 @@ describe("EBM Pi extension tools", () => {
       "evidence_list",
       "evidence_read",
       "guideline_mcp_read",
-      "guideline_mcp_retrieve",
       "guideline_mcp_search",
       "pubmed_read",
       "pubmed_search",

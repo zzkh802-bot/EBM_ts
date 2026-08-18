@@ -3,10 +3,11 @@ import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildAgentPrompt, createAgentApiServer, type AgentExecutor, type AgentRunInput, type AgentRunResponse, type RuntimeConfig } from "../src/server/agentApi.js";
+import { buildAgentPrompt, createAgentApiServer, formatQuickAnswerReferences, type AgentExecutor, type AgentRunInput, type AgentRunResponse, type RuntimeConfig } from "../src/server/agentApi.js";
 import { buildPatientIntakePrompt, type PatientIntakeInput } from "../src/server/patientIntake.js";
 import { archiveSource } from "../src/tools/archive.js";
 import { addEvidence } from "../src/tools/evidence.js";
+import { registerReadReceipt } from "../src/tools/readRegistry.js";
 import { writeReport } from "../src/tools/report.js";
 import { InternalAuthStore } from "../src/server/internalAuth.js";
 
@@ -138,6 +139,9 @@ describe("循医研究服务 API", () => {
       expect(prompt).not.toContain("保留 PICO")
       expect(prompt).not.toContain("临床场景概述、循证问题、证据基础与证据状态")
       expect(prompt).not.toContain("必须使用独立的二级或三级标题")
+      expect(prompt).toContain("专家模式策略")
+      expect(prompt).toContain("不要求完整 PICO")
+      expect(prompt).toContain("患者价值观")
     }
     expect(publicPrompt).toContain("read、bash 等本地工具仍可用于读取和定位本会话已归档内容")
     expect(publicPrompt).toContain("不使用 PubMed、公共网页或本地来源库检索")
@@ -163,6 +167,115 @@ describe("循医研究服务 API", () => {
     expect(prompt).toContain("不要为了回答追问而重复执行正式报告流程")
     expect(prompt).not.toContain("在最终回复前调用 report_write")
     expect(prompt).not.toContain("必须生成正式循证报告")
+  });
+
+  it("builds a direct, evidence-backed fast-mode answer prompt", () => {
+    const prompt = buildAgentPrompt(promptInput({ researchMode: "quick", thinkingLevel: "low", responseMode: "answer", maxIterations: 8 }));
+    expect(prompt).toContain("一批并发调用");
+    expect(prompt).toContain("循证问题");
+    expect(prompt).toContain("不要把分析写成无限制的碎片化要点");
+    expect(prompt).toContain("不要调用 evidence_add、report_write、report_finalize");
+    expect(prompt).toContain("<ref source_ids=");
+    expect(prompt).toContain("自动生成参考文献");
+    expect(prompt).toContain("完整 EBM 五步法");
+    expect(prompt).toContain("绝不要求完整 PICO");
+    expect(prompt).toContain("严格区分直接证据与间接证据");
+    expect(prompt).toContain("第一次接触这个问题的人");
+    expect(prompt).toContain("不要用‘循证问题’、‘问题界定’、‘核心结论’作标题");
+    expect(prompt).toContain("默认不用表格");
+    expect(prompt).toContain("当前要决定什么 → 已读证据直接说明什么");
+    expect(prompt).toContain("绝不可把 read_id（如 r05）");
+    expect(prompt).toContain("每批最多 8 个");
+    expect(prompt).toContain("第 8 个研究轮次");
+    expect(prompt).not.toContain("clinical-report-writing skill");
+  });
+
+  it("turns one or more quick-mode source IDs into numbered references without evidence records", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-quick-references-"));
+    const guideline = await archiveSource({
+      sessionDir, kind: "read", title: "Clinical guideline 2026", sourceInstitution: "Example Society",
+      sourceUrl: "https://example.test/guideline", content: "Use the recommended treatment when eligible.",
+    });
+    const review = await archiveSource({
+      sessionDir, kind: "read", title: "Systematic review 2025",
+      sourceUrl: "https://example.test/review", content: "The intervention improves the relevant outcome.",
+    });
+
+    const answer = await formatQuickAnswerReferences(
+      sessionDir,
+      `The treatment is conditionally appropriate <ref source_ids="${guideline.sourceId},${review.sourceId}" />.\n\nA second claim uses the guideline <ref source_ids="${guideline.sourceId}" />.`,
+    );
+
+    expect(answer).toContain("conditionally appropriate [1,2]");
+    expect(answer).toContain("guideline [1]");
+    expect(answer).toContain("## 参考文献");
+    expect(answer).toContain("1. Example Society. Clinical guideline 2026. https://example.test/guideline");
+    expect(answer).toContain("Systematic review 2025. https://example.test/review");
+    expect(answer).not.toContain("1. [1]");
+    expect(answer).not.toContain("<ref source_ids");
+  });
+
+  it("uses the archived document heading when a reader supplied an abstract label as the title", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-quick-citation-title-"));
+    const source = await archiveSource({
+      sessionDir,
+      kind: "read",
+      title: "**METHODS:** This is an abstract sentence rather than an article title.",
+      sourceUrl: "https://example.test/article",
+      content: "# Correct clinical article title\n\nAbstract text.",
+    });
+
+    const answer = await formatQuickAnswerReferences(sessionDir, `A supported claim <ref source_ids="${source.sourceId}" />.`);
+
+    expect(answer).toContain("Correct clinical article title. https://example.test/article");
+    expect(answer).not.toContain("**METHODS:**");
+  });
+
+  it("uses an embedded document title instead of a decorative image heading", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-quick-citation-image-title-"));
+    const source = await archiveSource({
+      sessionDir,
+      kind: "read",
+      sourceUrl: "https://example.test/thyroid",
+      content: "Title: 甲状腺功能亢进症诊治指南解读\n\n# ![Journal logo](https://example.test/logo.png)\n\nClinical content.",
+    });
+
+    const answer = await formatQuickAnswerReferences(sessionDir, `A supported claim <ref source_ids="${source.sourceId}" />.`);
+
+    expect(answer).toContain("甲状腺功能亢进症诊治指南解读. https://example.test/thyroid");
+    expect(answer).not.toContain("![Journal logo]");
+  });
+
+  it("recovers a read receipt mistakenly used in a quick citation marker", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-quick-read-id-reference-"));
+    const source = await archiveSource({
+      sessionDir, kind: "read", title: "Read receipt source", sourceUrl: "https://example.test/read", content: "Direct supporting evidence.",
+    });
+    const markdown = await readFile(path.join(sessionDir, source.path), "utf8");
+    const receipt = await registerReadReceipt({
+      sessionDir, sourcePath: source.path, source: markdown, lineStart: source.bodyLineStart, lineEnd: source.bodyLineStart,
+    });
+
+    const answer = await formatQuickAnswerReferences(sessionDir, `A supported claim <ref source_ids="${receipt.id}" />.`);
+
+    expect(answer).toContain("A supported claim [1].");
+    expect(answer).toContain("Read receipt source. https://example.test/read");
+  });
+
+  it("removes a model-written bold reference section before appending the generated bibliography", async () => {
+    const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-quick-manual-references-"));
+    const source = await archiveSource({
+      sessionDir, kind: "read", title: "Direct source", sourceUrl: "https://example.test/direct", content: "Direct supporting evidence.",
+    });
+
+    const answer = await formatQuickAnswerReferences(
+      sessionDir,
+      `Conclusion <ref source_ids="${source.sourceId}" />.\n\n**参考文献**\n- A model-written duplicate [1]`,
+    );
+
+    expect(answer.match(/参考文献/g)).toHaveLength(1);
+    expect(answer).not.toContain("model-written duplicate");
+    expect(answer).toContain("1. Direct source. https://example.test/direct");
   });
 
   it("returns verified source excerpts for a numbered report citation without exposing evidence IDs", async () => {
@@ -303,7 +416,7 @@ describe("循医研究服务 API", () => {
       );
       expect(result).toMatchObject({ status: "succeeded", stage: "idle", session_id: "pi-session-1", message: "这是可追溯的循证回答。" });
       expect(result.report_markdown).toContain("完整循证报告");
-      expect(result.summary.request_timeout_seconds).toBe(600);
+      expect(result.summary.request_timeout_seconds).toBe(3600);
       expect(result.summary.retrieval_policy).toBe("all");
       expect(result.summary.thinking_level).toBe("high");
       expect(receivedInput?.thinkingLevel).toBe("high");
@@ -311,6 +424,39 @@ describe("循医研究服务 API", () => {
       expect(result.agent_trace.some((event: { kind: string }) => event.kind === "tool.completed")).toBe(true);
       expect(result.progress_updates).toEqual([expect.objectContaining({ text: "正在核对最新治疗建议。" })]);
       expect(result.tools).toEqual([{ id: "tool-1", name: "pubmed_search", status: "completed", result: "已找到候选文献。" }]);
+    } finally {
+      api.server.close();
+      await once(api.server, "close");
+    }
+  });
+
+  it("uses server-owned quick limits and preserves expert thinking selection", async () => {
+    const received: AgentRunInput[] = [];
+    const { api, baseUrl } = await startApi(async (input) => { received.push(input); return { message: "done" }; });
+    const runsUrl = baseUrl + "/api/v1/agent-runs";
+    try {
+      const quick = await fetch(runsUrl, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: "quick mode test", research_mode: "quick", thinking_level: "high" }),
+      });
+      const quickAccepted = await quick.json() as { run_id: string };
+      const quickResult = await eventually(
+        async () => (await fetch(runsUrl + "/" + quickAccepted.run_id)).json() as Promise<TestRunResponse>,
+        (value) => value.status === "succeeded",
+      );
+      expect(received[0]).toMatchObject({ researchMode: "quick", thinkingLevel: "low", responseMode: "answer", maxIterations: 8, requestTimeoutSeconds: 600 });
+      expect(quickResult.summary).toMatchObject({ research_mode: "quick", thinking_level: "low", response_mode: "answer" });
+
+      const expert = await fetch(runsUrl, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: "expert mode test", research_mode: "expert", thinking_level: "medium" }),
+      });
+      const expertAccepted = await expert.json() as { run_id: string };
+      await eventually(
+        async () => (await fetch(runsUrl + "/" + expertAccepted.run_id)).json() as Promise<TestRunResponse>,
+        (value) => value.status === "succeeded",
+      );
+      expect(received[1]).toMatchObject({ researchMode: "expert", thinkingLevel: "medium", responseMode: "report", maxIterations: 48, requestTimeoutSeconds: 3600 });
     } finally {
       api.server.close();
       await once(api.server, "close");

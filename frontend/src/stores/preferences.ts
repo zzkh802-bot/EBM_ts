@@ -1,10 +1,10 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import type { ModeSnapshot, RuntimeConfig, ThemeMode, ThinkingLevel } from '../types/domain'
+import type { ModeSnapshot, ResearchMode, RuntimeConfig, ThemeMode, ThinkingLevel } from '../types/domain'
 import { safeRead, safeWrite, STORAGE_KEYS } from '../utils/core'
 
 export const defaultModes: ModeSnapshot = {
-  audienceMode: 'clinician', thinkingLevel: 'low', searchEnabled: true,
+  audienceMode: 'clinician', thinkingLevel: 'low', researchMode: 'quick', searchEnabled: true,
 }
 
 const thinkingLevels: ThinkingLevel[] = ['off', 'low', 'medium', 'high']
@@ -14,6 +14,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const thinkingLevel = ref<ThinkingLevel>(thinkingLevels.includes(stored.thinkingLevel as ThinkingLevel)
     ? stored.thinkingLevel as ThinkingLevel
     : 'low')
+  const researchMode = ref<ResearchMode>(stored.researchMode === 'expert' ? 'expert' : 'quick')
   // Evidence retrieval is part of the clinician workflow and is no longer a
   // user-toggleable mode. Keep the field for wire/storage compatibility.
   const searchEnabled = ref(true)
@@ -25,7 +26,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const snapshot = computed<ModeSnapshot>(() => ({
     // The only shipped workspace is for clinicians. Keep the API field so a future
     // patient-facing surface can opt into its own policy without reviving a UI toggle.
-    audienceMode: 'clinician', thinkingLevel: thinkingLevel.value, searchEnabled: searchEnabled.value,
+    audienceMode: 'clinician', thinkingLevel: thinkingLevel.value, researchMode: researchMode.value, searchEnabled: searchEnabled.value,
   }))
   const applyTheme = () => {
     const dark = themeMode.value === 'dark' ||
@@ -42,5 +43,5 @@ export const usePreferencesStore = defineStore('preferences', () => {
     provider.value = config.default_provider
     model.value = config.default_model
   }
-  return { thinkingLevel, searchEnabled, provider, model, themeMode, snapshot, applyTheme, applyRuntimeConfig }
+  return { thinkingLevel, researchMode, searchEnabled, provider, model, themeMode, snapshot, applyTheme, applyRuntimeConfig }
 })

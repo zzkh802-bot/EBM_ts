@@ -12,7 +12,7 @@ type Metadata = {
 
 const root = process.cwd();
 const sourceLibraryDir = process.env.SOURCE_LIBRARY_DIR || path.join("data", "source_library", "guidelines");
-const maxEntries = Number(process.env.SOURCE_LIBRARY_MAX_ENTRIES ?? "") || 2000;
+const maxEntries = Number(process.env.SOURCE_LIBRARY_MAX_ENTRIES ?? "") || 3000;
 
 function line(slug: string, message: string): string {
   return `${slug}: ${message}`;
@@ -25,8 +25,18 @@ function badTitle(title: unknown): string | undefined {
   if (/^title:\s+/i.test(title)) return `title still contains Title: prefix: ${title}`;
   if (/\.(?:pdf|html?|aspx?)$/i.test(normalized)) return `file-name-like title: ${title}`;
   if (/^https?[-:]/i.test(normalized)) return `url-like title: ${title}`;
+  if (/^\*\*(?:background|context|objective|methods?|results?|conclusions?):\*\*/i.test(title.trim())) return `abstract-label title: ${title}`;
+  if (title.length > 320 || /^\s*\*/.test(title) || (/^[a-z]/.test(title) && /\]\(https?:\/\//.test(title))) return `noisy body fragment title: ${title}`;
   if (title.trim().length < 8) return `too-short title: ${title}`;
   return undefined;
+}
+
+function pubmedIdFromUrl(value?: string): string | undefined {
+  return value?.match(/pubmed\.ncbi\.nlm\.nih\.gov\/(\d+)/i)?.[1];
+}
+
+function pubmedIdFromContent(content: string): string | undefined {
+  return /^PMID:\s*(\d+)\s*$/mi.exec(content)?.[1];
 }
 
 const entries = await readdir(path.join(root, sourceLibraryDir), { withFileTypes: true }).catch(() => []);
@@ -67,6 +77,10 @@ for (const dirent of dirs) {
     issues.push(line(slug, "missing full.md"));
   }
   if (content && content.trim().length < 300) warnings.push(line(slug, "full.md is very short"));
+  const urlPmid = pubmedIdFromUrl(sourceUrl);
+  const contentPmid = pubmedIdFromContent(content);
+  if (urlPmid && contentPmid && urlPmid !== contentPmid) issues.push(line(slug, `PubMed URL PMID ${urlPmid} disagrees with full.md PMID ${contentPmid}`));
+  if (urlPmid && typeof metadata.pmid === "string" && metadata.pmid !== urlPmid) issues.push(line(slug, `PubMed URL PMID ${urlPmid} disagrees with metadata PMID ${metadata.pmid}`));
 }
 
 console.log(`# Source library audit: ${issues.length ? "FAIL" : "PASS"}\n\nEntries: ${dirs.length}\nHard issues: ${issues.length}\nWarnings: ${warnings.length}\n`);

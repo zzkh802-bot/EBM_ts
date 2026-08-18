@@ -66,6 +66,15 @@ export type EvidenceAnchorAddInput = Omit<EvidenceAddInput, "sourcePath" | "sour
   endText?: string;
 };
 
+/**
+ * A receipt verifies the source revision; a very short explicit range also
+ * identifies a reproducible quote.  Requiring copied anchors for every such
+ * range made the agent repeatedly reread text only to repair locator syntax.
+ * Keep the exception deliberately small so it cannot become a whole-read
+ * shortcut.
+ */
+const MAX_READ_ID_RANGE_WITHOUT_ANCHORS = 12;
+
 function assertRelativeSafe(rel: string): void {
   if (!rel || rel.startsWith("/") || rel.includes("\0") || rel.split(/[\\/]+/).includes("..")) {
     throw new Error(`unsafe relative path: ${rel}`);
@@ -180,6 +189,7 @@ export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Pro
   let lineStart = input.lineStart;
   let lineEnd = input.lineEnd;
   let readIdMode = false;
+  let requestedReadRangeIsInsideReceipt = false;
   let normalizedSourcePath: string;
   let receipt: ReadReceipt | undefined;
   if (input.readId) {
@@ -190,6 +200,7 @@ export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Pro
     if (lineStart === undefined || lineEnd === undefined) {
       throw new Error("line_start and line_end are required with read_id; copy the absolute source lines reported by that read");
     }
+    requestedReadRangeIsInsideReceipt = lineStart >= receipt.lineStart && lineEnd <= receipt.lineEnd;
     // Line numbers are a narrowing hint that must stay inside the receipt.
     // Models may copy a stale candidate range or a range from a different
     // read, so clamp to the authoritative receipt instead of rejecting.
@@ -217,8 +228,14 @@ export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Pro
   if (hasStart !== hasEnd) {
     throw new Error("start_text and end_text must be provided together");
   }
-  if (readIdMode && (!hasStart || !hasEnd)) {
-    throw new Error("read_id requires both start_text and end_text; when text anchors are unavailable, omit read_id and use source_path with line_start and line_end");
+  if (readIdMode && !hasStart) {
+    const requestedLineCount = lineEnd! - lineStart! + 1;
+    if (!requestedReadRangeIsInsideReceipt) {
+      throw new Error("read_id without text anchors requires an absolute line range inside that read receipt; use the matching read_id or provide start_text and end_text");
+    }
+    if (requestedLineCount > MAX_READ_ID_RANGE_WITHOUT_ANCHORS) {
+      throw new Error(`read_id without text anchors requires a tight range of no more than ${MAX_READ_ID_RANGE_WITHOUT_ANCHORS} source lines; narrow the read or provide start_text and end_text`);
+    }
   }
   let located: ReturnType<typeof locateEvidenceRange>;
   if (hasStart && hasEnd) {
@@ -231,14 +248,15 @@ export async function addEvidenceFromAnchors(input: EvidenceAnchorAddInput): Pro
       try {
         // A stale line hint must not invalidate anchors that are unique within
         // the same receipt. This is still bounded and never becomes a whole
-        // source fallback because read_id anchors remain mandatory.
+        // source fallback because this anchor-based branch remains bounded to
+        // the receipt even when its line hint was stale.
         located = locateEvidenceAnchors(source, input.startText!, input.endText!, { ...receiptRange, widenLineWindow: false });
       } catch {
         throw error;
       }
     }
   } else {
-    located = locateEvidenceRange(source, lineStart!, lineEnd!, "line_range");
+    located = locateEvidenceRange(source, lineStart!, lineEnd!, readIdMode ? "read_id_range" : "line_range");
   }
   return persistLocatedEvidence({
     sessionDir: input.sessionDir,
@@ -392,7 +410,7 @@ function parseEvidenceMarkdown(markdown: string): EvidenceNode {
   const confidence = ({ "低": "low", "中": "moderate", "高": "high" } as Record<string, string>)[rawConfidence] ?? rawConfidence;
   if (!(["low", "moderate", "high"] as string[]).includes(confidence)) throw new Error(`invalid evidence confidence: ${confidence}`);
   const matchMode = metadata.get("source_match_mode");
-  if (matchMode !== undefined && !["exact", "layout_normalized", "noise_normalized", "read_id_range", "line_range"].includes(String(matchMode))) {
+  if (matchMode !== undefined && !["exact", "layout_normalized", "noise_normalized", "similarity", "read_id_range", "line_range"].includes(String(matchMode))) {
     throw new Error(`invalid evidence source_match_mode: ${String(matchMode)}`);
   }
   const charStart = optionalNumber("source_char_start");

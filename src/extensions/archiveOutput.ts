@@ -45,6 +45,10 @@ export function archiveToolText(
   readablePath = record.path,
   options: { compactRead?: boolean; citationEligible?: boolean } = {},
 ): ArchiveToolTextResult {
+  const quickMode = process.env.EBM_RESEARCH_MODE === "quick";
+  const sourceUseInstruction = quickMode
+    ? "Quick mode: this readable, archived source may support the final answer only through its Source ID marker; do not create evidence records."
+    : "After read, use the returned read_id with the absolute line_start/line_end from that same read (source_path is optional; never copy line numbers from another candidate or read). For an exact range of no more than 12 source lines, start_text/end_text may be omitted; broader read_id ranges need the shortest distinctive continuous anchors. Or use source_path with line_start/line_end (text anchors optional). Layout/XML/entity/punctuation noise is normalized. If read_id anchors do not match, choose more distinctive boundaries, use a tight matching range, or reread a narrower window; do not archive a broad whole read as a fallback.";
   const compactRead = options.compactRead === true;
   const previewLimit = compactRead ? READ_PREVIEW_CHARS : DEFAULT_MAX_BYTES;
   const excerpt = compactRead
@@ -64,14 +68,15 @@ export function archiveToolText(
   return {
     text: [
       `Readable archive path: ${readablePath}`,
+      `Source ID: ${record.sourceId}`,
       ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
       ...(readableResources.length ? [`Archived referenced resources: ${readableResources.join(", ")}`] : []),
       `Archive lines: 1-${totalLines} (${totalLines} total lines; 1-based).`,
       `Visible preview maps to absolute source lines ${visibleStart}-${visibleEnd}.`,
       `Read any archive window with read(path=${JSON.stringify(readablePath)}, offset=N, limit=M).`,
       ...(options.citationEligible === false
-        ? ["This search snapshot is discovery history and cannot be passed to evidence_add; use an individually archived sources/read document."]
-        : ["After read, use the returned read_id with the absolute line_start/line_end from that same read plus start_text/end_text (source_path is optional; line hints outside the read window are clamped to it; never copy line numbers from another candidate or read), or use source_path with line_start/line_end (text anchors are optional). Layout/XML/entity/punctuation noise is normalized. If read_id anchors do not match, choose more distinctive boundaries, narrow the line window, or reread a narrower window; do not archive the whole read range as a fallback."]),
+        ? [quickMode ? "This search snapshot is discovery-only and cannot be cited; read an individually archived sources/read document instead." : "This search snapshot is discovery history and cannot be passed to evidence_add; use an individually archived sources/read document."]
+        : [sourceUseInstruction]),
       ...(excerpt.truncated ? [`Continue without gaps (the last preview line is intentionally repeated): read(path=${JSON.stringify(readablePath)}, offset=${Math.max(record.bodyLineStart, visibleEnd)}, limit=200).`] : []),
       ...(readableTocPath ? [`Read the complete section index with read(path=${JSON.stringify(readableTocPath)}).`] : []),
       ...(map.items.length ? ["", `Source map${map.total > map.items.length ? ` (first ${map.items.length} of ${map.total}; complete index is in toc.md)` : ""}:`, ...map.items] : []),

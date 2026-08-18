@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { sourceLibraryMetadataFields } from "../src/tools/sourceLibrary.js";
 
@@ -19,6 +19,7 @@ type Candidate = {
   sha256: string;
   content: string;
   aliases: string[];
+  modified: number;
 };
 
 const root = process.cwd();
@@ -71,7 +72,39 @@ function parseFrontmatter(markdown: string): { frontmatter: Frontmatter; body: s
 function weakTitle(title?: string): boolean {
   if (!title) return true;
   const normalized = title.trim().toLowerCase();
-  return !normalized || normalized === "full" || /\.(?:pdf|html?)$/i.test(normalized) || normalized.length < 8;
+  return !normalized || normalized === "full" || /\.(?:pdf|html?)$/i.test(normalized) || normalized.length < 8
+    || /^https?[-:]/i.test(normalized) || /^\*\*(?:background|context|objective|methods?|results?|conclusions?):\*\*/i.test(normalized)
+    || title.length > 320 || /^\s*\*/.test(title) || (/^[a-z]/.test(title) && /\]\(https?:\/\//.test(title));
+}
+
+function pubmedIdFromUrl(value?: string): string | undefined {
+  return value?.match(/pubmed\.ncbi\.nlm\.nih\.gov\/(\d+)/i)?.[1];
+}
+
+function pubmedIdFromContent(content: string): string | undefined {
+  return /^PMID:\s*(\d+)\s*$/mi.exec(content)?.[1];
+}
+
+function sourceContentMatchesUrl(sourceUrl: string | undefined, content: string): boolean {
+  const urlPmid = pubmedIdFromUrl(sourceUrl);
+  const contentPmid = pubmedIdFromContent(content);
+  return !urlPmid || !contentPmid || urlPmid === contentPmid;
+}
+
+function titleFallback(sourceUrl: string | undefined, file: string): string {
+  const pmid = pubmedIdFromUrl(sourceUrl);
+  if (pmid) return `PubMed record ${pmid}`;
+  if (sourceUrl) {
+    try {
+      const url = new URL(sourceUrl);
+      const leaf = decodeURIComponent(url.pathname.split("/").filter(Boolean).at(-1) ?? "").replace(/\.[a-z0-9]{1,8}$/i, "");
+      if (leaf) return leaf.replace(/[-_]+/g, " ");
+      return url.hostname;
+    } catch {
+      // fall back to the file name below
+    }
+  }
+  return path.basename(file, ".md").replace(/[-_]+/g, " ");
 }
 
 function titleScore(title: string): number {
@@ -81,6 +114,7 @@ function titleScore(title: string): number {
   if (/acute myeloid leukemia|\baml\b|急性髓系白血病/i.test(title)) score += 12;
   if (/version|版|20\d{2}|19\d{2}/i.test(title)) score += 8;
   if (/continue|panel members|table of contents|url source|published time/i.test(title)) score -= 30;
+  if (title.length > 320 || /^\s*\*/.test(title) || (/^[a-z]/.test(title) && /\]\(https?:\/\//.test(title))) score -= 40;
   return weakTitle(title) ? -100 : score;
 }
 
@@ -134,11 +168,12 @@ async function walk(dir: string): Promise<string[]> {
   return files;
 }
 
-async function collectCandidates(limit?: number): Promise<Candidate[]> {
+async function collectCandidates(limit?: number): Promise<{ candidates: Candidate[]; skippedMismatches: number }> {
   const files = (await walk(sessionsDir))
     .filter((file) => file.includes(`${path.sep}sources${path.sep}read${path.sep}`))
     .filter((file) => file.endsWith(".md") && !file.endsWith(`${path.sep}toc.md`));
   const byKey = new Map<string, Candidate>();
+  let skippedMismatches = 0;
   for (const file of files) {
     const raw = await readFile(file, "utf8");
     const { frontmatter, body } = parseFrontmatter(raw);
@@ -148,10 +183,16 @@ async function collectCandidates(limit?: number): Promise<Candidate[]> {
     const relative = path.relative(root, file).replaceAll(path.sep, "/");
     const session = relative.split("/")[2] || "unknown-session";
     const sourceUrl = typeof frontmatter.source_url === "string" ? frontmatter.source_url : undefined;
-    const title = typeof frontmatter.title === "string" && frontmatter.title.trim() ? frontmatter.title.trim() : firstTitle(content, path.basename(file, ".md"));
+    if (!sourceContentMatchesUrl(sourceUrl, content)) {
+      skippedMismatches += 1;
+      continue;
+    }
+    const frontmatterTitle = typeof frontmatter.title === "string" ? frontmatter.title.trim() : undefined;
+    const title = weakTitle(frontmatterTitle) ? firstTitle(content, titleFallback(sourceUrl, file)) : frontmatterTitle!;
     const key = sourceUrl || sha256;
     const existing = byKey.get(key);
-    if (existing && existing.content.length >= content.length) continue;
+    const candidateModified = await stat(file).then((value) => value.mtimeMs).catch(() => 0);
+    if (existing && (existing.content.length > content.length || (existing.content.length === content.length && existing.modified >= candidateModified))) continue;
     const baseSlug = semanticSlug(title || sourceUrl || sha256.slice(0, 12));
     byKey.set(key, {
       sourcePath: relative,
@@ -162,11 +203,62 @@ async function collectCandidates(limit?: number): Promise<Candidate[]> {
       sha256,
       content,
       aliases: [],
+      modified: candidateModified,
     });
   }
   const candidates = [...byKey.values()].sort((a, b) => a.title.localeCompare(b.title));
   for (const candidate of candidates) candidate.aliases = aliasesFor(candidate);
-  return limit ? candidates.slice(0, limit) : candidates;
+  return { candidates: limit ? candidates.slice(0, limit) : candidates, skippedMismatches };
+}
+
+async function collectExistingLibraryCandidates(): Promise<{ candidates: Candidate[]; skippedMismatches: number }> {
+  const entries = await readdir(libraryDir, { withFileTypes: true }).catch(() => []);
+  const candidates: Candidate[] = [];
+  let skippedMismatches = 0;
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    try {
+      const dir = path.join(libraryDir, entry.name);
+      const metadata = JSON.parse(await readFile(path.join(dir, "metadata.json"), "utf8")) as { title?: unknown; source_url?: unknown; sha256?: unknown };
+      const content = (await readFile(path.join(dir, "full.md"), "utf8")).trim();
+      if (content.length < 500) continue;
+      const sourceUrl = typeof metadata.source_url === "string" ? metadata.source_url : undefined;
+      if (!sourceContentMatchesUrl(sourceUrl, content)) {
+        skippedMismatches += 1;
+        continue;
+      }
+      const rawTitle = typeof metadata.title === "string" ? metadata.title.trim() : undefined;
+      const sourcePath = path.relative(root, path.join(dir, "full.md")).replaceAll(path.sep, "/");
+      const title = weakTitle(rawTitle) ? firstTitle(content, titleFallback(sourceUrl, sourcePath)) : rawTitle!;
+      candidates.push({
+        sourcePath,
+        session: "existing-library",
+        slug: semanticSlug(title || sourceUrl || entry.name),
+        title,
+        ...(sourceUrl ? { sourceUrl } : {}),
+        sha256: typeof metadata.sha256 === "string" ? metadata.sha256 : createHash("sha256").update(content).digest("hex"),
+        content,
+        aliases: [],
+        modified: await stat(path.join(dir, "full.md")).then((value) => value.mtimeMs).catch(() => 0),
+      });
+    } catch {
+      // Invalid existing entries are left out; audit reports them before rebuild.
+    }
+  }
+  return { candidates, skippedMismatches };
+}
+
+function mergeCandidates(candidates: Candidate[], limit?: number): Candidate[] {
+  const byKey = new Map<string, Candidate>();
+  for (const candidate of candidates) {
+    const key = candidate.sourceUrl || candidate.sha256;
+    const existing = byKey.get(key);
+    if (existing && (existing.content.length > candidate.content.length || (existing.content.length === candidate.content.length && existing.modified >= candidate.modified))) continue;
+    byKey.set(key, candidate);
+  }
+  const merged = [...byKey.values()].sort((a, b) => a.title.localeCompare(b.title));
+  for (const candidate of merged) candidate.aliases = aliasesFor(candidate);
+  return limit ? merged.slice(0, limit) : merged;
 }
 
 async function uniqueDirName(base: string, used: Set<string>): Promise<string> {
@@ -179,6 +271,9 @@ async function uniqueDirName(base: string, used: Set<string>): Promise<string> {
 async function main(): Promise<void> {
   const { reset, limit } = parseArgs();
   await mkdir(libraryDir, { recursive: true });
+  // Collect before --reset so custom or older entries that are not represented
+  // in the current session folder survive a maintenance rebuild.
+  const [sessionCollection, existingCollection] = await Promise.all([collectCandidates(), collectExistingLibraryCandidates()]);
   if (reset) {
     const entries = await readdir(libraryDir, { withFileTypes: true });
     for (const entry of entries) {
@@ -186,7 +281,8 @@ async function main(): Promise<void> {
       await rm(path.join(libraryDir, entry.name), { recursive: true, force: true });
     }
   }
-  const candidates = await collectCandidates(limit);
+  const candidates = mergeCandidates([...existingCollection.candidates, ...sessionCollection.candidates], limit);
+  const skippedMismatches = sessionCollection.skippedMismatches + existingCollection.skippedMismatches;
   const used = new Set<string>();
   const written: Array<Candidate & { librarySlug: string }> = [];
   for (const candidate of candidates) {
@@ -219,7 +315,7 @@ async function main(): Promise<void> {
     "",
   ].join("\n");
   await writeFile(path.join(libraryDir, "INDEX.md"), index, "utf8");
-  console.log(JSON.stringify({ libraryDir: path.relative(root, libraryDir), entries: written.length, index: path.relative(root, path.join(libraryDir, "INDEX.md")) }, null, 2));
+  console.log(JSON.stringify({ libraryDir: path.relative(root, libraryDir), entries: written.length, skipped_pubmed_mismatches: skippedMismatches, index: path.relative(root, path.join(libraryDir, "INDEX.md")) }, null, 2));
 }
 
 main().catch((error) => {

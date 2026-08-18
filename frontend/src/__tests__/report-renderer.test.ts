@@ -48,6 +48,21 @@ describe('报告清晰渲染', () => {
     expect(bibliography.text()).not.toContain('[1] [1]')
   })
 
+  it('将快速模式的编号书目渲染为单一引用卡片', () => {
+    const quickAnswer = `## 结论
+
+常规不推荐抗生素 [1]。
+
+## 参考文献
+
+1. Antibiotics for acute bronchitis. https://pubmed.ncbi.nlm.nih.gov/28626858/`
+    const wrapper = mount(ReportRenderer, { props: { markdown: quickAnswer, audience: 'clinician' } })
+
+    expect(wrapper.find('.report-markdown').text()).toContain('常规不推荐抗生素')
+    expect(wrapper.findAll('.reference-card')).toHaveLength(1)
+    expect(wrapper.find('.reference-card').text()).toContain('Antibiotics for acute bronchitis.')
+  })
+
   it('保留疗效、安全结局与表格的语义内容', () => {
     const wrapper = mount(ReportRenderer, { props: { markdown, audience: 'clinician' } })
     expect(wrapper.findAll('h3').map((node) => node.text())).toContain('主要疗效结局')

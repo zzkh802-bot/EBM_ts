@@ -20,8 +20,11 @@ data/attachments/
 data/internal-users.json
 data/internal-sessions.json
 data/session-owners.json
-data/source_library/guidelines/*
-!data/source_library/guidelines/README.md
+# The source library is a versioned, reviewable knowledge asset. New runtime
+# entries remain unstaged until an audit and an intentional commit; keep only
+# transient files and original binary downloads out of Git.
+data/source_library/guidelines/**/*.pdf
+data/source_library/guidelines/**/*.tmp
 data/tmp/
 tmp/
 reports/

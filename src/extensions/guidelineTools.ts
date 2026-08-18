@@ -82,7 +82,7 @@ export function guidelineReadPreviewRange(record: { content: string; bodyLineSta
 
 export function renderGuidelineReadText(
   readablePath: string,
-  record: { content: string; bodyLineStart: number; lines: number; tocPath?: string },
+  record: { content: string; bodyLineStart: number; lines: number; tocPath?: string; sourceId?: string },
   document?: GuidelineSearchItem,
 ): string {
   const lines = record.content.split("\n");
@@ -108,9 +108,12 @@ export function renderGuidelineReadText(
       "",
     ] : []),
     `Readable guideline path: ${readablePath}`,
+    ...(record.sourceId ? [`Source ID: ${record.sourceId}`] : []),
     ...(readableTocPath ? [`Readable source index: ${readableTocPath}`] : []),
     `Archive lines: 1-${totalLines} (${totalLines} total lines; 1-based).`,
-    "After read, choose one evidence_add locator: the returned read_id with the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary; line_start/line_end are optional absolute-source-line narrowing hints—prefer the matching pair to narrow repeated phrases, but omit them if they came from another candidate/read), or source_path with line_start/line_end (text anchors optional). Layout/XML/entity/punctuation noise is normalized. If read_id anchors do not match, choose more distinctive boundaries or reread a narrower window; do not archive the whole read range as a fallback.",
+    ...(process.env.EBM_RESEARCH_MODE === "quick"
+      ? ["Quick mode: cite this actually read guideline only through the Source ID marker in the final answer; do not create evidence records."]
+      : ["After read, choose one evidence_add locator: the returned read_id with matching absolute source line_start/line_end; for a tight passage of no more than 12 source lines, anchors may be omitted, otherwise use the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary). Never copy line hints from another candidate/read. Or use source_path with line_start/line_end (text anchors optional). Layout/XML/entity/punctuation noise is normalized. If read_id anchors do not match, use the known tight range or choose more distinctive boundaries/reread a narrower window; do not archive a broad whole read range as a fallback."]),
     ...(headings.length ? ["", "Best-effort navigation index (generated from cleaned Markdown; verify against full text):", ...headings] : []),
     "",
     `Informative preview lines ${previewStart}-${previewEnd}:`,
@@ -139,7 +142,7 @@ export function renderRetrieveCards(title: string, items: GuidelineRetrieveItem[
     }
     lines.push("");
   });
-  lines.push("These are candidate materials, not evidence yet. When a read_id is shown, use it with the shortest distinctive start_text/end_text (source_path optional); otherwise use source_path plus line_start/line_end. Layout/XML/entity/punctuation noise is normalized; if read_id anchors mismatch, choose a more unique pair or reread a narrower window instead of scanning with bash.");
+  lines.push("These are candidate materials, not evidence yet. When a read_id is shown, use its matching line_start/line_end; for a tight passage of no more than 12 source lines, anchors may be omitted, otherwise use the shortest distinctive start_text/end_text (source_path optional). Layout/XML/entity/punctuation noise is normalized; if read_id anchors mismatch, use the known tight range, choose a more unique pair, or reread a narrower window instead of scanning with bash.");
   return lines.join("\n");
 }
 
@@ -157,7 +160,7 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
     label: "Search Guideline Library",
     description: "Search the internal guideline MCP and archive document-level candidates. This does not return citation-ready evidence passages.",
     promptSnippet: "Search the internal guideline index for document IDs",
-    promptGuidelines: ["This returns document candidates only, not evidence. If source_library_search already found a direct local source, use that first. Otherwise select a document, then use guideline_mcp_read for context or guideline_mcp_retrieve for focused evidence passages before creating evidence."],
+    promptGuidelines: ["This returns document candidates only, not evidence. If source_library_search already found a direct local source, use that first. Otherwise select a document and use guideline_mcp_read for the needed context or recommendation. guideline_mcp_retrieve is temporarily disabled."],
     parameters: Type.Object({
       query: Type.String({ minLength: 2, description: "Prefer a short high-information English query" }),
       topk: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),
@@ -185,12 +188,13 @@ export function registerGuidelineTools(pi: Pick<ExtensionAPI, "registerTool" | "
     },
   });
 
-  pi.registerTool({
+  // The upstream chunk endpoint is opt-in while it is under investigation.
+  if (process.env.EBM_ENABLE_GUIDELINE_RETRIEVE === "1") pi.registerTool({
     name: "guideline_mcp_retrieve",
     label: "Retrieve Guideline Chunks",
     description: "Run internal guideline RAG retrieval and archive each returned chunk as a citation-capable quote source.",
     promptSnippet: "Retrieve traceable guideline chunks that can directly support evidence when relevant",
-    promptGuidelines: ["RAG chunks may directly support evidence. Each returned chunk is archived and has its own read_id; register the decision-relevant claim promptly with evidence_add instead of deferring all evidence until the end. Use that read_id plus the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary; include a nearby local word when a marker repeats), and optionally matching line_start/line_end; if anchors mismatch, choose a more unique pair or reread a narrower window. If read_id is unavailable, use the returned source_path and line range. Never join separate spans or insert ellipses. Use guideline_mcp_read when broader context is needed, but do not read the entire full.md when a focused chunk/window is sufficient."],
+    promptGuidelines: ["RAG chunks may directly support evidence. Each returned chunk is archived and has its own read_id; register the decision-relevant claim promptly with evidence_add instead of deferring all evidence until the end. Use that read_id with matching line_start/line_end; for a tight passage of no more than 12 source lines, anchors may be omitted, otherwise use the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary; include a nearby local word when a marker repeats). If anchors mismatch, use the known tight range, choose a more unique pair, or reread a narrower window. If read_id is unavailable, use the returned source_path and line range. Never join separate spans or insert ellipses. Use guideline_mcp_read when broader context is needed, but do not read the entire full.md when a focused chunk/window is sufficient."],
     parameters: Type.Object({
       query: Type.String({ minLength: 2, description: "Focused clinical retrieval query" }),
       topk: Type.Optional(Type.Integer({ minimum: 1, maximum: 20 })),

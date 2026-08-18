@@ -37,6 +37,7 @@ function evidenceSourcePath(value: string, sessionId: string, sessionDir: string
 
 export function registerEbmTools(pi: ExtensionAPI): void {
   const retrievalPolicy = process.env.EBM_RETRIEVAL_POLICY?.trim() || "all";
+  const quickMode = process.env.EBM_RESEARCH_MODE === "quick";
   registerSessionWorkspace(pi);
   registerReadRegistry(pi);
   registerEbmIdentity(pi);
@@ -44,15 +45,15 @@ export function registerEbmTools(pi: ExtensionAPI): void {
   registerStreamStallWatchdog(pi);
   registerSecurityGuard(pi);
 
-  pi.registerTool({
+  if (!quickMode) pi.registerTool({
     name: "evidence_add",
     label: "Add Evidence",
     description: "Archive claim-linked evidence using a bounded read receipt or a source line range; text anchors improve location precision but do not judge clinical quality.",
     promptSnippet: "Archive claim-linked evidence with a read receipt or source line range",
     promptGuidelines: [
-      "Use evidence_add only after reading the archived source. line_start and line_end are always required and define the evidence window: with read_id, copy the absolute source lines reported by that read (a small amount of line drift is tolerated); otherwise pass them with source_path. Anchors are mandatory with read_id; in line-range mode they are optional precision aids. Never convert absolute source lines into read-window-relative offsets, and never copy line numbers from a different candidate or read.",
+      "Use evidence_add only after reading the archived source. line_start and line_end are always required and define the evidence window: with read_id, copy the absolute source lines reported by that read; otherwise pass them with source_path. With read_id, anchors are preferred, but may be omitted for a tight range of no more than 12 source lines; broad ranges still require anchors. In line-range mode anchors are optional precision aids. Never convert absolute source lines into read-window-relative offsets, and never copy line numbers from a different candidate or read.",
       "Use the shortest distinctive continuous boundary snippets from the same read; semantic completeness is not required, and a snippet may end mid-sentence or beside punctuation. Prefer a local word or two next to a generic marker (for example, include the preceding treatment phrase with ‘证据等级’, rather than using ‘证据等级’ alone); do not copy a whole sentence merely because it reads well. There is no fixed character count. If you copied one complete passage into both start_text and end_text, keeping the two fields identical is allowed and the locator treats it as one quote; otherwise use different beginning/end snippets. Layout, XML/entity, punctuation, and transport-symbol noise are normalized; wording and clinical numbers are not invented or repaired.",
-      "If anchor matching fails in read_id mode, do not accept a whole-read fallback: keep the read_id, narrow the line window to the passage (absolute source lines from that same read), and choose shorter more distinctive start_text/end_text, or reread a narrower window. In line-range mode, the explicitly supplied line range remains the locator, so keep it narrow and never use an entire article as a convenience range.",
+      "If anchor matching fails in read_id mode, do not accept a whole-read fallback: for a known tight passage, omit anchors and submit its matching range of no more than 12 source lines; otherwise keep the read_id, narrow the line window and choose shorter more distinctive start_text/end_text, or reread a narrower window. In line-range mode, the explicitly supplied line range remains the locator, so keep it narrow and never use an entire article as a convenience range.",
       "The evidence tool preserves source text and provenance; it does not judge article quality, PubMed section boundaries, or PDF table structure. Use your clinical judgment and state limitations in the report when relevant.",
       "Classify provenance honestly. An unverified mirror may be cited as an unverified mirror; never call it an official guideline. Search snippets and discovery snapshots remain discovery-only. Use expert_consensus for consensus/position documents rather than calling them guidelines.",
       "For secondary sources, attribute claims to that source; never rewrite a paraphrase as the target guideline's direct recommendation.",
@@ -80,8 +81,8 @@ export function registerEbmTools(pi: ExtensionAPI): void {
       read_id: Type.Optional(Type.String({ pattern: "^r[0-9]+$", description: "Read receipt ID returned by read for the same source" })),
       line_start: Type.Integer({ minimum: 1, description: "1-based source line range start; required in both locator modes. With read_id, use the absolute source lines returned by that read" }),
       line_end: Type.Integer({ minimum: 1, description: "1-based source line range end; required in both locator modes. With read_id, use the absolute source lines returned by that read" }),
-      start_text: Type.Optional(Type.String({ minLength: 2, description: "Shortest distinctive continuous source snippet at the beginning; semantic completeness is unnecessary; required with read_id, optional in line-range mode" })),
-      end_text: Type.Optional(Type.String({ minLength: 2, description: "Shortest distinctive continuous source snippet at the end; semantic completeness is unnecessary; required with read_id, optional in line-range mode" })),
+      start_text: Type.Optional(Type.String({ minLength: 2, description: "Shortest distinctive continuous source snippet at the beginning; optional with a read_id only when its exact range is no more than 12 source lines, otherwise required" })),
+      end_text: Type.Optional(Type.String({ minLength: 2, description: "Shortest distinctive continuous source snippet at the end; optional with a read_id only when its exact range is no more than 12 source lines, otherwise required" })),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const sessionId = ctx.sessionManager.getSessionId();
@@ -119,7 +120,7 @@ export function registerEbmTools(pi: ExtensionAPI): void {
     },
   });
 
-  pi.registerTool({
+  if (!quickMode) pi.registerTool({
     name: "evidence_list",
     label: "List Evidence",
     description: "List concise summaries of all Markdown evidence records in the current Pi session.",
@@ -134,7 +135,7 @@ export function registerEbmTools(pi: ExtensionAPI): void {
     },
   });
 
-  pi.registerTool({
+  if (!quickMode) pi.registerTool({
     name: "evidence_read",
     label: "Read Evidence",
     description: "Read and verify one Markdown evidence record by evidence id before citing it.",
@@ -169,14 +170,14 @@ export function registerEbmTools(pi: ExtensionAPI): void {
     },
   });
 
-  registerResearchFrameTools(pi);
+  if (!quickMode) registerResearchFrameTools(pi);
   if (retrievalPolicy !== "mcp_only") {
     registerWebTools(pi);
     registerPubMedTools(pi);
     registerEuropePmcTools(pi);
     registerClinicalTrialsTools(pi);
   }
-  registerReportTools(pi);
+  if (!quickMode) registerReportTools(pi);
   registerGuidelineTools(pi);
   registerCompactionArtifacts(pi);
   registerTrajectoryRecorder(pi);

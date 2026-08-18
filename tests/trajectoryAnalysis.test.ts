@@ -206,6 +206,7 @@ describe("trajectory analysis", () => {
     expect(analysis.evidence_add_attempts.by_source).toMatchObject({
       pubmed: { calls: 1, errors: 0, first_attempts: 1 },
     });
+    expect(analysis.evidence_add_attempts.by_input_mode.read_id_range).toMatchObject({ calls: 1, errors: 0, first_attempts: 1 });
     expect(analysis.evidence_add_attempts.by_source.unknown).toBeUndefined();
   });
 

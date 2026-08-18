@@ -13,7 +13,7 @@ function toolError(error: ClinicalTrialsError): Error {
 
 const INLINE_BUDGET_CHARS = 40_000;
 
-function renderInlineStudies(sessionDirectoryName: string, archives: Array<{ path: string; title?: string; content: string }>, nctIds: string[]): { text: string; inlined: number } {
+function renderInlineStudies(sessionDirectoryName: string, archives: Array<{ path: string; title?: string; content: string; sourceId?: string }>, nctIds: string[]): { text: string; inlined: number } {
   const lines: string[] = [];
   let budget = INLINE_BUDGET_CHARS;
   let inlined = 0;
@@ -22,7 +22,10 @@ function renderInlineStudies(sessionDirectoryName: string, archives: Array<{ pat
     const block = [
       `${index + 1}. ${archive.title ?? archive.path}`,
       `   Readable study path: ${readablePath}`,
-      "   Evidence use: use evidence_add with source_path (the Readable study path above) and the matching absolute line_start/line_end, or the shortest distinctive continuous start_text/end_text.",
+      ...(archive.sourceId ? [`   Source ID: ${archive.sourceId}`] : []),
+      process.env.EBM_RESEARCH_MODE === "quick"
+        ? "   Quick mode: retain this study's Source ID for the final-answer reference marker; do not create an evidence record."
+        : "   Evidence use: use evidence_add with source_path (the Readable study path above) and the matching absolute line_start/line_end, or the shortest distinctive continuous start_text/end_text.",
       "",
       archive.content.trim(),
       "",

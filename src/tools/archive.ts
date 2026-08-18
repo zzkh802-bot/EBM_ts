@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { preprocessExternalContent, type ExternalContentFormat } from "./markdown.js";
 import { registerArchivedSource, sourceIdentity } from "./sourceIdentity.js";
@@ -203,14 +203,20 @@ async function archiveReadDirectory(input: SourceArchiveInput, archived: string,
     const archiveDir = path.posix.join("sources", input.kind, dirName);
     const sourcePath = path.posix.join(archiveDir, "full.md");
     const tocPath = path.posix.join(archiveDir, "toc.md");
+    const stagingDir = `${absDir}.${randomUUID()}.tmp`;
     try {
-      await mkdir(absDir);
-      await writeFile(path.join(absDir, "full.md"), archived, { encoding: "utf8", flag: "wx" });
-      await writeFile(path.join(absDir, "toc.md"), renderToc(sourcePath, input.content, bodyLineStart), { encoding: "utf8", flag: "wx" });
-      const resourcePaths = await writeArchiveResources(absDir, input.resources ?? []);
+      // A completed archive is published with one directory rename. This prevents a
+      // parallel reader of the same session from treating a half-written full.md/toc
+      // pair as a reusable archive.
+      await mkdir(stagingDir);
+      await writeFile(path.join(stagingDir, "full.md"), archived, { encoding: "utf8", flag: "wx" });
+      await writeFile(path.join(stagingDir, "toc.md"), renderToc(sourcePath, input.content, bodyLineStart), { encoding: "utf8", flag: "wx" });
+      const resourcePaths = await writeArchiveResources(stagingDir, input.resources ?? []);
+      await rename(stagingDir, absDir);
       return { path: sourcePath, archiveDir, tocPath, ...(resourcePaths.length ? { resourcePaths } : {}) };
     } catch (error) {
-      if (!(error instanceof Error && "code" in error && error.code === "EEXIST")) throw error;
+      await rm(stagingDir, { recursive: true, force: true });
+      if (!(error instanceof Error && "code" in error && (error.code === "EEXIST" || error.code === "ENOTEMPTY"))) throw error;
       try {
         if (await readFile(path.join(absDir, "full.md"), "utf8") === archived && await archivedResourcesMatch(absDir, input.resources ?? [])) {
           const resourcePaths = resourceManifest(input.resources ?? []).map((resource) => resource.path);

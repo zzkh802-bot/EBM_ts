@@ -78,6 +78,11 @@ const questionInput = ref<HTMLTextAreaElement | null>(null)
 const thinkingLevelLabel = (level: ModeSnapshot['thinkingLevel']) => ({
   off: 'off · 关闭', low: 'low · 低', medium: 'medium · 中', high: 'high · 高',
 }[level])
+const researchModeLabel = (mode?: ModeSnapshot["researchMode"]) => mode === "quick" ? "快速模式" : "专家模式"
+const selectResearchMode = (mode: "quick" | "expert") => {
+  preferences.researchMode = mode
+  if (mode === "quick") preferences.thinkingLevel = "low"
+}
 const primaryActionLabel = computed(() => {
   if (!run.busy) return '开始研究'
   return question.value.trim() ? '加入后续追问' : '停止本轮研究'
@@ -289,7 +294,7 @@ const share = async (message: Message) => {
   else await copyText(text)
 }
 const retry = (message: Message, detail = '') => submit(`${detail}${message.sourceQuestion || ''}`, {
-  audienceMode: message.audienceMode, thinkingLevel: message.thinkingLevel, searchEnabled: message.searchEnabled,
+  audienceMode: message.audienceMode, thinkingLevel: message.thinkingLevel, researchMode: message.researchMode, searchEnabled: message.searchEnabled,
 })
 const openCitation = (reference: Reference, reportPath?: string) => {
   const sessionId = sessions.active.researchSessionId
@@ -357,7 +362,7 @@ const handlePrimaryAction = () => {
       <form class="ask-bar" aria-label="循医输入区" @submit.prevent="submit()">
         <div class="mode-context" aria-live="polite">
           <strong>临床循证工作流</strong>
-          <span>推理强度只控制模型的思考深度；检索、核验和正式报告保持一致。</span>
+          <span>{{ preferences.researchMode === "quick" ? "快速模式：低推理、并行检索、直接输出带参考文献的回答。" : "专家模式：保留完整证据登记与正式报告；推理强度可自行选择。" }}</span>
         </div>
         <div class="composer-body">
           <div class="queue-tray" :hidden="!run.queuedGuidance.length">
@@ -401,9 +406,13 @@ const handlePrimaryAction = () => {
               <option v-for="item in modelsForProvider" :key="item.model" :value="item.model">{{ item.model_label }}</option>
             </select>
           </label>
+          <div class="research-mode-buttons" role="group" aria-label="研究模式">
+            <button type="button" :class="{ active: preferences.researchMode === 'quick' }" :disabled="run.busy" @click="selectResearchMode('quick')">快速模式</button>
+            <button type="button" :class="{ active: preferences.researchMode === 'expert' }" :disabled="run.busy" @click="selectResearchMode('expert')">专家模式</button>
+          </div>
           <label class="runtime-select thinking-select">
             <span>推理强度</span>
-            <select v-model="preferences.thinkingLevel" :disabled="run.busy">
+            <select v-model="preferences.thinkingLevel" :disabled="run.busy || preferences.researchMode === 'quick'">
               <option value="off">off · 关闭</option>
               <option value="low">low · 低</option>
               <option value="medium">medium · 中</option>
@@ -474,7 +483,7 @@ const handlePrimaryAction = () => {
             <div class="bubble">
               <div class="message-heading">
                 <strong>{{ message.title }}</strong>
-                <span v-if="message.role === 'assistant'" class="message-mode">{{ thinkingLevelLabel(message.thinkingLevel) }}</span>
+                <span v-if="message.role === 'assistant'" class="message-mode">{{ researchModeLabel(message.researchMode) }} · {{ thinkingLevelLabel(message.thinkingLevel) }}</span>
               </div>
               <div v-if="message.pending" class="agent-stage">{{ stages[run.stage] || '正在调用循证引擎…' }}</div>
               <RunActivity
@@ -653,6 +662,7 @@ const handlePrimaryAction = () => {
       <section class="workspace-info-card">
         <div class="workspace-info-title"><span>当前工作模式</span></div>
         <div class="workspace-mode-list">
+          <div><span>工作流</span><strong>{{ researchModeLabel(preferences.researchMode) }}</strong></div>
           <div><span>推理强度</span><strong>{{ thinkingLevelLabel(preferences.thinkingLevel) }}</strong></div>
           <div><span>证据检索</span><strong class="mode-on">开启</strong></div>
           <div><span>工作台</span><strong>医生专业版</strong></div>
@@ -667,6 +677,11 @@ const handlePrimaryAction = () => {
 </template>
 
 <style scoped>
+.research-mode-buttons { display: inline-flex; overflow: hidden; border: 1px solid rgba(49, 123, 107, .26); border-radius: 6px; }
+.research-mode-buttons button { border: 0; padding: 6px 10px; background: transparent; color: var(--ink-soft, #56636f); cursor: pointer; }
+.research-mode-buttons button + button { border-left: 1px solid rgba(49, 123, 107, .18); }
+.research-mode-buttons button.active { background: rgba(49, 123, 107, .14); color: var(--jade, #08766d); font-weight: 700; }
+.research-mode-buttons button:disabled { cursor: not-allowed; opacity: .58; }
 .attachment-tray { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 8px 0 0; color: var(--ink-faint, #7d888d); font-size: 12px; }
 .attachment-tray > button { padding: 5px 8px; border: 1px solid rgba(49, 123, 107, .24); border-radius: 5px; background: rgba(255, 255, 255, .72); color: var(--ink-soft, #56636f); cursor: pointer; }
 .attachment-tray > button:disabled { cursor: not-allowed; opacity: .55; }

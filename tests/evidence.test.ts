@@ -337,6 +337,24 @@ describe("Markdown evidence ledger", () => {
     expect(read.verification).toEqual({ ok: true, errors: [] });
   });
 
+  it("reads evidence records produced by the supported similarity locator", async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
+    await writeFile(path.join(dir, "source.md"), "The intervention reduced symptoms after seven days.", "utf8");
+    const node = await addEvidence({
+      sessionDir: dir,
+      question: "Does treatment help?",
+      claim: "Symptoms improved.",
+      relation: "supports",
+      sourcePath: "source.md",
+      quote: "The intervention reduced symptoms after seven days.",
+    });
+    const recordPath = path.join(dir, "evidence", `${node.id}.md`);
+    await writeFile(recordPath, (await readFile(recordPath, "utf8")).replace("source_match_mode: exact", "source_match_mode: similarity"), "utf8");
+
+    await expect(readEvidence(dir, node.id)).resolves.toMatchObject({ node: { id: node.id, matchMode: "similarity" } });
+    await expect(listEvidence(dir)).resolves.toEqual([expect.objectContaining({ id: node.id })]);
+  });
+
   it("keeps unverified guideline mirrors citable with their provenance", async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), "ebm-evidence-"));
     await writeFile(path.join(dir, "source.md"), "A search result claims a recommendation.", "utf8");

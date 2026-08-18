@@ -1,9 +1,33 @@
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { archiveSource, stableArchiveName, type SourceArchiveRecord } from "./archive.js";
 import { expandSourceLibraryQueryTerms } from "./sourceLibraryTerms.js";
 
-const DEFAULT_SOURCE_LIBRARY_MAX_ENTRIES = 2000;
+const DEFAULT_SOURCE_LIBRARY_MAX_ENTRIES = 3000;
+const sourceLibraryLocks = new Map<string, Promise<void>>();
+
+async function withSourceLibraryLock<T>(sourceLibraryDir: string, operation: () => Promise<T>): Promise<T> {
+  const key = path.resolve(sourceLibraryDir);
+  const previous = sourceLibraryLocks.get(key) ?? Promise.resolve();
+  let release: (() => void) | undefined;
+  const current = new Promise<void>((resolve) => { release = resolve; });
+  const tail = previous.then(() => current);
+  sourceLibraryLocks.set(key, tail);
+  await previous;
+  try {
+    return await operation();
+  } finally {
+    release?.();
+    if (sourceLibraryLocks.get(key) === tail) sourceLibraryLocks.delete(key);
+  }
+}
+
+async function writeTextAtomically(target: string, content: string): Promise<void> {
+  const temporary = `${target}.${randomUUID()}.tmp`;
+  await writeFile(temporary, content, "utf8");
+  await rename(temporary, target);
+}
 
 export type SourceLibraryCandidate = {
   slug: string;
@@ -47,6 +71,29 @@ function sourceLibrarySlugFromLocator(url: string): string | undefined {
   }
 }
 
+function pubmedIdFromUrl(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    if (!/(?:^|\.)pubmed\.ncbi\.nlm\.nih\.gov$/i.test(parsed.hostname)) return undefined;
+    return /^\/(\d+)\/?$/.exec(parsed.pathname)?.[1];
+  } catch {
+    return undefined;
+  }
+}
+
+function pubmedIdFromArchive(content: string): string | undefined {
+  return /^PMID:\s*(\d+)\s*$/mi.exec(content)?.[1];
+}
+
+function sourceContentMatchesRequestedUrl(url: string, content: string): boolean {
+  const requestedPubmedId = pubmedIdFromUrl(url);
+  if (!requestedPubmedId) return true;
+  const archivedPubmedId = pubmedIdFromArchive(content);
+  // A stale local record must never be materialized under a different PMID:
+  // it would make a correct-looking final citation point to the wrong study.
+  return !archivedPubmedId || archivedPubmedId === requestedPubmedId;
+}
+
 type SourceLibraryMetadata = {
   title?: unknown;
   source_url?: unknown;
@@ -84,6 +131,7 @@ function queryConceptGroups(value: string): Array<{ name: string; terms: string[
   add("thrombolysis", ["溶栓", "阿替普酶", "alteplase", "thrombolysis", "rt-pa"]);
   add("blood_pressure", ["血压", "收缩压", "舒张压", "blood pressure", "bp", "sbp", "dbp"]);
   add("guideline", ["指南", "guideline", "recommendation"]);
+  add("acute_myeloid_leukemia", ["急性髓系白血病", "acute myeloid leukemia", "aml"]);
   return groups;
 }
 
@@ -112,6 +160,10 @@ function poorArchiveTitle(title?: string): boolean {
     || normalized === "read-source"
     || normalized === "markdown content"
     || /^https?[-:]/.test(normalized)
+    || /^\*\*(?:background|context|objective|methods?|results?|conclusions?):\*\*/.test(normalized)
+    || title.length > 320
+    || /^\s*\*/.test(title)
+    || (/^[a-z]/.test(title) && /\]\(https?:\/\//.test(title))
     || /\.(?:pdf|html?|aspx?)$/i.test(normalized)
     || normalized.length < 8;
 }
@@ -125,6 +177,7 @@ function titleCandidateScore(title: string): number {
   if (/acute myeloid leukemia|\baml\b|急性髓系白血病/.test(normalized)) score += 12;
   if (/version|版|20\d{2}|19\d{2}/.test(normalized)) score += 8;
   if (/continue|panel members|table of contents|copyright|url source|published time/.test(normalized)) score -= 30;
+  if (title.length > 320 || /^\s*\*/.test(title) || (/^[a-z]/.test(title) && /\]\(https?:\/\//.test(title))) score -= 40;
   return score;
 }
 
@@ -337,15 +390,21 @@ export async function searchSourceLibrary(input: { sourceLibraryDir?: string; qu
       const matchedFocusedGroups = matchedConceptGroups.filter((group) => group.name !== "guideline");
       const directThreshold = Math.max(2, Math.ceil(Math.max(rawQueryTokens.length, conceptGroups.length) * 0.4));
       const requestedAtrialFibrillation = focusedGroups.some((group) => group.name === "atrial_fibrillation");
+      const focusedTopicMatch = focusedGroups.length === 0
+        || matchedFocusedGroups.length >= Math.min(2, focusedGroups.length);
       const authoritativeGuidelineMatch = (metadata.provider === "guideline_mcp" || metadata.provider === "archive")
         && conceptGroups.some((group) => group.name === "guideline" && group.terms.some((term) => metadataHaystack.includes(term)))
+        && focusedTopicMatch
         && (!requestedAtrialFibrillation || matchedFocusedGroups.some((group) => group.name === "atrial_fibrillation"));
       const hasFocusedDirectMatch = focusedGroups.length === 0
         ? matchedConceptGroups.length > 0
         : matchedFocusedGroups.length >= Math.min(2, focusedGroups.length)
           && (!requestedAtrialFibrillation || matchedFocusedGroups.some((group) => group.name === "atrial_fibrillation"));
+      const specificClinicalGuidelineMatch = matchedConceptGroups.some((group) => group.name === "guideline")
+        && matchedFocusedGroups.some((group) => group.name === "acute_myeloid_leukemia");
       const genericDirectMatch = conceptGroups.length === 0 && matchedQueryTerms.length >= Math.max(2, Math.ceil(rawQueryTokens.length * 0.3));
-      const matchQuality = (authoritativeGuidelineMatch || hasFocusedDirectMatch || genericDirectMatch) && matchedQueryTerms.length >= directThreshold ? "direct" : "related";
+      const matchQuality = (authoritativeGuidelineMatch || hasFocusedDirectMatch || genericDirectMatch)
+        && (matchedQueryTerms.length >= directThreshold || specificClinicalGuidelineMatch) ? "direct" : "related";
       const snippet = content ? snippetFor(content, queryTokens) : undefined;
       const sourceUrl = typeof metadata.source_url === "string" && metadata.source_url.trim()
         ? metadata.source_url.trim()
@@ -453,16 +512,26 @@ function aliasesFor(input: { title?: string; sourceUrl?: string; archivePath?: s
   return [...aliases].filter((alias) => alias && alias !== input.title).slice(0, 12);
 }
 
-export async function upsertSourceLibraryFromArchive(input: {
+type SourceLibraryUpsertInput = {
   sourceLibraryDir?: string;
   archive: SourceArchiveRecord;
   provider: string;
   sessionId?: string;
   sourceStatus?: string;
   discoveryQuery?: string;
-}): Promise<{ written: boolean; updated?: boolean; path?: string }> {
-  if (!input.sourceLibraryDir) return { written: false };
+};
+
+export async function upsertSourceLibraryFromArchive(input: SourceLibraryUpsertInput): Promise<{ written: boolean; updated?: boolean; path?: string }> {
+  const sourceLibraryDir = input.sourceLibraryDir;
+  if (!sourceLibraryDir) return { written: false };
+  return withSourceLibraryLock(sourceLibraryDir, () => upsertSourceLibraryFromArchiveUnlocked({ ...input, sourceLibraryDir }));
+}
+
+async function upsertSourceLibraryFromArchiveUnlocked(input: SourceLibraryUpsertInput & { sourceLibraryDir: string }): Promise<{ written: boolean; updated?: boolean; path?: string }> {
   if (!input.archive.content.trim()) return { written: false };
+  if (!sourceContentMatchesRequestedUrl(input.archive.sourceUrl ?? "", input.archive.content)) {
+    throw new Error("refusing to store a PubMed source whose body PMID disagrees with its source URL");
+  }
   await mkdir(input.sourceLibraryDir, { recursive: true });
   const entries = await sourceLibraryEntries(input.sourceLibraryDir);
   for (const entry of entries) {
@@ -479,30 +548,44 @@ export async function upsertSourceLibraryFromArchive(input: {
         let contentUpdated = false;
         try {
           const existingContent = await readFile(fullPath, "utf8");
-          if (input.archive.content.trim().length > existingContent.trim().length) {
-            await writeFile(fullPath, `${input.archive.content.trim()}\n`, "utf8");
+          // The body, identifiers and provenance are one record. Choosing the
+          // longer body let a new PMID/URL overwrite metadata while retaining
+          // an old abstract, yielding a plausible-looking but false citation.
+          if (input.archive.content.trim() !== existingContent.trim()) {
+            await writeTextAtomically(fullPath, `${input.archive.content.trim()}\n`);
             contentUpdated = true;
           }
         } catch {
-          await writeFile(fullPath, `${input.archive.content.trim()}\n`, "utf8");
+          await writeTextAtomically(fullPath, `${input.archive.content.trim()}\n`);
           contentUpdated = true;
         }
         const existingTitle = typeof metadata.title === "string" ? metadata.title : undefined;
         const improvedTitle = poorArchiveTitle(existingTitle) ? bestSourceTitle({ ...(input.archive.title ? { title: input.archive.title } : {}), content: input.archive.content, ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}), fallback: path.basename(input.archive.path, ".md") }) : existingTitle!;
+        const refreshedFields = sourceLibraryMetadataFields({
+          title: improvedTitle,
+          ...(input.archive.sourceUrl ? { sourceUrl: input.archive.sourceUrl } : {}),
+          content: input.archive.content,
+          provider: input.provider,
+          ...(input.sourceStatus ? { sourceStatus: input.sourceStatus } : {}),
+        });
         const updatedMetadata = {
           ...metadata,
           document_id: input.archive.documentId,
           source_id: input.archive.sourceId,
           title: improvedTitle,
+          ...(input.archive.sourceUrl ? { source_url: input.archive.sourceUrl } : {}),
           ...(discoveryQueries.length ? { discovery_queries: discoveryQueries } : {}),
-          keywords: uniqueStrings([...existingKeywords, ...incomingKeywords]),
-          sha256: contentUpdated ? input.archive.sha256 : metadata.sha256,
+          ...refreshedFields,
+          keywords: uniqueStrings([...(refreshedFields.keywords ?? []), ...existingKeywords, ...incomingKeywords]),
+          sha256: input.archive.sha256,
+          provider: input.provider,
+          ...(input.sourceStatus ? { source_status: input.sourceStatus } : {}),
           access_count: metadataAccessCount(metadata) + 1,
           last_seen_at: new Date().toISOString(),
           last_used_at: new Date().toISOString(),
           ...(contentUpdated ? { updated_at: new Date().toISOString(), updated_from: input.archive.path } : {}),
         };
-        await writeFile(metadataPath, `${JSON.stringify(updatedMetadata, null, 2)}\n`, "utf8");
+        await writeTextAtomically(metadataPath, `${JSON.stringify(updatedMetadata, null, 2)}\n`);
         return { written: false, updated: contentUpdated || discoveryQueries.length !== existingQueries.length, path: path.posix.join(input.sourceLibraryDir, entry.name) };
       }
     } catch {
@@ -519,8 +602,8 @@ export async function upsertSourceLibraryFromArchive(input: {
   const dir = path.join(input.sourceLibraryDir, slug);
   await mkdir(dir, { recursive: true });
   const title = incomingTitle;
-  await writeFile(path.join(dir, "full.md"), `${input.archive.content.trim()}\n`, "utf8");
-  await writeFile(path.join(dir, "metadata.json"), `${JSON.stringify({
+  await writeTextAtomically(path.join(dir, "full.md"), `${input.archive.content.trim()}\n`);
+  await writeTextAtomically(path.join(dir, "metadata.json"), `${JSON.stringify({
     title,
     document_id: input.archive.documentId,
     source_id: input.archive.sourceId,
@@ -536,7 +619,7 @@ export async function upsertSourceLibraryFromArchive(input: {
     imported_from: input.archive.path,
     imported_at: new Date().toISOString(),
     import_method: "automatic_read_archive_upsert",
-  }, null, 2)}\n`, "utf8");
+  }, null, 2)}\n`);
   return { written: true, path: path.posix.join(input.sourceLibraryDir, slug) };
 }
 
@@ -558,11 +641,15 @@ export async function readFromSourceLibrary(input: { sessionDir: string; sourceL
       if (metadata.source_url !== input.url && entry.name !== locatorSlug) continue;
       const content = await readFile(path.join(dir, "full.md"), "utf8");
       if (!content.trim()) continue;
-      await writeFile(metadataPath, `${JSON.stringify({
-        ...metadata,
-        access_count: metadataAccessCount(metadata) + 1,
-        last_used_at: new Date().toISOString(),
-      }, null, 2)}\n`, "utf8");
+      if (!sourceContentMatchesRequestedUrl(input.url, content)) continue;
+      await withSourceLibraryLock(input.sourceLibraryDir, async () => {
+        const current = JSON.parse(await readFile(metadataPath, "utf8")) as Record<string, unknown>;
+        await writeTextAtomically(metadataPath, `${JSON.stringify({
+          ...current,
+          access_count: metadataAccessCount(current) + 1,
+          last_used_at: new Date().toISOString(),
+        }, null, 2)}\n`);
+      });
       return archiveSource({
         sessionDir: input.sessionDir,
         kind: "read",

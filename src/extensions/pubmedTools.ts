@@ -37,7 +37,7 @@ function pmidFromAbstract(content: string): string {
 
 export function renderAbstractNavigation(
   sessionDirectoryName: string,
-  archives: Array<{ path: string; title?: string; content: string; bodyLineStart: number }>,
+  archives: Array<{ path: string; title?: string; content: string; bodyLineStart: number; sourceId?: string }>,
   options: { searchArchivePath?: string; pmids?: string[] } = {},
 ): string {
   if (!archives.length) {
@@ -63,11 +63,12 @@ export function renderAbstractNavigation(
     const preview = abstractPreview(archive);
     lines.push(
       `${index + 1}. ${archive.title ?? archive.path}`,
+      ...(archive.sourceId ? [`   Source ID: ${archive.sourceId}`] : []),
       `   PMID: ${pmidFromAbstract(archive.content)}`,
       `   Abstract lines: ${preview.startLine}-${preview.endLine}`,
       `   Abstract preview: ${preview.text}`,
       `   Readable abstract path: ${readablePath}`,
-      "   Evidence use: call pubmed_read first, then choose read_id with the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary); prefer the matching absolute line_start/line_end when the read range is known, but omit line hints copied from another candidate/read. Or use the displayed source path with line_start/line_end. Layout/XML/entity/punctuation noise is normalized; if read_id anchors mismatch, choose more distinctive boundaries or reread a narrower window rather than archiving the whole read.",
+      "   Evidence use: call pubmed_read first, then choose read_id with matching absolute line_start/line_end. For a tight decision-relevant passage of no more than 12 source lines, anchors may be omitted; otherwise use the shortest distinctive continuous start_text/end_text (semantic completeness is unnecessary). Never copy line hints from another candidate/read. Or use the displayed source path with line_start/line_end. Layout/XML/entity/punctuation noise is normalized; if read_id anchors mismatch, use the known tight range or choose more distinctive boundaries/reread a narrower window rather than archiving a broad whole read.",
       "",
     );
   });
