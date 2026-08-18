@@ -105,7 +105,6 @@ type AccountConnection = {
 export type AgentExecutionResult = {
   sessionId?: string;
   message: string;
-  patientHealth?: PatientHealthAnswer;
   reportMarkdown?: string;
   reportPath?: string;
   agentTrace?: AgentTraceEvent[];
