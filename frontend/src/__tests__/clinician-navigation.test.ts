@@ -38,6 +38,8 @@ describe('医生工作台入口与新建问题', () => {
 
     const patientEntry = wrapper.get<HTMLButtonElement>('.entry-choice.patient')
     expect(patientEntry.element.disabled).toBe(false)
+    expect(patientEntry.text()).toContain('健康问答')
+    expect(patientEntry.text()).not.toContain('我是患者')
     expect(patientEntry.text()).toContain('开始提问')
 
     await router.push('/patient/intake')

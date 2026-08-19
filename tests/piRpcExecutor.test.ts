@@ -18,6 +18,7 @@ class FakeRpcClient implements PiRpcClientLike {
   started = false;
   stopped = false;
   writeReport = true;
+  thinkingOnly = false;
 
   constructor(private readonly sessionId: string, private readonly rootDir: string) {}
 
@@ -40,7 +41,9 @@ class FakeRpcClient implements PiRpcClientLike {
     }
     for (const listener of this.listeners) listener({ type: "tool_execution_start", toolName: "pubmed_search", toolCallId: "call-1", args: { query: "common cold" } });
     for (const listener of this.listeners) listener({ type: "tool_execution_end", toolName: "pubmed_search", toolCallId: "call-1", result: "found candidate study", isError: false });
-    const assistant = { role: "assistant", content: [{ type: "text", text: `answer ${this.prompts.length}` }] };
+    const assistant = this.thinkingOnly
+      ? { role: "assistant", content: [{ type: "thinking", thinking: "先检索指南，再核对随机试验证据。" }], stopReason: "toolUse" }
+      : { role: "assistant", content: [{ type: "text", text: `answer ${this.prompts.length}` }] };
     for (const listener of this.listeners) listener({ type: "message_end", message: assistant });
     for (const listener of this.listeners) listener({ type: "agent_end", messages: [assistant] });
     for (const listener of this.listeners) listener({ type: "agent_settled" });
@@ -161,6 +164,34 @@ describe("Pi RPC clinician executor", () => {
     expect(healthArgs).not.toContain("quick-ebm-answer");
     expect(healthArgs).not.toContain("ebm-research");
     expect(healthArgs).not.toContain("clinical-report-writing");
+    await executor.dispose();
+  });
+
+  it("surfaces thinking-only assistant turns as quick-mode progress updates", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-rpc-thinking-"));
+    const cli = path.join(rootDir, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
+    await mkdir(path.dirname(cli), { recursive: true });
+    await writeFile(cli, "", "utf8");
+    await mkdir(path.join(rootDir, ".pi"), { recursive: true });
+    await writeFile(path.join(rootDir, ".pi", "models.json"), "{}\n", "utf8");
+    const executor = createPiRpcExecutor({
+      rootDir,
+      clientFactory: () => {
+        const client = new FakeRpcClient("rpc-thinking-1", rootDir);
+        client.thinkingOnly = true;
+        return client;
+      },
+    });
+    const progress: Array<{ text: string }> = [];
+    const result = await executor({
+      ...request(), researchMode: "quick", responseMode: "answer", thinkingLevel: "low", maxIterations: 8,
+    }, {
+      ...hooks(),
+      onProgress: (update) => progress.push({ text: update.text }),
+    });
+
+    expect(progress).toEqual([{ text: "先检索指南，再核对随机试验证据。" }]);
+    expect(result.message).toBe("answer 1");
     await executor.dispose();
   });
 

@@ -1365,8 +1365,13 @@ async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks:
         if (event.message.stopReason === "toolUse") {
           hooks.onProgress({ text, timestamp: new Date().toISOString() });
         }
+      } else {
+        const thinking = contentThinking(event.message.content);
+        if (thinking && event.message.stopReason === "toolUse") {
+          hooks.onProgress({ text: thinking, timestamp: new Date().toISOString() });
+        }
+        if (typeof event.message.errorMessage === "string") addTrace(trace("model.error", "模型服务请求失败", modelErrorSummary(event.message.errorMessage)));
       }
-      else if (typeof event.message.errorMessage === "string") addTrace(trace("model.error", "模型服务请求失败", modelErrorSummary(event.message.errorMessage)));
       return;
     }
     if (event.type === "agent_start") addTrace(trace("agent.started", "研究引擎已启动", ""));
@@ -1709,6 +1714,12 @@ function contentText(value: unknown): string {
   if (typeof value === "string") return value;
   if (!Array.isArray(value)) return "";
   return value.map((item) => isRecord(item) && item.type === "text" && typeof item.text === "string" ? item.text : "").join("");
+}
+
+function contentThinking(value: unknown): string {
+  if (!Array.isArray(value)) return "";
+  const thinking = value.map((item) => isRecord(item) && item.type === "thinking" && typeof item.thinking === "string" ? item.thinking : "").join("");
+  return thinking.replace(/\s+/g, " ").trim().slice(0, 160);
 }
 
 function trace(kind: string, label: string, detail: string): AgentTraceEvent {

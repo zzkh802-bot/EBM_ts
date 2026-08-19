@@ -31,7 +31,7 @@ const router = useRouter()
         >
           <span class="entry-choice-icon" aria-hidden="true">↗</span>
           <span class="entry-choice-overline">健康快速问答</span>
-          <strong>我是患者</strong>
+          <strong>健康问答</strong>
           <p>用容易理解的方式解答日常健康疑问，必要时提示何时该线下就医。</p>
           <em>{{ PATIENT_INTAKE_ENABLED ? '开始提问' : '暂未开放' }}</em>
         </button>

@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import MarkdownContent from '../components/report/MarkdownContent.vue'
+import RunActivity from '../components/evidence/RunActivity.vue'
 import SiteCredit from '../components/shell/SiteCredit.vue'
 import { agentService, uploadAttachment } from '../services'
 import { usePatientIntakeStore } from '../stores'
@@ -273,6 +274,15 @@ const handlePrimaryAction = () => {
                 <div v-if="message.role === 'assistant'" class="message-heading">
                   <strong>循医</strong>
                 </div>
+                <RunActivity
+                  v-if="message.role === 'assistant'"
+                  :trace="message.trace || []"
+                  :progress-updates="message.progressUpdates"
+                  :tools="message.tools"
+                  :pending="message.pending"
+                  :started-at="message.runStartedAt"
+                  :completed-at="message.runCompletedAt"
+                />
                 <p v-if="message.role === 'assistant' && message.pending" class="patient-answer-status" role="status">正在认真整理信息，请稍候…</p>
                 <div v-else-if="message.role === 'assistant'" class="markdown-content">
                   <MarkdownContent :markdown="message.content" />
