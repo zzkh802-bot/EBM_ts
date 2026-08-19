@@ -1,0 +1,4 @@
+interface:
+  display_name: "健康问答"
+  short_description: "将已读医学资料转为清晰、稳妥、友善且可执行的公众健康建议"
+  default_prompt: "Use $health-answer to provide a clear, evidence-informed health answer for the general public."

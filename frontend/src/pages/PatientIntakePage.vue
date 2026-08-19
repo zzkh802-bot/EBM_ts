@@ -1,24 +1,20 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import RunActivity from '../components/evidence/RunActivity.vue'
 import MarkdownContent from '../components/report/MarkdownContent.vue'
 import SiteCredit from '../components/shell/SiteCredit.vue'
 import { agentService, uploadAttachment } from '../services'
-import { usePatientIntakeStore, usePreferencesStore } from '../stores'
-import { PATIENT_FREE_CHAT_TURN_LIMIT, type RuntimeConfig } from '../types/domain'
+import { usePatientIntakeStore } from '../stores'
+import { PATIENT_FREE_CHAT_TURN_LIMIT } from '../types/domain'
 import { newId, nowIso } from '../utils/core'
 
 const router = useRouter()
 const intake = usePatientIntakeStore()
-const preferences = usePreferencesStore()
 const question = ref('')
 const busy = ref(false)
 const error = ref('')
 const feed = ref<HTMLElement | null>(null)
 const questionInput = ref<HTMLTextAreaElement | null>(null)
-const runtimeConfig = ref<RuntimeConfig | null>(null)
-const runtimeConfigError = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const medicalImageInput = ref<HTMLInputElement | null>(null)
 const attachmentError = ref('')
@@ -31,11 +27,6 @@ const freeChatComplete = computed(() => intake.userTurnCount >= PATIENT_FREE_CHA
 const hasConversation = computed(() => intake.active.messages.some((message) => message.role === 'user'))
 const activeHasConversation = computed(() => intake.active.messages.some((message) => message.role === 'user'))
 const researchCount = computed(() => intake.active.messages.filter((message) => message.role === 'user').length)
-const availableModels = computed(() => runtimeConfig.value?.models.filter((item) => item.available && !item.connection_provider) || [])
-const providers = computed(() => availableModels.value.filter((item, index, items) =>
-  items.findIndex((candidate) => candidate.provider === item.provider) === index,
-))
-const modelsForProvider = computed(() => availableModels.value.filter((item) => item.provider === preferences.provider))
 const primaryActionLabel = computed(() => {
   if (!busy.value) return '提问'
   return question.value.trim() ? '加入后续追问' : '停止本轮问答'
@@ -44,10 +35,6 @@ const primaryActionLabel = computed(() => {
 watch(() => intake.activeSessionId, () => {
   question.value = ''
   error.value = ''
-})
-watch(() => preferences.provider, () => {
-  if (modelsForProvider.value.some((item) => item.model === preferences.model)) return
-  preferences.model = modelsForProvider.value[0]?.model || ''
 })
 watch(() => intake.active.messages.length, async () => {
   await nextTick()
@@ -60,14 +47,6 @@ const scrollToLatest = async () => {
 }
 watch(() => intake.active.messages.length, () => { void scrollToLatest() })
 
-onMounted(async () => {
-  try {
-    runtimeConfig.value = await agentService.getRuntimeConfig()
-    preferences.applyRuntimeConfig(runtimeConfig.value)
-  } catch (reason) {
-    runtimeConfigError.value = reason instanceof Error ? reason.message : '无法读取服务器运行配置'
-  }
-})
 
 const addPendingFiles = (files: FileList | null, kind: PendingUpload['kind']) => {
   if (!files) return
@@ -120,8 +99,6 @@ const ask = async () => {
       question: text,
       ...(requestResearchSessionId ? { session_id: requestResearchSessionId } : {}),
       audience_mode: 'patient', thinking_level: 'low', research_mode: 'quick', search_enabled: true, response_mode: 'answer',
-      ...(preferences.provider ? { provider: preferences.provider } : {}),
-      ...(preferences.model ? { model: preferences.model } : {}),
       ...(attachmentIds.length ? { attachments: attachmentIds } : {}),
     }, signal.signal, {
       onStatus: (status) => {
@@ -207,16 +184,16 @@ const handlePrimaryAction = () => {
       <div class="patient-center">
         <section v-if="!activeHasConversation" class="hero-dp" aria-label="健康问答">
           <div class="hero-copy">
-            <span class="workspace-eyebrow">循医 · HEALTH INFO</span>
-            <div class="hero-title">从日常健康疑问，走到可靠的判断。</div>
-            <p>用容易理解的方式解答健康问题；答案不替代现场诊疗。最多 {{ PATIENT_FREE_CHAT_TURN_LIMIT }} 轮，每轮都会快速检索可靠信息。</p>
+            <span class="workspace-eyebrow">循医 · 健康问答</span>
+            <div class="hero-title">把健康疑问，说清楚一点。</div>
+            <p>你可以描述哪里不舒服、持续多久、有没有伴随症状。我们会尽量用容易理解的方式帮助你判断下一步；这里不能替代医生的面对面诊疗。</p>
           </div>
         </section>
 
         <form class="ask-bar" aria-label="健康问题输入区" @submit.prevent="ask()">
           <div class="mode-context" aria-live="polite">
-            <strong>日常健康问答</strong>
-            <span>快速模式：低推理、快速检索，直接输出容易理解的回答。</span>
+            <strong>说说你现在最关心的事</strong>
+            <span>如果方便，可以写下症状出现的时间、变化和让你担心的地方。</span>
           </div>
           <div class="composer-body">
             <textarea
@@ -231,32 +208,18 @@ const handlePrimaryAction = () => {
             <div class="attachment-tray" aria-label="本轮附件">
               <input ref="fileInput" type="file" multiple accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.gif,.txt,.md" hidden @change="addPendingFiles(($event.target as HTMLInputElement).files, 'document')" />
               <input ref="medicalImageInput" type="file" multiple accept=".png,.jpg,.jpeg,.webp,.gif" hidden @change="addPendingFiles(($event.target as HTMLInputElement).files, 'medical_image')" />
-              <button type="button" :disabled="busy || uploadingAttachments" @click="fileInput?.click()">上传附件</button>
-              <button type="button" :disabled="busy || uploadingAttachments" @click="medicalImageInput?.click()">上传医学图像</button>
+              <button type="button" :disabled="busy || uploadingAttachments" @click="fileInput?.click()">添加文件</button>
+              <button type="button" :disabled="busy || uploadingAttachments" @click="medicalImageInput?.click()">添加图片</button>
               <span v-for="(item, index) in pendingUploads" :key="`${item.file.name}-${index}`" class="attachment-chip">
-                {{ item.kind === 'medical_image' ? '医学图像 · ' : '' }}{{ item.file.name }}
+                {{ item.kind === 'medical_image' ? '图片 · ' : '' }}{{ item.file.name }}
                 <button type="button" aria-label="移除附件" @click="removePendingFile(index)">×</button>
               </span>
-              <small v-if="uploadingAttachments">正在上传附件；随后会并行进行 OCR/文字解析…</small>
+              <small v-if="uploadingAttachments">正在准备附件，请稍候…</small>
               <small v-if="attachmentError" class="attachment-error">{{ attachmentError }}</small>
             </div>
           </div>
-          <div class="composer-options" aria-label="问答选项">
-            <label class="runtime-select">
-              <span>服务</span>
-              <select v-model="preferences.provider" :disabled="busy || !providers.length">
-                <option v-for="item in providers" :key="item.provider" :value="item.provider">{{ item.provider_label }}</option>
-              </select>
-            </label>
-            <label class="runtime-select">
-              <span>模型</span>
-              <select v-model="preferences.model" :disabled="busy || !modelsForProvider.length">
-                <option v-for="item in modelsForProvider" :key="item.model" :value="item.model">{{ item.model_label }}</option>
-              </select>
-            </label>
-            <span class="composer-option active" aria-label="信息检索已开启">信息检索已开启</span>
-            <span class="composer-option" aria-label="快速模式">快速模式</span>
-            <span v-if="runtimeConfigError" class="runtime-error">{{ runtimeConfigError }}</span>
+          <div class="composer-options patient-composer-note" aria-label="使用提示">
+            <span>回答供健康信息参考，不代替诊断、处方或紧急救治。</span>
           </div>
           <button class="send-button" type="button" :aria-label="primaryActionLabel" @click="handlePrimaryAction">
             <svg v-if="!busy" width="27" height="27" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
@@ -297,7 +260,7 @@ const handlePrimaryAction = () => {
               <div class="conversation-context-copy">
                 <span>健康问答</span>
                 <strong>{{ intake.active.title }}</strong>
-                <small>第 {{ researchCount }} 问 · 共 {{ intake.userTurnCount }}/{{ PATIENT_FREE_CHAT_TURN_LIMIT }} 轮</small>
+                <small>已提问 {{ researchCount }} 次 · 本次最多 {{ PATIENT_FREE_CHAT_TURN_LIMIT }} 次</small>
               </div>
             </header>
             <article
@@ -310,16 +273,8 @@ const handlePrimaryAction = () => {
                 <div v-if="message.role === 'assistant'" class="message-heading">
                   <strong>循医</strong>
                 </div>
-                <RunActivity
-                  v-if="message.role === 'assistant'"
-                  :trace="message.trace || []"
-                  :progress-updates="message.progressUpdates"
-                  :tools="message.tools"
-                  :pending="message.pending"
-                  :started-at="message.runStartedAt"
-                  :completed-at="message.runCompletedAt"
-                />
-                <div v-if="message.role === 'assistant' && !message.pending" class="markdown-content">
+                <p v-if="message.role === 'assistant' && message.pending" class="patient-answer-status" role="status">正在认真整理信息，请稍候…</p>
+                <div v-else-if="message.role === 'assistant'" class="markdown-content">
                   <MarkdownContent :markdown="message.content" />
                 </div>
                 <p v-else>{{ message.content }}</p>
@@ -340,4 +295,6 @@ const handlePrimaryAction = () => {
 
 <style scoped>
 .patient-error { margin: 0 0 12px; color: var(--danger); font-size: 13px; }
+.patient-answer-status { margin: 0; color: var(--ink-soft); font-size: 15px; line-height: 1.7; }
+.patient-answer-status::before { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--jade); content: ""; animation: evidence-pulse 1.4s ease-in-out infinite; }
 </style>

@@ -5,7 +5,7 @@ import { newId, nowIso, safeRead, safeWrite, STORAGE_KEYS } from '../utils/core'
 
 const welcome = (): PatientMessage => ({
   id: newId('patient-welcome'), role: 'assistant', createdAt: nowIso(),
-  content: `你好，这里可以进行最多 ${PATIENT_FREE_CHAT_TURN_LIMIT} 轮的日常健康问答。本窗口会检索可靠信息并用容易理解的方式回答；连续提问时会结合本窗口已经说过的内容。有什么想了解的？`,
+  content: `你好，这里可以进行日常健康问答。你可以说说哪里不舒服、持续多久、有没有变化或让你担心的地方；我会尽量用容易理解的方式帮你理清下一步。回答不能替代医生面对面的诊疗；本次对话最多可以继续问 ${PATIENT_FREE_CHAT_TURN_LIMIT} 次。`,
 })
 
 const createSession = (): PatientIntakeSession => {

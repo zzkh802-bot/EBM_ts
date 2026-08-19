@@ -146,15 +146,21 @@ describe("Pi RPC clinician executor", () => {
 
     await executor(request(), hooks());
     await executor({ ...request(), researchMode: "quick", responseMode: "answer", thinkingLevel: "low", maxIterations: 8 }, hooks());
+    await executor({ ...request(), audienceMode: "patient", researchMode: "quick", responseMode: "answer", thinkingLevel: "low", maxIterations: 8 }, hooks());
 
     const expertArgs = argumentsByMode[0]!.join(" ");
     const quickArgs = argumentsByMode[1]!.join(" ");
+    const healthArgs = argumentsByMode[2]!.join(" ");
     expect(expertArgs).toContain("ebm-research");
     expect(expertArgs).toContain("clinical-report-writing");
     expect(expertArgs).not.toContain("quick-ebm-answer");
     expect(quickArgs).toContain("quick-ebm-answer");
     expect(quickArgs).not.toContain("ebm-research");
     expect(quickArgs).not.toContain("clinical-report-writing");
+    expect(healthArgs).toContain("health-answer");
+    expect(healthArgs).not.toContain("quick-ebm-answer");
+    expect(healthArgs).not.toContain("ebm-research");
+    expect(healthArgs).not.toContain("clinical-report-writing");
     await executor.dispose();
   });
 

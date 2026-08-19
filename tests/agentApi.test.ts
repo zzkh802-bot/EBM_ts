@@ -227,6 +227,18 @@ describe("循医研究服务 API", () => {
     expect(prompt).not.toContain("clinical-report-writing skill");
   });
 
+  it("uses the dedicated health-answer skill while retaining private source traceability", () => {
+    const prompt = buildAgentPrompt(promptInput({ audienceMode: "patient", researchMode: "quick", thinkingLevel: "low", responseMode: "answer", maxIterations: 8 }));
+    expect(prompt).toContain("health-answer skill 已随会话完整加载");
+    expect(prompt).toContain("health-answer skill 的面向公众写作、安全边界和内部 Source ID 规则优先");
+    expect(prompt).toContain("发送前硬性检查：判断、原因和边界写成完整段落");
+    expect(prompt).toContain("自我照护步骤或安全警示需要核对时，可以使用一组同类的 3–5 项简洁列表");
+    expect(prompt).toContain("不得出现“下面分两部分来说”“简单总结”");
+    expect(prompt).not.toContain("患者端呈现规则（优先于本提示中其他面向临床读者的写法）");
+    expect(prompt).toContain("<ref source_ids=");
+    expect(hideQuickAnswerReferences("可以先休息和补充水分。[1]\n\n## 参考文献\n\n1. 内部来源")).toBe("可以先休息和补充水分。");
+  });
+
   it("turns one or more quick-mode source IDs into numbered references without evidence records", async () => {
     const sessionDir = await mkdtemp(path.join(os.tmpdir(), "ebm-quick-references-"));
     const guideline = await archiveSource({
