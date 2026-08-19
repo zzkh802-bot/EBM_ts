@@ -13,6 +13,8 @@ data/pi-sessions*/
 data/pi-agent*/
 data/pi-patient-intake/
 data/pi-patient-sessions/
+data/pi-patient-research/
+data/pi-patient-research-sessions/
 data/patient-records/
 data/agent-runs/
 data/benchmark_reports/
