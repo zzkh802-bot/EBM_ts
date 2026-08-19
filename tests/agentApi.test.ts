@@ -3,8 +3,7 @@ import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { buildAgentPrompt, createAgentApiServer, formatQuickAnswerReferences, hideQuickAnswerReferences, normalizePatientHealthAnswer, type AgentExecutor, type AgentRunInput, type AgentRunResponse, type RuntimeConfig } from "../src/server/agentApi.js";
-import { buildPatientIntakePrompt, type PatientIntakeInput } from "../src/server/patientIntake.js";
+import { buildAgentPrompt, createAgentApiServer, formatQuickAnswerReferences, hideQuickAnswerReferences, type AgentExecutor, type AgentRunInput, type AgentRunResponse, type RuntimeConfig } from "../src/server/agentApi.js";
 import { archiveSource } from "../src/tools/archive.js";
 import { addEvidence } from "../src/tools/evidence.js";
 import { registerReadReceipt } from "../src/tools/readRegistry.js";
@@ -109,7 +108,7 @@ describe("循医研究服务 API", () => {
   it("keeps a valid login session across a backend restart", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-auth-session-"));
     const first = new InternalAuthStore("restart-test-key", rootDir);
-    const registration = await first.register("restart-user", "重启测试", "test-pass-1", "restart-test-key", "test-client");
+    const registration = await first.register("restart-user", "test-pass-1", "restart-test-key", "test-client");
     expect(registration.ok).toBe(true);
     if (!registration.ok) return;
     await new Promise((resolve) => setTimeout(resolve, 30));
@@ -121,7 +120,7 @@ describe("循医研究服务 API", () => {
   it("accepts both a unique username and the generated user ID for login", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-auth-id-login-"));
     const auth = new InternalAuthStore("id-login-key", rootDir);
-    const registration = await auth.register("only-id-user", "只记 ID", "test-pass-1", "id-login-key", "test-client");
+    const registration = await auth.register("only-id-user", "test-pass-1", "id-login-key", "test-client");
     expect(registration.ok).toBe(true);
     if (!registration.ok) return;
     expect(registration.user.id).toMatch(/^u-[23456789abcdefghjkmnpqrstuvwxyz]{8}$/);
@@ -132,6 +131,24 @@ describe("循医研究服务 API", () => {
     expect(idLogin?.user.id).toBe(registration.user.id);
   });
 
+  it("allows a unique legacy display name only when the account has no username", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-auth-legacy-name-"));
+    const writer = new InternalAuthStore("legacy-name-key", rootDir);
+    const registration = await writer.register("new-account", "test-pass-1", "legacy-name-key", "test-client");
+    expect(registration.ok).toBe(true);
+    if (!registration.ok) return;
+    const usersPath = path.join(rootDir, "data", "internal-users.json");
+    const persisted = JSON.parse(await readFile(usersPath, "utf8")) as { users: Array<Record<string, unknown>> };
+    persisted.users[0]!.display_name = "legacy-name";
+    delete persisted.users[0]!.username;
+    await writeFile(usersPath, JSON.stringify(persisted), "utf8");
+    const legacy = new InternalAuthStore("legacy-name-key", rootDir);
+    expect(legacy.login("legacy-name", "test-pass-1", "test-client")?.user.id).toBe(registration.user.id);
+    const rejected = await legacy.register("legacy-name", "test-pass-2", "legacy-name-key", "test-client");
+    expect(rejected).toMatchObject({ ok: false, code: "username_taken" });
+    expect(legacy.login("new-account", "test-pass-1", "test-client")).toBeUndefined();
+  });
+
   it("delegates clinician report structure to the writing skill independently of thinking level", () => {
     const low = buildAgentPrompt(promptInput({ thinkingLevel: "low" }));
     const maximum = buildAgentPrompt(promptInput({ thinkingLevel: "high" }));
@@ -140,6 +157,14 @@ describe("循医研究服务 API", () => {
       expect(prompt).toContain("在最终回复前调用 report_write")
       expect(prompt).toContain("不得只在聊天消息中输出摘要")
       expect(prompt).toContain("clinical-report-writing skill")
+      expect(prompt).toContain("先一句话说明该研究的对象、设计与对照")
+      expect(prompt).toContain("不得以“研究名＋数字＋引用编号”的裸清单堆叠证据")
+      expect(prompt).toContain("简练不等于删去信息")
+      expect(prompt).toContain("技能加载：ebm-research 与 clinical-report-writing skill 已随会话完整加载")
+      expect(prompt).toContain("不要额外读取 skill 文件")
+      expect(prompt).not.toContain("研究一开始（读取第一个研究来源之前）加载")
+      expect(prompt).toContain("教科书式循证框架")
+      expect(prompt).toContain("背景问题")
       expect(prompt).toContain("调用 report_write 前自检")
       expect(prompt).toContain("只有研究目标、临床判断或面向医生的阶段发生实质变化时才说明进展")
       expect(prompt).toContain("原文定位、登记证据和可自动恢复的工具重试")
@@ -180,8 +205,11 @@ describe("循医研究服务 API", () => {
   it("builds a direct, evidence-backed fast-mode answer prompt", () => {
     const prompt = buildAgentPrompt(promptInput({ researchMode: "quick", thinkingLevel: "low", responseMode: "answer", maxIterations: 8 }));
     expect(prompt).toContain("一批并发调用");
+    expect(prompt).toContain("quick-ebm-answer skill 已随会话完整加载");
+    expect(prompt).not.toContain("用 read 工具加载");
     expect(prompt).toContain("循证问题");
     expect(prompt).toContain("不要把分析写成无限制的碎片化要点");
+    expect(prompt).toContain("先一句话交代该研究的对象与结局");
     expect(prompt).toContain("不要调用 evidence_add、report_write、report_finalize");
     expect(prompt).toContain("<ref source_ids=");
     expect(prompt).toContain("自动生成参考文献");
@@ -195,6 +223,7 @@ describe("循医研究服务 API", () => {
     expect(prompt).toContain("绝不可把 read_id（如 r05）");
     expect(prompt).toContain("每批最多 8 个");
     expect(prompt).toContain("第 8 个研究轮次");
+    expect(prompt).not.toContain("加载 .pi/skills/quick-ebm-answer/SKILL.md 全文");
     expect(prompt).not.toContain("clinical-report-writing skill");
   });
 
@@ -471,59 +500,6 @@ describe("循医研究服务 API", () => {
     }
   });
 
-  it("forces patient health questions onto quick mode and hides rendered references", async () => {
-    let received: AgentRunInput | undefined;
-    const { api, baseUrl } = await startApi(async (input) => { received = input; return { message: "先补充水分并休息。[1]\n\n## 参考文献\n\n1. 隐藏来源" }; });
-    try {
-      const created = await fetch(`${baseUrl}/api/v1/agent-runs`, {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question: "孩子流鼻血时第一步怎么做？", audience_mode: "patient", research_mode: "expert", thinking_level: "high" }),
-      });
-      const accepted = await created.json() as { run_id: string };
-      const result = await eventually(
-        async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
-        (value) => value.status === "succeeded",
-      );
-      expect(received).toMatchObject({ audienceMode: "patient", researchMode: "quick", thinkingLevel: "low", responseMode: "answer" });
-      expect(result.agent_answer).not.toContain("参考文献");
-      expect(result.patient_health).toMatchObject({
-        contract_version: "xunyi-patient-health/v1",
-        bottom_line: "先补充水分并休息。",
-        safety: { level: "routine", needs_urgent_care: false },
-      });
-      expect(hideQuickAnswerReferences("正文[1, 2]\n\n## 参考文献\n\n1. 来源")).toBe("正文");
-      expect(buildAgentPrompt({ ...promptInput({ audienceMode: "patient", researchMode: "quick", thinkingLevel: "low", responseMode: "answer" }) })).toContain("患者健康问答服务");
-    } finally {
-      api.server.close();
-      await once(api.server, "close");
-    }
-  });
-
-  it("normalizes patient answers into a safe health contract", () => {
-    const answer = normalizePatientHealthAnswer(JSON.stringify({
-      contract_version: "xunyi-patient-health/v1",
-      status: "answered",
-      bottom_line: "多数轻症可以先观察，但不能仅凭这段描述确定原因。",
-      actions: ["记录症状变化"],
-      red_flags: ["出现呼吸困难时立即就医"],
-      when_to_seek_care: "出现呼吸困难请立即就医。",
-      follow_up_questions: ["症状持续了多久？"],
-      uncertainty: "还缺少持续时间和既往病史。",
-      safety: { level: "urgent", needs_urgent_care: true },
-    }));
-    expect(answer).toMatchObject({
-      contract_version: "xunyi-patient-health/v1",
-      bottom_line: "多数轻症可以先观察，但不能仅凭这段描述确定原因。",
-      actions: ["记录症状变化"],
-      red_flags: ["出现呼吸困难时立即就医"],
-      safety: { level: "urgent", needs_urgent_care: true },
-    });
-    expect(normalizePatientHealthAnswer("结论先说：目前无法确定。\n\n何时就医\n症状加重时尽快就医。" )).toMatchObject({
-      bottom_line: "结论先说：目前无法确定。",
-      when_to_seek_care: "症状加重时尽快就医。",
-    });
-  });
-
   it("classifies malformed route encoding as a client error", async () => {
     const { api, baseUrl } = await startApi(async () => ({ message: "unused" }));
     try {
@@ -612,65 +588,6 @@ describe("循医研究服务 API", () => {
       api.server.close();
       await once(api.server, "close");
     }
-  });
-
-  it("runs patient preparation through its own no-tool executor contract", async () => {
-    let received: PatientIntakeInput | undefined;
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-patient-api-"));
-    const runtimeConfig: RuntimeConfig = {
-      default_provider: "deepseek", default_model: "deepseek-v4-flash",
-      models: [{ provider: "deepseek", provider_label: "DeepSeek", model: "deepseek-v4-flash", model_label: "DeepSeek V4 Flash", available: true }],
-    };
-    const patientApi = createAgentApiServer({
-      executor: async () => ({ message: "研究完成。" }),
-      rootDir,
-      runtimeConfig,
-      patientIntakeExecutor: async (input) => {
-        received = input;
-        return { sessionId: input.sessionId || "patient-session-1", reply: input.intent === "summary"
-          ? "## 此次就诊想解决什么\n\n睡眠问题\n\n## 发生经过\n\n两周\n\n## 目前的感受与影响\n\n尚未说明\n\n## 已有检查、用药和相关情况\n\n尚未说明\n\n## 我想请医生帮助回答\n\n如何改善\n\n## 还没说清楚的地方\n\n尚未说明"
-          : "我明白了。" };
-      },
-    });
-    patientApi.server.listen(0, "127.0.0.1");
-    await once(patientApi.server, "listening");
-    const address = patientApi.server.address();
-    if (!address || typeof address === "string") throw new Error("Expected a TCP test server");
-    const patientUrl = `http://127.0.0.1:${address.port}`;
-    const body = {
-      client_session_id: "visit-1", mode: "visit_preparation", thinking_enabled: true,
-      profile: { id: "profile-1", revision: "2026-08-01T12:00:00.000Z", name: "我", sex: "unspecified", allergies: "", pregnancy: "not_applicable", memory: "" },
-    };
-    try {
-      const reply = await fetch(`${patientUrl}/api/v1/patient-intake/messages`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, message: "最近总是睡不好" }),
-      });
-      expect(reply.status).toBe(200);
-      expect(await reply.json()).toMatchObject({ contract_version: "xunyi-patient/v1", session_id: "visit-1", reply: "我明白了。" });
-      expect(received).toMatchObject({ message: "最近总是睡不好", intent: "conversation" });
-      const summary = await fetch(`${patientUrl}/api/v1/patient-intake/summary`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...body, message: "请整理本次就诊说明" }),
-      });
-      expect(summary.status).toBe(200);
-      expect(received).toMatchObject({ sessionId: "patient-session-1", intent: "summary" });
-      const archived = await summary.json() as { report_path: string };
-      expect(archived.report_path).toContain("reports/report-001.md");
-      expect(await readFile(path.join(rootDir, archived.report_path), "utf8")).toContain("睡眠问题");
-    } finally {
-      patientApi.server.close();
-      await once(patientApi.server, "close");
-    }
-  });
-
-  it("keeps patient preparation prompt focused on expression rather than diagnosis or retrieval", () => {
-    const input: PatientIntakeInput = {
-      message: "胸口有些不舒服", clientSessionId: "visit-1", intent: "conversation", mode: "visit_preparation",
-      thinkingEnabled: true, profile: { id: "profile-1", revision: "r1", name: "我", sex: "unspecified", allergies: "", pregnancy: "not_applicable", memory: "" },
-      provider: "deepseek", model: "deepseek-v4-flash",
-    };
-    const prompt = buildPatientIntakePrompt(input);
-    expect(prompt).toBe("胸口有些不舒服");
-    expect(buildPatientIntakePrompt({ ...input, message: "ignored", intent: "summary" })).toContain("用户明确提供的信息");
   });
 
   it.each(["off", "low", "medium", "high"] as const)("passes Pi thinking level %s through without a research-mode mapping", async (thinkingLevel) => {

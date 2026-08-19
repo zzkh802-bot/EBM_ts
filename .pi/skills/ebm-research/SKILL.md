@@ -115,3 +115,98 @@ Prefer `research_frame_scratchpad_append` over full frame rewrites for lightweig
 10. Before stopping retrieval, check whether at least one source directly matches the population, intervention, comparator, and outcome requested. If not, state that the direct comparison is insufficient; do not let a larger body of indirect evidence silently replace it.
 11. Before `report_write`, create an internal citation map from evidence IDs to numbered real references. In the report body and reference list, cite as `[1]`, `[2]` with real source text; pass the raw evidence IDs only through `report_write.references`.
 12. Verify all claims before final answer.
+
+### 附：五个步骤的循证示范（社区获得性肺炎）
+
+急诊科某患者，男，65岁，既往健康，主诉咳嗽、黄色痰、气短、发烧、缺氧，未吸氧时氧饱和度为86%，右下肺可闻支气管呼吸音，白细胞计数升高，胸片示实变，入住普通内科，诊断为社区获得性肺炎，并被安排做相关检查。值班住院医生已使用抗生素，但犹豫是否应该合用皮质类固醇。
+
+## 第一步 将临床问题转换为科学问题
+
+科学问题包括4要素：患者、干预措施、比较措施和干预结果，简称PICO。
+对于社区获得性肺炎患者(P)，抗生素(I)合用皮质类固醇治疗(I)能否降低死亡风险(O)，进入重症监护室(ICU)的风险(O)和插管治疗的风险(O)？
+
+## 第二步 检索证据
+
+## 1. 用于临床决策的数据库
+
+"6S"证据金字塔（从顶到底）：证据组织、综合证据、系统评价摘要及评论、系统评价、原始研究摘要及评论、原始研究。
+对应数据库：
+证据组织：ZynxCare, ProVation MD
+综合证据：UpToDate, Best Practice, G-I-N/NGC
+系统评价摘要及评论：ACP Journal Club
+● 系统评价：CDSR, PubMed
+原始研究摘要及评论：ACP Journal Club
+原始研究：CENTRAL, PubMed
+其他：TRIP, Clinical Queries
+
+## 2. 检索策略
+
+由于当时的指南没有提及合用皮质类固醇治疗社区获得性肺炎，所以作者首先检索系统评价。作者检索PubMed的Clinical queries，使用术语Corticosteroids, Pneumonia和Adults。
+
+## 3. 筛选结果
+
+通过阅读标题、摘要和全文筛选，发现Ann Intern Med. 2015发表的一篇文章符合要求：
+Siemieniuk RA, Meade MO, Alonso-Coello P, et al. Corticosteroid Therapy for Patients Hospitalized With Community-Acquired Pneumonia: A Systematic Review and Metaanalysis. Ann Intern Med. 2015;163(7):519-528. doi:10.7326/M15-0715
+
+第三步 评价证据
+
+## 基本内容： 一、证据的真实性 二、证据的重要性 三、证据的适用性
+
+## 一、证据的真实性
+
+## 1. 该系统评价纳入的是否为随机对照试验？
+
+RESULTS: We included a total of 13 randomized, controlled trials (2005 patients), with 9 studies not included in the previous review.
+
+## 2. 该系统评价是否全面系统检索了有关文献？
+
+METHODS Data Sources and Searches: A previous Cochrane review with similar inclusion criteria identified studies up to December 2010 (13). Using the Medical Subject Headings terms "pneumonia" and "corticosteroid", we replicated the search strategy of that review (13) for MEDLINE, EMBASE, and the Cochrane Central Register of Controlled Trials (13) from 1 January 2010 to 24 May 2015. We manually searched the reference lists of included studies and existing systematic reviews as well as all articles citing the included studies on Google Scholar.
+
+## 3. 该系统评价是否对每个研究的真实性进行了评估？
+
+Two teams of 2 reviewers independently screened titles and abstracts in duplicate, obtained full texts of articles that either reviewer considered potentially eligible, and determined eligibility from the full texts.
+
+Two reviewers independently extracted data and assessed risk of bias. For all phases of the project, reviewers resolved disagreements by discussion and, as necessary, in consultation with a third reviewer.
+
+We used the Grading of Recommendations Assessment, Development, and Evaluation (GRADE) system to assess the certainty of evidence (also known as quality of evidence or confidence in evidence) for each outcome and for the entire body of evidence (18). Certainty of evidence takes into consideration the study design (in this case, randomized clinical trials); risk of bias, precision, consistency, and directness of the evidence; and the possibility of publication bias. A modified Cochrane instrument (19) provided the structure for assessing the risk of bias of the primary studies.
+
+## 4. 该系统评价采用个体患者数据或汇总数据分析？
+
+采用个体患者数据制作的系统评价结论比用汇总数据制作系统评价的结论更可靠。该系统评价收集的是随机对照试验，故属于汇总数据分析。
+
+## 二、证据的重要性
+
+## 1. 每个独立研究的结果是否一致？
+
+合用皮质类固醇组5.3%的患者死亡，单纯用抗生素组7.9%的患者死亡。
+
+## 2. 治疗效果有多大？
+
+重症患者的绝对危险度减少率（ARR）为：-0.15（95%CI：-0.22，-0.08），即每治疗100例，减少死亡15例。
+轻症患者ARR为：0.00（95%CI：-0.02，0.02）
+全部患者ARR为：0.03（95%CI：-0.05，-0.01）
+用需要治疗的人数（NNT）表示，重症患者的NNT=1/|-0.15|=6.7(4.6,12.5)，即平均每治67个患者，可救活10个。
+进入ICU的风险和插管治疗的风险，合用抗生素和皮质类固醇治疗组也有更好的效果。
+
+## 三、证据的适用性
+
+## 2. 在该环境中治疗可行吗？
+
+抗生素合用皮质类固醇在一般医院均可行。
+
+## 3. 该患者获得的潜在利和弊是什么？
+
+对于该患者，利是减少死亡的风险、进入ICU的风险和插管治疗的风险，弊是长期使用皮质类固醇有副作用，如胃溃疡、高血压和糖尿病等。很明显，抗生素合用皮质类固醇对该患者利大于弊。
+
+## 4. 该患者的价值观和期望是什么？
+
+临床医生应根据所获得的证据、自己的经验，并征求患者的意见制定科学的临床决策。
+
+## 第四步 应用证据
+
+通过上述严格评价，可以认为该系统评价提供的证据是真实的、有重要临床意义，并且适用于该患者，故可制定相应的治疗方案。
+
+## 第五步：后效评价
+
+1. 用循证医学的原则对前面4个步骤进行分析，找出成功经验和失败教训，以改善下一次的诊治水平。
+2. 经过治疗，疗效如何，有何不良反应？患者和家属对治疗有何评价等。

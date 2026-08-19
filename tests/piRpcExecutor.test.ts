@@ -128,6 +128,36 @@ describe("Pi RPC clinician executor", () => {
     await executor.dispose();
   });
 
+  it("loads separate skills for quick and expert mode", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-rpc-skills-"));
+    const cli = path.join(rootDir, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
+    await mkdir(path.dirname(cli), { recursive: true });
+    await writeFile(cli, "", "utf8");
+    await mkdir(path.join(rootDir, ".pi"), { recursive: true });
+    await writeFile(path.join(rootDir, ".pi", "models.json"), "{}\n", "utf8");
+    const argumentsByMode: string[][] = [];
+    const executor = createPiRpcExecutor({
+      rootDir,
+      clientFactory: (options) => {
+        argumentsByMode.push(options.args);
+        return new FakeRpcClient("rpc-skills-client", rootDir);
+      },
+    });
+
+    await executor(request(), hooks());
+    await executor({ ...request(), researchMode: "quick", responseMode: "answer", thinkingLevel: "low", maxIterations: 8 }, hooks());
+
+    const expertArgs = argumentsByMode[0]!.join(" ");
+    const quickArgs = argumentsByMode[1]!.join(" ");
+    expect(expertArgs).toContain("ebm-research");
+    expect(expertArgs).toContain("clinical-report-writing");
+    expect(expertArgs).not.toContain("quick-ebm-answer");
+    expect(quickArgs).toContain("quick-ebm-answer");
+    expect(quickArgs).not.toContain("ebm-research");
+    expect(quickArgs).not.toContain("clinical-report-writing");
+    await executor.dispose();
+  });
+
   it("keeps one native RPC process for consecutive turns in the same session", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-rpc-"));
     const cli = path.join(rootDir, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");

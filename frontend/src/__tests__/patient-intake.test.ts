@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { usePatientIntakeStore } from '../stores'
 import { STORAGE_KEYS } from '../utils/core'
-import { normalizePatientHealthAnswer } from '../utils/patientHealth'
 
 beforeEach(() => {
   localStorage.clear()
@@ -48,21 +47,6 @@ describe('患者健康问答状态', () => {
     intake.add(userMessage('ok', '流鼻血怎么办'))
     intake.add(userMessage('failed', '服务失败的问题', true))
     expect(intake.userTurnCount).toBe(1)
-  })
-
-  it('normalizes the patient health contract for the card renderer', () => {
-    const answer = normalizePatientHealthAnswer({
-      contract_version: 'xunyi-patient-health/v1',
-      bottom_line: '目前可以先观察。',
-      actions: ['记录变化'],
-      red_flags: ['出现明显呼吸困难时尽快就医'],
-      when_to_seek_care: '症状加重时就医。',
-      follow_up_questions: [],
-      uncertainty: '还缺少持续时间。',
-      safety: { level: 'prompt_medical_review', needs_urgent_care: false },
-    })
-    expect(answer).toMatchObject({ bottom_line: '目前可以先观察。', safety: { level: 'prompt_medical_review' } })
-    expect(normalizePatientHealthAnswer(undefined, '只有一段旧版文本')).toMatchObject({ bottom_line: '只有一段旧版文本' })
   })
 
   it('patches a message and records the research session id', () => {

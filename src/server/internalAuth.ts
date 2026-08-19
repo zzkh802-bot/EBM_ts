@@ -42,18 +42,17 @@ export class InternalAuthStore {
 
   get enabled(): boolean { return Boolean(this.accessKey); }
 
-  async register(usernameValue: unknown, displayNameValue: unknown, passwordValue: unknown, inviteValue: unknown, clientKey = "unknown"): Promise<RegistrationResult> {
+  async register(usernameValue: unknown, passwordValue: unknown, inviteValue: unknown, clientKey = "unknown"): Promise<RegistrationResult> {
     if (!this.allowAttempt(clientKey)) return { ok: false, code: "invalid_invite" };
     if (!this.accessKey || !constantTimeEqual(inviteValue, this.accessKey)) return { ok: false, code: "invalid_invite" };
     if (typeof passwordValue !== "string" || passwordValue.length < PASSWORD_MIN_LENGTH || passwordValue.length > 256) return { ok: false, code: "invalid_password" };
     const username = normalizeUsername(usernameValue);
     if (!username) return { ok: false, code: "invalid_username" };
-    if (this.userByUsername(username)) return { ok: false, code: "username_taken" };
+    if (this.userByUsername(username) || this.userByLegacyDisplayName(username)) return { ok: false, code: "username_taken" };
     const id = this.newUserId();
-    const displayName = normalizeDisplayName(displayNameValue);
     const salt = randomBytes(16).toString("hex");
     const stored: StoredUser = {
-      id, username, ...(displayName ? { display_name: displayName } : {}), salt,
+      id, username, salt,
       password_hash: hashPassword(passwordValue, salt), created_at: new Date().toISOString(),
     };
     this.users.set(id, stored);
@@ -67,7 +66,8 @@ export class InternalAuthStore {
   login(usernameOrIdValue: unknown, passwordValue: unknown, clientKey = "unknown"): { token: string; user: InternalUser } | undefined {
     if (!this.allowAttempt(clientKey) || typeof passwordValue !== "string") return undefined;
     const username = normalizeUsername(usernameOrIdValue);
-    const stored = (username ? this.userByUsername(username) : undefined) ?? this.users.get(normalizeUserId(usernameOrIdValue) ?? "");
+    const stored = (username ? (this.userByUsername(username) ?? this.userByLegacyDisplayName(username)) : undefined)
+      ?? this.users.get(normalizeUserId(usernameOrIdValue) ?? "");
     if (!stored || !verifyPassword(passwordValue, stored.salt, stored.password_hash)) return undefined;
     return this.issueSession(toPublicUser(stored));
   }
@@ -105,6 +105,11 @@ export class InternalAuthStore {
 
   private userByUsername(username: string): StoredUser | undefined {
     return [...this.users.values()].find((user) => user.username === username);
+  }
+
+  private userByLegacyDisplayName(username: string): StoredUser | undefined {
+    const matches = [...this.users.values()].filter((user) => !user.username && normalizeUsername(user.display_name) === username);
+    return matches.length === 1 ? matches[0] : undefined;
   }
 
   private issueSession(user: InternalUser): { token: string; user: InternalUser } {
@@ -202,11 +207,6 @@ export function normalizeUsername(value: unknown): string | undefined {
   return USERNAME_PATTERN.test(username) ? username : undefined;
 }
 
-function normalizeDisplayName(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const displayName = value.trim().replace(/\s+/g, " ");
-  return displayName ? displayName.slice(0, 80) : undefined;
-}
 
 function toPublicUser(user: StoredUser): InternalUser {
   return { id: user.id, ...(user.username ? { username: user.username } : {}), ...(user.display_name ? { display_name: user.display_name } : {}) };

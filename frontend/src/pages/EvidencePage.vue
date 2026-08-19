@@ -11,6 +11,7 @@ import ReportRenderer from '../components/report/ReportRenderer.vue'
 import PdfDocumentViewer from '../components/evidence/PdfDocumentViewer.vue'
 import RunActivity from '../components/evidence/RunActivity.vue'
 import FeedbackPanel from '../components/evidence/FeedbackPanel.vue'
+import SiteCredit from '../components/shell/SiteCredit.vue'
 import { goodCases } from '../data/goodCases'
 import { useAccountConnection } from '../composables/useAccountConnection'
 import { useResearchDocuments } from '../composables/useResearchDocuments'
@@ -339,13 +340,13 @@ const handlePrimaryAction = () => {
 <template>
   <div class="workspace-layout" :class="{ 'document-open': Boolean(selectedConversationFile) }">
     <div class="workspace-center">
-      <section v-if="!hasConversation" class="hero-dp" aria-label="循医工作台">
+<section v-if="!hasConversation" class="hero-dp" aria-label="循医工作台">
         <div class="hero-copy">
           <span class="workspace-eyebrow">循医 · EVIDENCE WORKBOOK</span>
           <div class="hero-title">从临床问题，走到可追溯的判断。</div>
           <p>将文献、指南与临床证据编织成一份可复核的研究记录。</p>
         </div>
-
+        <SiteCredit placement="hero" />
       </section>
 
       <form class="ask-bar" aria-label="循医输入区" @submit.prevent="submit()">

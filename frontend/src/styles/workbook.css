@@ -189,37 +189,38 @@ a { color: var(--evidence); }
 .entry-choice em::after { padding-left: 7px; content: '→'; }
 .entry-choice:disabled em::after { content: ''; }
 .site-credit { margin: 0; color: var(--ink-faint); font-family: var(--sans); font-size: 11px; line-height: 1.75; }
-.site-credit--patient-rail { margin-top: 30px; padding: 13px 10px; border-top: 1px solid var(--line); }
+.site-credit--hero { margin-top: 30px; max-width: 520px; }
+.site-credit--patient-rail { margin-top: 30px; padding: 14px 12px; border: 1px solid var(--accent-border); border-radius: var(--radius-btn); background: rgba(255, 253, 247, .72); color: var(--ink-soft); font-size: 12px; }
 .site-credit--doctor-rail { margin-top: auto; padding: 12px 2px 2px; border-top: 1px solid var(--line); font-size: 9px; line-height: 1.8; text-align: center; }
 .entry-foot { margin-top: 22px; color: var(--ink-faint); font-size: 12px; text-align: center; }
 
 .patient-page {
   --paper: #fdf8ee;
   --paper-bright: #fffdf7;
-  --paper-muted: #f5ecdb;
+  --paper-muted: #f3e9d5;
   --ink: #3c3226;
-  --ink-soft: #6f6150;
-  --ink-faint: #988a72;
-  --line: rgba(140, 104, 52, .16);
-  --line-strong: rgba(140, 104, 52, .28);
-  --jade: #b0783a;
+  --ink-soft: #655746;
+  --ink-faint: #85735a;
+  --line: rgba(140, 104, 52, .24);
+  --line-strong: rgba(140, 104, 52, .4);
+  --jade: #a06a2c;
   --jade-soft: #f6ecd8;
-  --evidence: #8f6f34;
+  --evidence: #7d5c29;
   --evidence-soft: #f4ead4;
   --amber: #c89a45;
   --danger: #b04f45;
   --success: #7d7a2f;
   --shadow: 0 18px 42px rgba(112, 86, 48, .10);
-  --accent-soft: rgba(176, 120, 58, .14);
-  --accent-border: var(--accent-border);
-  --accent-strong: rgba(176, 120, 58, .42);
-  --shadow-card: 0 6px 18px rgba(112, 86, 48, .08);
+  --accent-soft: rgba(160, 106, 44, .14);
+  --accent-border: rgba(160, 106, 44, .26);
+  --accent-strong: rgba(160, 106, 44, .46);
+  --shadow-card: 0 6px 18px rgba(112, 86, 48, .10);
   --shadow-float: 0 18px 42px rgba(84, 63, 29, .16);
   padding: 25px clamp(22px, 6vw, 92px) 72px;
   background:
-    radial-gradient(ellipse 44rem 30rem at 80% -4%, rgba(185, 138, 66, .14), transparent 72%),
-    radial-gradient(ellipse 36rem 28rem at 4% 76%, rgba(160, 120, 60, .08), transparent 70%),
-    linear-gradient(155deg, #fdfaf2 0%, var(--paper) 54%, #f6efe0 100%);
+    radial-gradient(ellipse 44rem 30rem at 80% -4%, rgba(185, 138, 66, .16), transparent 72%),
+    radial-gradient(ellipse 36rem 28rem at 4% 76%, rgba(160, 120, 60, .1), transparent 70%),
+    linear-gradient(155deg, #fdfaf2 0%, var(--paper) 54%, #f0e7d2 100%);
 }
 .patient-top { max-width: 1540px; margin: 0 auto; }
 .patient-brand { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; color: var(--ink); font-family: var(--serif); font-size: 21px; font-weight: 700; letter-spacing: .08em; }
@@ -227,13 +228,13 @@ a { color: var(--evidence); }
 .patient-top > div button { padding: 5px 9px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,253,247,.6); color: var(--ink-soft); font-size: 12px; }
 .patient-workspace { display: grid; max-width: 1540px; grid-template-columns: 240px minmax(0, 1fr); gap: clamp(28px, 3vw, 48px); padding-top: 10px; margin: 0 auto; }
 .patient-center { min-width: 0; }
-.patient-rail { position: sticky; top: 26px; align-self: start; display: grid; gap: 10px; padding-top: 42px; }
+.patient-rail { position: sticky; top: 26px; align-self: start; display: grid; gap: 10px; padding: 24px 14px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-card); background: linear-gradient(180deg, rgba(246, 236, 216, .72), rgba(246, 236, 216, .32)); }
 .patient-rail-head { color: var(--ink-faint); font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
 .patient-rail-new { padding: 9px 10px; border: 1px dashed var(--line-strong); border-radius: var(--radius-btn); background: transparent; color: var(--ink-soft); font-size: 12px; transition: border-color .18s ease, color .18s ease, background .18s ease; }
 .patient-rail-new:hover { border-color: var(--jade); color: var(--jade); background: var(--jade-soft); }
 .patient-rail-list { display: grid; gap: 4px; }
 .patient-rail-list > button { display: grid; gap: 2px; width: 100%; padding: 9px 10px; border: 1px solid transparent; border-radius: var(--radius-btn); background: transparent; text-align: left; transition: border-color .18s ease, background .18s ease; }
-.patient-rail-list > button:hover, .patient-rail-list > button.active { border-color: var(--accent-border); background: rgba(246, 236, 216, .5); }
+.patient-rail-list > button:hover, .patient-rail-list > button.active { border-color: var(--accent-border); background: var(--jade-soft); }
 .patient-rail-list strong { overflow: hidden; color: var(--ink-soft); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .patient-rail-list > button.active strong { color: var(--jade); font-weight: 700; }
 .patient-rail-list small { color: var(--ink-faint); font-size: 10px; }
@@ -243,11 +244,12 @@ a { color: var(--evidence); }
 .free-chat-finished span { color: var(--ink-soft); font-size: 13px; }
 .free-chat-finished button { justify-self: start; padding: 6px 10px; border: 0; border-radius: 7px; background: var(--ink); color: white; font-size: 12px; }
 
-.patient-page .ask-bar { border-color: rgba(140, 104, 52, .22); background: rgba(255, 253, 247, .9); box-shadow: var(--shadow-float); }
+.patient-page .ask-bar { border-color: var(--accent-border); background: rgba(255, 253, 247, .97); box-shadow: var(--shadow-float); }
 .patient-page .ask-bar::after { background: linear-gradient(90deg, var(--jade), var(--evidence) 54%, transparent); }
 .patient-page .composer-body textarea::placeholder { color: #a5977c; }
 .patient-page .send-button { box-shadow: var(--shadow-card); }
 .patient-page .send-button:hover { background: var(--evidence); box-shadow: 0 12px 24px rgba(140, 106, 50, .25); }
+.patient-page .feature-card { background: rgba(255, 253, 247, .78); border-color: var(--line); }
 .patient-page .feature-card:hover { border-color: var(--accent-strong); box-shadow: var(--shadow-card); }
 .patient-page .feature-card.primary { border-color: var(--accent-strong); background: linear-gradient(135deg, rgba(246, 236, 216, .96), rgba(255, 253, 247, .78)); }
 
@@ -269,7 +271,7 @@ a { color: var(--evidence); }
 .patient-page .chat-message.user .bubble { max-width: min(72%, 620px); padding: 14px 17px; border-color: rgba(140, 104, 52, .18); border-radius: 18px 18px 4px 18px; background: #f3ead9; box-shadow: var(--shadow-card); }
 .patient-page .chat-message.user .bubble > p { margin: 0; color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.7; }
 .patient-page .chat-message.user .message-heading { display: none; }
-.patient-page .chat-message.assistant .bubble { padding: 18px 22px 15px; border: 1px solid rgba(140, 104, 52, .14); border-left: 3px solid var(--jade); border-radius: 5px 16px 16px 5px; background: rgba(255, 253, 247, .9); box-shadow: var(--shadow-card); }
+.patient-page .chat-message.assistant .bubble { padding: 18px 22px 15px; border: 1px solid var(--line); border-left: 3px solid var(--jade); border-radius: 5px 16px 16px 5px; background: var(--paper-bright); box-shadow: var(--shadow-card); }
 .patient-page .chat-message.assistant .message-heading { margin-bottom: 14px; }
 .patient-page .chat-message.assistant .message-heading > strong { color: var(--jade); font-size: 11px; }
 .patient-page .chat-message.assistant .markdown-content > :first-child { margin-top: 0; }

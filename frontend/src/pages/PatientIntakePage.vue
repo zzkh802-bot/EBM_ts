@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import PatientHealthAnswerView from '../components/patient/PatientHealthAnswerView.vue'
 import RunActivity from '../components/evidence/RunActivity.vue'
 import MarkdownContent from '../components/report/MarkdownContent.vue'
 import SiteCredit from '../components/shell/SiteCredit.vue'
@@ -9,7 +8,6 @@ import { agentService, uploadAttachment } from '../services'
 import { usePatientIntakeStore, usePreferencesStore } from '../stores'
 import { PATIENT_FREE_CHAT_TURN_LIMIT, type RuntimeConfig } from '../types/domain'
 import { newId, nowIso } from '../utils/core'
-import { normalizePatientHealthAnswer } from '../utils/patientHealth'
 
 const router = useRouter()
 const intake = usePatientIntakeStore()
@@ -143,10 +141,8 @@ const ask = async () => {
     if (data.session_id) intake.setResearchSessionId(data.session_id)
     intake.markServerStarted()
     const answerText = data.agent_answer || data.message || ''
-    const health = normalizePatientHealthAnswer(data.patient_health, answerText)
     intake.patch(pendingId, {
-      content: health?.bottom_line || answerText || '这次没有生成回答，请重试。',
-      ...(health ? { health } : {}),
+      content: answerText || '这次没有生成回答，请重试。',
       pending: false,
       trace: data.agent_trace || [],
       progressUpdates: data.progress_updates || [],
@@ -323,11 +319,7 @@ const handlePrimaryAction = () => {
                   :started-at="message.runStartedAt"
                   :completed-at="message.runCompletedAt"
                 />
-                <PatientHealthAnswerView
-                  v-if="message.role === 'assistant' && !message.pending && message.health"
-                  :answer="message.health"
-                />
-                <div v-else-if="message.role === 'assistant' && !message.pending" class="markdown-content">
+                <div v-if="message.role === 'assistant' && !message.pending" class="markdown-content">
                   <MarkdownContent :markdown="message.content" />
                 </div>
                 <p v-else>{{ message.content }}</p>
