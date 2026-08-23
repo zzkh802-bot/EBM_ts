@@ -193,7 +193,7 @@ a { color: var(--evidence); }
 .site-credit--doctor-rail { margin-top: auto; padding: 12px 2px 2px; border-top: 1px solid var(--line); font-size: 9px; line-height: 1.8; text-align: center; }
 .entry-foot { margin-top: 22px; color: var(--ink-faint); font-size: 12px; text-align: center; }
 
-.patient-page {
+.patient-shell {
   --paper: #fdf8ee;
   --paper-bright: #fffdf7;
   --paper-muted: #f5ecdb;
@@ -215,13 +215,15 @@ a { color: var(--evidence); }
   --accent-strong: rgba(176, 120, 58, .42);
   --shadow-card: 0 6px 18px rgba(112, 86, 48, .08);
   --shadow-float: 0 18px 42px rgba(84, 63, 29, .16);
-  margin-left: 88px;
-  padding: 25px clamp(22px, 6vw, 92px) 72px;
+  min-height: 100vh;
   background:
     radial-gradient(ellipse 44rem 30rem at 80% -4%, rgba(185, 138, 66, .14), transparent 72%),
     radial-gradient(ellipse 36rem 28rem at 4% 76%, rgba(160, 120, 60, .08), transparent 70%),
     linear-gradient(155deg, #fdfaf2 0%, var(--paper) 54%, #f6efe0 100%);
 }
+.patient-page { min-height: calc(100vh - 88px); }
+.patient-shell .patient-mobile-app { min-height: 100vh; background: transparent; }
+body.patient-mode.chat-mode .patient-shell .patient-mobile-app { background: transparent; }
 .patient-navigation { border-color: var(--line); background: rgba(250, 244, 232, .92); }
 .patient-navigation .workspace-nav-item:hover, .patient-navigation .workspace-nav-item.active { color: var(--jade); background: var(--jade-soft); }
 .patient-navigation .rail-menu:hover { color: var(--jade); background: var(--jade-soft); }
@@ -301,6 +303,7 @@ a { color: var(--evidence); }
 .patient-status-panel { min-width: 0; padding-top: 42px; }
 .patient-status-panel .workspace-info-card { border-color: var(--line-strong); }
 .patient-status-panel .workspace-live.error { color: var(--danger); }
+.patient-status-panel .workspace-live.checking { color: var(--amber); }
 .patient-section-page { width: min(100%, 1120px); min-height: calc(100vh - 100px); padding-right: 0; padding-left: 0; }
 .patient-section-page .asset-project { border-color: var(--line); background: rgba(255, 253, 247, .66); }
 .patient-section-page .asset-project:hover { border-color: var(--accent-strong); background: var(--paper-bright); }
@@ -449,6 +452,12 @@ body.chat-mode .chat-message.assistant .model-answer .report-markdown li { color
 body.chat-mode .chat-message.assistant .report-markdown h1 { font-size: clamp(25px, 2.4vw, 32px); }
 body.chat-mode .chat-message.assistant .report-markdown h2 { margin-top: 25px; font-size: 21px; }
 body.chat-mode .research-progress { margin-bottom: 18px; }
+body.patient-mode.chat-mode .patient-page .ask-bar { border-color: rgba(140, 104, 52, .22); background: rgba(255, 253, 247, .96); }
+body.patient-mode.chat-mode .patient-page .chat-message.user .bubble { border-color: rgba(140, 104, 52, .18); background: #f3ead9; }
+body.patient-mode.chat-mode .patient-page .chat-message.assistant .bubble { border-color: rgba(140, 104, 52, .14); border-left-color: var(--jade); background: rgba(255, 253, 247, .92); }
+body.patient-mode.chat-mode .patient-page .research-progress { border-color: var(--accent-soft); background: rgba(246, 236, 216, .62); }
+body.patient-mode.chat-mode .patient-page .conversation-files-panel { background: rgba(255, 253, 247, .88); }
+body.patient-mode.chat-mode .patient-page { transition: none; }
 .research-progress { max-width: 720px; padding: 14px 17px; margin: 0 0 19px; border: 1px solid var(--accent-soft); border-left: 3px solid var(--jade); border-radius: 5px 12px 12px 5px; background: linear-gradient(100deg, rgba(224, 234, 255, .72), rgba(252, 253, 252, .65)); }
 .research-progress-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; color: var(--jade); font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .09em; }
 .research-progress-head small { color: var(--ink-faint); font-family: var(--sans); font-size: 11px; font-weight: 400; letter-spacing: 0; }
@@ -721,7 +730,7 @@ body.chat-mode .conversation-files-panel { position: sticky; top: 20px; display:
   .entry-choices { grid-template-columns: 1fr; }
   .entry-choice { min-height: 235px; }
   .entry-choice-icon { margin-bottom: 17px; }
-  .patient-page { box-sizing: border-box; width: 100vw; max-width: 100vw; padding: 20px 18px 88px; margin-left: 0; overflow-x: hidden; }
+  .patient-page { box-sizing: border-box; width: 100%; max-width: 100vw; margin-left: 0; overflow-x: hidden; }
   .patient-top, .patient-workspace, .patient-rail, .patient-center, .patient-page .ask-bar { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; }
   .patient-top > div small { display: none; }
   .patient-workspace { display: flex; flex-direction: column; gap: 26px; padding-top: 0; }

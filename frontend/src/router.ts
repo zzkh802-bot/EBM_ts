@@ -6,8 +6,9 @@ import { PATIENT_INTAKE_ENABLED } from './config/features'
 
 const patientRoutes = PATIENT_INTAKE_ENABLED
   ? [
-      { path: '/patient', redirect: '/patient/intake' },
+      { path: '/patient', component: () => import('./pages/PatientIntakePage.vue'), meta: { shell: 'patient' } },
       { path: '/patient/intake', component: () => import('./pages/PatientIntakePage.vue'), meta: { shell: 'patient' } },
+      { path: '/patient/reports', component: () => import('./pages/PatientKnowledgePage.vue'), meta: { shell: 'patient' } },
     ]
   : [
       { path: '/patient', redirect: '/' },

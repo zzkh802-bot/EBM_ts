@@ -2,7 +2,7 @@ import { nextTick } from 'vue'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { usePatientIntakeStore } from '../stores'
-import { STORAGE_KEYS } from '../utils/core'
+import { AUTH_USER_STORAGE_KEY, STORAGE_KEYS } from '../utils/core'
 import { normalizePatientHealthAnswer } from '../utils/patientHealth'
 
 beforeEach(() => {
@@ -63,6 +63,16 @@ describe('患者健康问答状态', () => {
     })
     expect(answer).toMatchObject({ bottom_line: '目前可以先观察。', safety: { level: 'prompt_medical_review' } })
     expect(normalizePatientHealthAnswer(undefined, '只有一段旧版文本')).toMatchObject({ bottom_line: '只有一段旧版文本' })
+  })
+
+  it('scopes patient history to the authenticated user', async () => {
+    localStorage.setItem(AUTH_USER_STORAGE_KEY, 'patient-user-a')
+    const intake = usePatientIntakeStore()
+    intake.add(userMessage('u-scoped', '咳嗽多久需要就医？'))
+    await nextTick()
+
+    expect(localStorage.getItem(`${STORAGE_KEYS.patientIntake}:patient-user-a`)).toContain('咳嗽多久需要就医')
+    expect(localStorage.getItem(STORAGE_KEYS.patientIntake)).toBeNull()
   })
 
   it('patches a message and records the research session id', () => {

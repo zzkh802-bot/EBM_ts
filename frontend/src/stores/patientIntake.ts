@@ -1,7 +1,7 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { PATIENT_FREE_CHAT_TURN_LIMIT, type PatientIntakeSession, type PatientMessage } from '../types/domain'
-import { newId, nowIso, safeRead, safeWrite, STORAGE_KEYS } from '../utils/core'
+import { newId, nowIso, safeRead, safeWrite, STORAGE_KEYS, userScopedStorageKey } from '../utils/core'
 
 const welcome = (): PatientMessage => ({
   id: newId('patient-welcome'), role: 'assistant', createdAt: nowIso(),
@@ -38,15 +38,17 @@ const titleFrom = (message: string) => {
 }
 
 export const usePatientIntakeStore = defineStore('patientIntake', () => {
-  const storedSessions = safeRead<StoredPatientSession[]>(STORAGE_KEYS.patientIntake, [])
+  const sessionsKey = userScopedStorageKey(STORAGE_KEYS.patientIntake)
+  const activeSessionKey = userScopedStorageKey(STORAGE_KEYS.patientIntakeActive)
+  const storedSessions = safeRead<StoredPatientSession[]>(sessionsKey, [])
   const sessions = ref<PatientIntakeSession[]>(storedSessions.length ? storedSessions.map(normalizeSession) : [createSession()])
-  const savedActive = safeRead(STORAGE_KEYS.patientIntakeActive, '')
+  const savedActive = safeRead(activeSessionKey, '')
   const activeSessionId = ref(sessions.value.some((session) => session.id === savedActive) ? savedActive : sessions.value[0]!.id)
   const active = computed(() => sessions.value.find((session) => session.id === activeSessionId.value) || sessions.value[0]!)
   const userTurnCount = computed(() => active.value.messages.filter((message) => message.role === 'user' && !message.failed).length)
   watch([sessions, activeSessionId], () => {
-    safeWrite(STORAGE_KEYS.patientIntake, sessions.value)
-    safeWrite(STORAGE_KEYS.patientIntakeActive, activeSessionId.value)
+    safeWrite(sessionsKey, sessions.value)
+    safeWrite(activeSessionKey, activeSessionId.value)
   }, { deep: true })
 
   const create = () => {
@@ -58,11 +60,14 @@ export const usePatientIntakeStore = defineStore('patientIntake', () => {
   const select = (sessionId: string) => {
     if (sessions.value.some((session) => session.id === sessionId)) activeSessionId.value = sessionId
   }
-  const add = (message: PatientMessage) => {
-    active.value.messages.push(message)
-    if (message.role === 'user' && ['新的就诊准备', '健康问答'].includes(active.value.title)) active.value.title = titleFrom(message.content)
-    active.value.updatedAt = nowIso()
+  const addTo = (sessionId: string, message: PatientMessage) => {
+    const session = sessions.value.find((item) => item.id === sessionId)
+    if (!session) return
+    session.messages.push(message)
+    if (message.role === 'user' && ['新的就诊准备', '健康问答'].includes(session.title)) session.title = titleFrom(message.content)
+    session.updatedAt = nowIso()
   }
+  const add = (message: PatientMessage) => addTo(activeSessionId.value, message)
   const patch = (id: string, change: Partial<PatientMessage>) => {
     const message = active.value.messages.find((item) => item.id === id)
     if (message) Object.assign(message, change)
@@ -96,7 +101,7 @@ export const usePatientIntakeStore = defineStore('patientIntake', () => {
   }
   return {
     sessions, activeSessionId, active, userTurnCount,
-    create, select, add, patch, patchIn, markServerStarted, markServerStartedIn,
+    create, select, add, addTo, patch, patchIn, markServerStarted, markServerStartedIn,
     setResearchSessionId, setResearchSessionIdIn, clear,
   }
 })
