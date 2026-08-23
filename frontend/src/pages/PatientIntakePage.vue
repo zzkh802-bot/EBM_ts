@@ -35,7 +35,24 @@ const uploadingAttachments = ref(false)
 type PendingUpload = { file: File; kind: 'document' | 'medical_image' }
 const pendingUploads = ref<PendingUpload[]>([])
 const busySignal = ref<AbortController | null>(null)
+type PatientSection = 'ask' | 'reports' | 'history'
+type PatientReportEntry = {
+  id: string
+  localSessionId: string
+  researchSessionId?: string
+  title: string
+  updatedAt: string
+  reportMarkdown?: string
+  reportPath?: string
+}
+const patientSection = ref<PatientSection>('ask')
 const historyQuery = ref('')
+const reportQuery = ref('')
+const selectedPatientReport = ref<PatientReportEntry | null>(null)
+const selectedPatientReportContent = ref('')
+const patientReportLoading = ref(false)
+const patientReportError = ref('')
+let patientReportRequestId = 0
 const expandedReportMessageIds = ref<Set<string>>(new Set())
 const copiedMessageId = ref('')
 const feedbackClosedRunIds = ref<Set<string>>(new Set())
@@ -49,11 +66,31 @@ const providers = computed(() => availableModels.value.filter((item, index, item
   items.findIndex((candidate) => candidate.provider === item.provider) === index,
 ))
 const modelsForProvider = computed(() => availableModels.value.filter((item) => item.provider === preferences.provider))
+const selectedProviderLabel = computed(() => providers.value.find((item) => item.provider === preferences.provider)?.provider_label || preferences.provider || '服务器默认')
+const selectedModelLabel = computed(() => modelsForProvider.value.find((item) => item.model === preferences.model)?.model_label || preferences.model || '服务器默认')
 const filteredSessions = computed(() => {
   const query = historyQuery.value.trim().toLowerCase()
   return intake.sessions.filter((session) => !query
     || session.title.toLowerCase().includes(query)
     || session.messages.some((message) => message.content.toLowerCase().includes(query)))
+})
+const patientReports = computed<PatientReportEntry[]>(() => intake.sessions.flatMap((session) => session.messages
+  .filter((message) => message.role === 'assistant' && (message.reportMarkdown || message.reportPath))
+  .map((message) => ({
+    id: `${session.id}:${message.id}`,
+    localSessionId: session.id,
+    researchSessionId: session.researchSessionId,
+    title: session.title,
+    updatedAt: message.runCompletedAt || message.createdAt || session.updatedAt,
+    reportMarkdown: message.reportMarkdown,
+    reportPath: message.reportPath,
+  })))
+  .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)))
+const filteredPatientReports = computed(() => {
+  const query = reportQuery.value.trim().toLowerCase()
+  return patientReports.value.filter((report) => !query
+    || report.title.toLowerCase().includes(query)
+    || report.reportPath?.toLowerCase().includes(query))
 })
 const latestCompletedAssistantId = computed(() => [...intake.active.messages].reverse()
   .find((message) => message.role === 'assistant' && !message.pending && message.runId)?.id || '')
@@ -173,6 +210,50 @@ const closeFeedback = (runId: string) => {
   feedbackClosedRunIds.value.add(runId)
   feedbackClosedRunIds.value = new Set(feedbackClosedRunIds.value)
 }
+const selectPatientSection = (section: PatientSection) => {
+  patientSection.value = section
+  if (section === 'ask') void focusQuestion()
+}
+const openPatientSession = (sessionId: string) => {
+  intake.select(sessionId)
+  patientSection.value = 'ask'
+}
+const formatReportDate = (value: string) => {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '时间未知' : date.toLocaleDateString('zh-CN')
+}
+const openPatientReport = async (report: PatientReportEntry) => {
+  const requestId = ++patientReportRequestId
+  selectedPatientReport.value = report
+  selectedPatientReportContent.value = report.reportMarkdown || ''
+  patientReportError.value = ''
+  patientReportLoading.value = false
+  if (selectedPatientReportContent.value || !report.researchSessionId || !report.reportPath) return
+  patientReportLoading.value = true
+  try {
+    const content = (await workspaceService.read(report.researchSessionId, report.reportPath)).content
+    if (requestId === patientReportRequestId) selectedPatientReportContent.value = content
+  } catch (reason) {
+    if (requestId === patientReportRequestId) {
+      patientReportError.value = reason instanceof Error ? reason.message : '无法读取这份报告。'
+    }
+  } finally {
+    if (requestId === patientReportRequestId) patientReportLoading.value = false
+  }
+}
+const closePatientReport = () => {
+  patientReportRequestId += 1
+  selectedPatientReport.value = null
+  selectedPatientReportContent.value = ''
+  patientReportError.value = ''
+  patientReportLoading.value = false
+}
+const openLibraryCitation = (reference: Reference) => {
+  const report = selectedPatientReport.value
+  ui.openCitation(reference, report?.researchSessionId && report.reportPath
+    ? { sessionId: report.researchSessionId, reportPath: report.reportPath }
+    : undefined)
+}
 
 const ask = async () => {
   const text = question.value.trim()
@@ -280,6 +361,7 @@ const ask = async () => {
 const stop = () => { busySignal.value?.abort() }
 const newQuestion = () => {
   intake.create()
+  patientSection.value = 'ask'
   question.value = ''
   error.value = ''
 }
@@ -291,11 +373,31 @@ const handlePrimaryAction = () => {
 
 <template>
   <main class="patient-page" :class="{ 'patient-chat': activeHasConversation }">
+    <aside class="gemini-rail patient-navigation" aria-label="患者健康版快速导航">
+      <button class="rail-menu" type="button" aria-label="打开问答记录" @click="selectPatientSection('history')">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+      </button>
+      <nav class="workspace-nav" aria-label="患者健康版一级导航">
+        <button class="nav-item workspace-nav-item" :class="{ active: patientSection === 'ask' }" type="button" aria-label="健康问答" @click="selectPatientSection('ask')">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 4h7l4 4v12H7zM14 4v4h4M9.5 14.5l2 2 4-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          <span>健康问答</span>
+        </button>
+        <button class="nav-item workspace-nav-item" :class="{ active: patientSection === 'reports' }" type="button" aria-label="患者报告库" @click="selectPatientSection('reports')">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 5h5l2 2h7v12H5zM8 11h8M8 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          <span>报告库</span>
+        </button>
+        <button class="workspace-nav-item workspace-history-button" :class="{ active: patientSection === 'history' }" type="button" aria-label="问答记录" @click="selectPatientSection('history')">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.35-5.65L4 8.7M4 4v4.7h4.7M12 8v4l2.8 1.8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          <span>问答记录</span>
+        </button>
+      </nav>
+      <SiteCredit placement="doctor-rail" />
+    </aside>
     <header class="patient-top">
       <button class="patient-brand" type="button" aria-label="返回入口" @click="router.push('/')"><span>循</span>循医</button>
       <div><small>健康问答 · 日常问题</small><button type="button" @click="router.push('/clinician')">医生入口</button></div>
     </header>
-    <div class="patient-workspace">
+    <div v-if="patientSection === 'ask'" class="patient-workspace" :class="{ 'with-status': !activeHasConversation }">
       <aside class="patient-rail" aria-label="健康问答记录">
         <div class="patient-rail-head">
           <span>问答记录</span>
@@ -516,7 +618,124 @@ const handlePrimaryAction = () => {
           </section>
         </div>
       </div>
+      <aside v-if="!activeHasConversation" class="workspace-info-panel patient-status-panel" aria-label="患者健康版运行信息">
+        <section class="workspace-info-card evidence-status-card">
+          <div class="workspace-info-title">
+            <span>运行状态</span>
+            <span class="workspace-live" :class="{ error: runtimeConfigError }"><i />{{ runtimeConfigError ? '配置异常' : runtimeConfig ? '已连接' : '连接中' }}</span>
+          </div>
+          <strong>{{ runtimeConfig ? '服务器配置已读取' : runtimeConfigError ? '服务器配置读取失败' : '正在读取服务器配置' }}</strong>
+          <div class="evidence-source-list">
+            <div><span>服务</span><small>{{ selectedProviderLabel }}</small></div>
+            <div><span>模型</span><small>{{ selectedModelLabel }}</small></div>
+            <div><span>检索</span><small>按需调用证据工具</small></div>
+          </div>
+        </section>
+        <section class="workspace-info-card">
+          <div class="workspace-info-title"><span>当前工作模式</span></div>
+          <div class="workspace-mode-list">
+            <div><span>工作流</span><strong>{{ preferences.researchMode === 'expert' ? '专家模式' : '快速模式' }}</strong></div>
+            <div><span>推理强度</span><strong>{{ preferences.researchMode === 'expert' ? 'high · 高' : 'low · 低' }}</strong></div>
+            <div><span>证据检索</span><strong class="mode-on">开启</strong></div>
+            <div><span>工作台</span><strong>患者健康版</strong></div>
+          </div>
+        </section>
+        <div class="workspace-trust-note">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.8 8 7 10 4.2-2 7-5.4 7-10V6l-7-3Zm-3 9 2 2 4-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          <span>健康回答用于信息参考，不替代医生诊断、处方与现场诊疗。</span>
+        </div>
+      </aside>
     </div>
+
+    <section v-else-if="patientSection === 'reports'" class="asset-page patient-section-page" aria-label="患者报告库">
+      <header class="asset-page-head">
+        <div>
+          <span>患者报告库</span>
+          <h2>每一次深入问答，都保留可核对的证据依据。</h2>
+          <p>这里仅展示患者健康版生成的正式报告，可继续查看适用边界、参考文献和已登记原文。</p>
+        </div>
+        <button class="asset-refresh" type="button" @click="selectPatientSection('ask')">返回健康问答</button>
+      </header>
+      <div class="asset-summary" aria-label="患者报告概览">
+        <span><strong>{{ patientReports.length }}</strong> 份正式报告</span>
+        <span><strong>{{ intake.sessions.length }}</strong> 个问答会话</span>
+      </div>
+      <div class="asset-toolbar">
+        <label>
+          <span class="sr-only">搜索患者报告</span>
+          <input v-model="reportQuery" type="search" placeholder="搜索健康问题或报告名称">
+        </label>
+        <span>点击报告即可查看详细依据并核验引用。</span>
+      </div>
+      <section v-if="!filteredPatientReports.length" class="asset-empty">
+        <strong>还没有正式报告</strong>
+        <p>使用专家模式完成一次健康问答后，详细循证报告会自动出现在这里。</p>
+        <button type="button" @click="selectPatientSection('ask')">开始健康问答</button>
+      </section>
+      <section v-else class="asset-list" aria-label="患者正式报告">
+        <button v-for="report in filteredPatientReports" :key="report.id" class="asset-project" type="button" @click="openPatientReport(report)">
+          <span class="asset-project-state">详细报告</span>
+          <span class="asset-main">
+            <strong>{{ report.title }}</strong>
+            <small>健康结论、风险边界与参考文献已保存</small>
+            <span class="asset-project-meta">生成于 {{ formatReportDate(report.updatedAt) }}</span>
+          </span>
+          <span class="asset-open">阅读报告</span>
+        </button>
+      </section>
+      <section v-if="selectedPatientReport" class="asset-reader" aria-label="患者报告阅读区">
+        <header class="asset-reader-head">
+          <div>
+            <span>详细循证报告</span>
+            <h3>{{ selectedPatientReport.title }}</h3>
+            <small>{{ selectedPatientReport.reportPath?.split('/').at(-1) || '患者健康报告' }}</small>
+          </div>
+          <button type="button" @click="closePatientReport">收起阅读区</button>
+        </header>
+        <p v-if="patientReportLoading" class="asset-reader-state">正在打开报告…</p>
+        <p v-else-if="patientReportError" class="asset-reader-state error">{{ patientReportError }}</p>
+        <ReportRenderer v-else-if="selectedPatientReportContent" :markdown="selectedPatientReportContent" audience="patient" @citation="openLibraryCitation" />
+      </section>
+    </section>
+
+    <section v-else class="asset-page patient-section-page" aria-label="患者问答记录">
+      <header class="asset-page-head">
+        <div>
+          <span>问答记录</span>
+          <h2>回到之前的健康问题，继续补充情况。</h2>
+          <p>患者问答与医生研究记录相互隔离；打开记录后会继续沿用该会话的上下文。</p>
+        </div>
+        <button class="asset-refresh" type="button" :disabled="busy" @click="clearHistory">清空本机记录</button>
+      </header>
+      <div class="asset-summary" aria-label="患者问答概览">
+        <span><strong>{{ intake.sessions.length }}</strong> 个问答会话</span>
+        <span><strong>{{ patientReports.length }}</strong> 份正式报告</span>
+      </div>
+      <div class="asset-toolbar">
+        <label>
+          <span class="sr-only">搜索问答记录</span>
+          <input v-model="historyQuery" type="search" placeholder="搜索健康问题或回答内容">
+        </label>
+        <span>点击记录即可回到对应问答。</span>
+      </div>
+      <section class="asset-list" aria-label="患者历史问答">
+        <button v-for="session in filteredSessions" :key="session.id" class="asset-project" type="button" @click="openPatientSession(session.id)">
+          <span class="asset-project-state">健康问答</span>
+          <span class="asset-main">
+            <strong>{{ session.title }}</strong>
+            <small>{{ session.messages.filter((message) => message.role === 'user').length }} 次提问 · {{ session.messages.some((message) => message.reportMarkdown || message.reportPath) ? '含详细报告' : '健康回答' }}</small>
+            <span class="asset-project-meta">最近更新 {{ formatReportDate(session.updatedAt) }}</span>
+          </span>
+          <span class="asset-open">继续问答</span>
+        </button>
+      </section>
+    </section>
+
+    <nav class="patient-mobile-nav" aria-label="患者健康版导航">
+      <button type="button" :class="{ active: patientSection === 'ask' }" @click="selectPatientSection('ask')">健康问答</button>
+      <button type="button" :class="{ active: patientSection === 'reports' }" @click="selectPatientSection('reports')">报告库</button>
+      <button type="button" :class="{ active: patientSection === 'history' }" @click="selectPatientSection('history')">问答记录</button>
+    </nav>
     <RightDetailPanel />
     <RunCompletionNotices />
   </main>
