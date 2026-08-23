@@ -77,6 +77,44 @@ describe('患者健康问答状态', () => {
     expect(intake.active.researchSessionId).toBe('research-42')
   })
 
+  it('updates the originating session when a patient switches sessions during a run', () => {
+    const intake = usePatientIntakeStore()
+    const origin = intake.active
+    intake.add(userMessage('u-origin', '头痛时哪些情况需要尽快就医？'))
+    intake.add({
+      id: 'a-origin', role: 'assistant', content: '处理中', createdAt: new Date().toISOString(), pending: true,
+    })
+    const other = intake.create()
+
+    intake.patchIn(origin.id, 'a-origin', {
+      content: '需要结合危险信号判断。', pending: false, researchMode: 'expert',
+      reportMarkdown: '# 详细循证报告', reportPath: 'reports/report.md', runId: 'run-42', queryId: 'query-42',
+    })
+    intake.setResearchSessionIdIn(origin.id, 'research-origin')
+    intake.markServerStartedIn(origin.id)
+
+    expect(intake.active.id).toBe(other.id)
+    expect(origin.researchSessionId).toBe('research-origin')
+    expect(origin.serverStarted).toBe(true)
+    expect(origin.messages.find((item) => item.id === 'a-origin')).toMatchObject({
+      pending: false, researchMode: 'expert', reportPath: 'reports/report.md', runId: 'run-42',
+    })
+  })
+
+  it('clears patient history into one fresh local conversation', () => {
+    const intake = usePatientIntakeStore()
+    intake.add(userMessage('u1', '皮肤出现红疹怎么办'))
+    intake.create()
+    expect(intake.sessions.length).toBe(2)
+
+    intake.clear()
+
+    expect(intake.sessions).toHaveLength(1)
+    expect(intake.active.title).toBe('健康问答')
+    expect(intake.active.messages[0]?.role).toBe('assistant')
+    expect(intake.userTurnCount).toBe(0)
+  })
+
   it('drops legacy visit-preparation fields when reading stored sessions', () => {
     const legacy = {
       id: 'legacy-1', remoteSessionId: 'remote-9', mode: 'visit_preparation', profileId: 'profile-1',

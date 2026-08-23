@@ -471,7 +471,7 @@ describe("循医研究服务 API", () => {
     }
   });
 
-  it("forces patient health questions onto quick mode and hides rendered references", async () => {
+  it("preserves the selected patient research mode and keeps patient answers on the safe contract", async () => {
     let received: AgentRunInput | undefined;
     const { api, baseUrl } = await startApi(async (input) => { received = input; return { message: "先补充水分并休息。[1]\n\n## 参考文献\n\n1. 隐藏来源" }; });
     try {
@@ -484,7 +484,10 @@ describe("循医研究服务 API", () => {
         async () => (await fetch(`${baseUrl}/api/v1/agent-runs/${accepted.run_id}`)).json() as Promise<TestRunResponse>,
         (value) => value.status === "succeeded",
       );
-      expect(received).toMatchObject({ audienceMode: "patient", researchMode: "quick", thinkingLevel: "low", responseMode: "answer" });
+      expect(received).toMatchObject({
+        audienceMode: "patient", researchMode: "expert", thinkingLevel: "high",
+        responseMode: "report", maxIterations: 48, requestTimeoutSeconds: 3600,
+      });
       expect(result.agent_answer).not.toContain("参考文献");
       expect(result.patient_health).toMatchObject({
         contract_version: "xunyi-patient-health/v1",
@@ -493,6 +496,11 @@ describe("循医研究服务 API", () => {
       });
       expect(hideQuickAnswerReferences("正文[1, 2]\n\n## 参考文献\n\n1. 来源")).toBe("正文");
       expect(buildAgentPrompt({ ...promptInput({ audienceMode: "patient", researchMode: "quick", thinkingLevel: "low", responseMode: "answer" }) })).toContain("患者健康问答服务");
+      const patientExpertPrompt = buildAgentPrompt({ ...promptInput({ audienceMode: "patient", researchMode: "expert", thinkingLevel: "high", responseMode: "report" }) });
+      expect(patientExpertPrompt).toContain("患者健康循证研究服务");
+      expect(patientExpertPrompt).toContain("患者端专家研究");
+      expect(patientExpertPrompt).toContain("最终聊天答复只输出一个合法 JSON 对象");
+      expect(patientExpertPrompt).toContain("必须生成正式循证报告");
     } finally {
       api.server.close();
       await once(api.server, "close");

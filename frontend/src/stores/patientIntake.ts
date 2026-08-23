@@ -68,10 +68,35 @@ export const usePatientIntakeStore = defineStore('patientIntake', () => {
     if (message) Object.assign(message, change)
     active.value.updatedAt = nowIso()
   }
+  const patchIn = (sessionId: string, id: string, change: Partial<PatientMessage>) => {
+    const session = sessions.value.find((item) => item.id === sessionId)
+    const message = session?.messages.find((item) => item.id === id)
+    if (session && message) {
+      Object.assign(message, change)
+      session.updatedAt = nowIso()
+    }
+  }
   const markServerStarted = () => { active.value.serverStarted = true; active.value.updatedAt = nowIso() }
+  const markServerStartedIn = (localSessionId: string) => {
+    const session = sessions.value.find((item) => item.id === localSessionId)
+    if (session) { session.serverStarted = true; session.updatedAt = nowIso() }
+  }
   const setResearchSessionId = (sessionId: string) => { active.value.researchSessionId = sessionId; active.value.updatedAt = nowIso() }
+  const setResearchSessionIdIn = (localSessionId: string, researchSessionId: string) => {
+    const session = sessions.value.find((item) => item.id === localSessionId)
+    if (session) {
+      session.researchSessionId = researchSessionId
+      session.updatedAt = nowIso()
+    }
+  }
+  const clear = () => {
+    const session = createSession()
+    sessions.value = [session]
+    activeSessionId.value = session.id
+  }
   return {
     sessions, activeSessionId, active, userTurnCount,
-    create, select, add, patch, markServerStarted, setResearchSessionId,
+    create, select, add, patch, patchIn, markServerStarted, markServerStartedIn,
+    setResearchSessionId, setResearchSessionIdIn, clear,
   }
 })

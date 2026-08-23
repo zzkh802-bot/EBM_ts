@@ -3,17 +3,24 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import PatientHealthAnswerView from '../components/patient/PatientHealthAnswerView.vue'
 import RunActivity from '../components/evidence/RunActivity.vue'
+import FeedbackPanel from '../components/evidence/FeedbackPanel.vue'
 import MarkdownContent from '../components/report/MarkdownContent.vue'
+import ReportRenderer from '../components/report/ReportRenderer.vue'
+import RightDetailPanel from '../components/shell/RightDetailPanel.vue'
+import RunCompletionNotices from '../components/shell/RunCompletionNotices.vue'
 import SiteCredit from '../components/shell/SiteCredit.vue'
-import { agentService, uploadAttachment } from '../services'
-import { usePatientIntakeStore, usePreferencesStore } from '../stores'
-import { PATIENT_FREE_CHAT_TURN_LIMIT, type RuntimeConfig } from '../types/domain'
-import { newId, nowIso } from '../utils/core'
+import { agentService, uploadAttachment, workspaceService } from '../services'
+import { usePatientIntakeStore, usePreferencesStore, useUiStore } from '../stores'
+import { PATIENT_FREE_CHAT_TURN_LIMIT, type PatientHealthAnswer, type PatientMessage, type ResearchMode, type RuntimeConfig } from '../types/domain'
+import { hydrateRunReport, newId, nowIso } from '../utils/core'
+import { copyText } from '../utils/browser'
+import type { Reference } from '../utils/report'
 import { normalizePatientHealthAnswer } from '../utils/patientHealth'
 
 const router = useRouter()
 const intake = usePatientIntakeStore()
 const preferences = usePreferencesStore()
+const ui = useUiStore()
 const question = ref('')
 const busy = ref(false)
 const error = ref('')
@@ -28,6 +35,10 @@ const uploadingAttachments = ref(false)
 type PendingUpload = { file: File; kind: 'document' | 'medical_image' }
 const pendingUploads = ref<PendingUpload[]>([])
 const busySignal = ref<AbortController | null>(null)
+const historyQuery = ref('')
+const expandedReportMessageIds = ref<Set<string>>(new Set())
+const copiedMessageId = ref('')
+const feedbackClosedRunIds = ref<Set<string>>(new Set())
 
 const freeChatComplete = computed(() => intake.userTurnCount >= PATIENT_FREE_CHAT_TURN_LIMIT)
 const hasConversation = computed(() => intake.active.messages.some((message) => message.role === 'user'))
@@ -38,6 +49,18 @@ const providers = computed(() => availableModels.value.filter((item, index, item
   items.findIndex((candidate) => candidate.provider === item.provider) === index,
 ))
 const modelsForProvider = computed(() => availableModels.value.filter((item) => item.provider === preferences.provider))
+const filteredSessions = computed(() => {
+  const query = historyQuery.value.trim().toLowerCase()
+  return intake.sessions.filter((session) => !query
+    || session.title.toLowerCase().includes(query)
+    || session.messages.some((message) => message.content.toLowerCase().includes(query)))
+})
+const latestCompletedAssistantId = computed(() => [...intake.active.messages].reverse()
+  .find((message) => message.role === 'assistant' && !message.pending && message.runId)?.id || '')
+const feedbackEnabled = computed(() => runtimeConfig.value?.feedback_enabled !== false)
+const modeDescription = computed(() => preferences.researchMode === 'quick'
+  ? '快速模式：8 轮研究预算，优先尽快给出可靠的健康结论。'
+  : '专家模式：48 轮研究预算，生成健康结论和可展开核对的详细循证报告。')
 const primaryActionLabel = computed(() => {
   if (!busy.value) return '提问'
   return question.value.trim() ? '加入后续追问' : '停止本轮问答'
@@ -46,6 +69,7 @@ const primaryActionLabel = computed(() => {
 watch(() => intake.activeSessionId, () => {
   question.value = ''
   error.value = ''
+  expandedReportMessageIds.value = new Set()
 })
 watch(() => preferences.provider, () => {
   if (modelsForProvider.value.some((item) => item.model === preferences.model)) return
@@ -58,7 +82,7 @@ watch(() => intake.active.messages.length, async () => {
 
 const scrollToLatest = async () => {
   await nextTick()
-  feed.value?.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+  feed.value?.lastElementChild?.scrollIntoView?.({ behavior: 'smooth', block: 'end' })
 }
 watch(() => intake.active.messages.length, () => { void scrollToLatest() })
 
@@ -91,19 +115,79 @@ const selectExample = async (value: string) => {
   question.value = value
   await focusQuestion()
 }
+const selectResearchMode = (mode: ResearchMode) => {
+  preferences.researchMode = mode
+  preferences.thinkingLevel = mode === 'quick' ? 'low' : 'high'
+}
+const clearHistory = () => {
+  if (busy.value) return
+  if (window.confirm('清空本机保存的患者问答记录？\n\n这不会删除服务端已经归档的研究数据。')) {
+    intake.clear()
+    historyQuery.value = ''
+  }
+}
+const patientAnswerText = (answer?: PatientHealthAnswer, fallback = '') => {
+  if (!answer) return fallback
+  return [
+    `结论：${answer.bottom_line}`,
+    answer.actions.length ? `现在可以做：\n${answer.actions.map((item, index) => `${index + 1}. ${item}`).join('\n')}` : '',
+    answer.red_flags.length ? `需要警惕：\n${answer.red_flags.map((item) => `- ${item}`).join('\n')}` : '',
+    `何时就医：${answer.when_to_seek_care}`,
+    answer.uncertainty ? `回答边界：${answer.uncertainty}` : '',
+  ].filter(Boolean).join('\n\n')
+}
+const copyAnswer = async (message: PatientMessage) => {
+  if (await copyText(patientAnswerText(message.health, message.content))) {
+    copiedMessageId.value = message.id
+    window.setTimeout(() => { if (copiedMessageId.value === message.id) copiedMessageId.value = '' }, 1500)
+  }
+}
+const readFormalReport = async (sessionId?: string, preferredPath?: string) => {
+  if (!sessionId) return ''
+  try {
+    if (preferredPath) return (await workspaceService.read(sessionId, preferredPath)).content
+    const report = (await workspaceService.list(sessionId)).files.find((file) => file.kind === 'report')
+    return report ? (await workspaceService.read(sessionId, report.path)).content : ''
+  } catch {
+    return ''
+  }
+}
+const toggleReport = async (message: PatientMessage) => {
+  if (expandedReportMessageIds.value.has(message.id)) {
+    expandedReportMessageIds.value.delete(message.id)
+    expandedReportMessageIds.value = new Set(expandedReportMessageIds.value)
+    return
+  }
+  if (!message.reportMarkdown && message.reportPath) {
+    const markdown = await readFormalReport(intake.active.researchSessionId, message.reportPath)
+    if (markdown) intake.patch(message.id, { reportMarkdown: markdown })
+  }
+  expandedReportMessageIds.value.add(message.id)
+  expandedReportMessageIds.value = new Set(expandedReportMessageIds.value)
+}
+const openCitation = (reference: Reference, reportPath?: string) => {
+  const sessionId = intake.active.researchSessionId
+  ui.openCitation(reference, sessionId && reportPath ? { sessionId, reportPath } : undefined)
+}
+const closeFeedback = (runId: string) => {
+  feedbackClosedRunIds.value.add(runId)
+  feedbackClosedRunIds.value = new Set(feedbackClosedRunIds.value)
+}
 
 const ask = async () => {
   const text = question.value.trim()
   if (!text || busy.value || freeChatComplete.value) return
   error.value = ''
   const localSessionId = intake.activeSessionId
+  const selectedResearchMode = preferences.researchMode
   if (!hasConversation.value) { question.value = '' } else { /* 追问沿用当前会话 */ }
   question.value = ''
-  intake.add({ id: newId('patient-user'), role: 'user', content: text, createdAt: nowIso() })
+  const userMessageId = newId('patient-user')
+  intake.add({ id: userMessageId, role: 'user', content: text, createdAt: nowIso() })
   const pendingId = newId('patient-assistant')
   intake.add({
     id: pendingId, role: 'assistant', content: '正在检索并整理可靠信息，请稍候…',
-    createdAt: nowIso(), pending: true, trace: [], tools: [],
+    createdAt: nowIso(), pending: true, trace: [], tools: [], researchMode: selectedResearchMode,
   })
   const signal = new AbortController()
   busySignal.value = signal
@@ -117,11 +201,15 @@ const ask = async () => {
       uploadAttachment(pending.file, requestResearchSessionId || localSessionId)))
     const attachmentIds = uploadedAttachments.map((uploaded) => uploaded.attachment_id)
     pendingUploads.value = []
-    intake.patch(pendingId, { runStartedAt: nowIso() })
+    intake.patchIn(localSessionId, pendingId, { runStartedAt: nowIso() })
     const data = await agentService.run({
       question: text,
       ...(requestResearchSessionId ? { session_id: requestResearchSessionId } : {}),
-      audience_mode: 'patient', thinking_level: 'low', research_mode: 'quick', search_enabled: true, response_mode: 'answer',
+      audience_mode: 'patient',
+      thinking_level: selectedResearchMode === 'quick' ? 'low' : preferences.thinkingLevel,
+      research_mode: selectedResearchMode,
+      search_enabled: true,
+      response_mode: selectedResearchMode === 'quick' ? 'answer' : 'report',
       ...(preferences.provider ? { provider: preferences.provider } : {}),
       ...(preferences.model ? { model: preferences.model } : {}),
       ...(attachmentIds.length ? { attachments: attachmentIds } : {}),
@@ -129,9 +217,9 @@ const ask = async () => {
       onStatus: (status) => {
         if (status.session_id && status.session_id !== loadedServerSessionId) {
           loadedServerSessionId = status.session_id
-          intake.setResearchSessionId(status.session_id)
+          intake.setResearchSessionIdIn(localSessionId, status.session_id)
         }
-        intake.patch(pendingId, {
+        intake.patchIn(localSessionId, pendingId, {
           trace: status.agent_trace || [],
           progressUpdates: status.progress_updates || [],
           tools: status.tools || [],
@@ -140,13 +228,18 @@ const ask = async () => {
         })
       },
     })
-    if (data.session_id) intake.setResearchSessionId(data.session_id)
-    intake.markServerStarted()
+    if (data.session_id) intake.setResearchSessionIdIn(localSessionId, data.session_id)
+    intake.markServerStartedIn(localSessionId)
     const answerText = data.agent_answer || data.message || ''
     const health = normalizePatientHealthAnswer(data.patient_health, answerText)
-    intake.patch(pendingId, {
+    const reportMarkdown = await hydrateRunReport(data, readFormalReport)
+    intake.patchIn(localSessionId, pendingId, {
       content: health?.bottom_line || answerText || '这次没有生成回答，请重试。',
       ...(health ? { health } : {}),
+      ...(reportMarkdown ? { reportMarkdown } : {}),
+      ...(data.report_path ? { reportPath: data.report_path } : {}),
+      runId: data.run_id,
+      queryId: data.query_id,
       pending: false,
       trace: data.agent_trace || [],
       progressUpdates: data.progress_updates || [],
@@ -154,9 +247,23 @@ const ask = async () => {
       runStartedAt: data.started_at,
       runCompletedAt: data.completed_at,
     })
+    if (reportMarkdown || data.report_path) {
+      expandedReportMessageIds.value.add(pendingId)
+      expandedReportMessageIds.value = new Set(expandedReportMessageIds.value)
+    }
+    if (intake.activeSessionId !== localSessionId || router.currentRoute.value.path !== '/patient/intake') {
+      ui.notifyRunCompleted({
+        sessionId: localSessionId,
+        runId: data.run_id,
+        title: intake.sessions.find((session) => session.id === localSessionId)?.title || '健康问答',
+        question: text,
+        workspace: 'patient',
+      })
+    }
   } catch (reason) {
     const stopped = reason instanceof DOMException && reason.name === 'AbortError'
-    intake.patch(pendingId, {
+    intake.patchIn(localSessionId, userMessageId, { failed: true })
+    intake.patchIn(localSessionId, pendingId, {
       pending: false,
       content: stopped
         ? '已停止等待；后端任务可能仍会短暂收尾。'
@@ -192,11 +299,16 @@ const handlePrimaryAction = () => {
       <aside class="patient-rail" aria-label="健康问答记录">
         <div class="patient-rail-head">
           <span>问答记录</span>
+          <button type="button" :disabled="busy" @click="clearHistory">清空</button>
         </div>
         <button class="patient-rail-new" type="button" @click="newQuestion">＋ 新建健康问答</button>
+        <label class="patient-history-search">
+          <span class="sr-only">搜索历史问答</span>
+          <input v-model="historyQuery" type="search" placeholder="搜索历史问答" />
+        </label>
         <nav class="patient-rail-list" aria-label="历史问答">
           <button
-            v-for="session in intake.sessions"
+            v-for="session in filteredSessions"
             :key="session.id"
             type="button"
             :class="{ active: session.id === intake.activeSessionId }"
@@ -205,6 +317,7 @@ const handlePrimaryAction = () => {
             <strong>{{ session.title }}</strong>
             <small>{{ new Date(session.updatedAt).toLocaleDateString('zh-CN') }} · {{ session.messages.filter((m) => m.role === 'user').length }} 问</small>
           </button>
+          <p v-if="!filteredSessions.length" class="patient-history-empty">没有匹配的问答记录</p>
         </nav>
         <SiteCredit placement="patient-rail" />
       </aside>
@@ -220,7 +333,7 @@ const handlePrimaryAction = () => {
         <form class="ask-bar" aria-label="健康问题输入区" @submit.prevent="ask()">
           <div class="mode-context" aria-live="polite">
             <strong>日常健康问答</strong>
-            <span>快速模式：低推理、快速检索，直接输出容易理解的回答。</span>
+            <span>{{ modeDescription }}</span>
           </div>
           <div class="composer-body">
             <textarea
@@ -258,8 +371,23 @@ const handlePrimaryAction = () => {
                 <option v-for="item in modelsForProvider" :key="item.model" :value="item.model">{{ item.model_label }}</option>
               </select>
             </label>
+            <div class="patient-mode-switch" role="group" aria-label="研究模式">
+              <button
+                type="button"
+                :class="{ active: preferences.researchMode === 'quick' }"
+                :aria-pressed="preferences.researchMode === 'quick'"
+                :disabled="busy"
+                @click="selectResearchMode('quick')"
+              >快速</button>
+              <button
+                type="button"
+                :class="{ active: preferences.researchMode === 'expert' }"
+                :aria-pressed="preferences.researchMode === 'expert'"
+                :disabled="busy"
+                @click="selectResearchMode('expert')"
+              >专家</button>
+            </div>
             <span class="composer-option active" aria-label="信息检索已开启">信息检索已开启</span>
-            <span class="composer-option" aria-label="快速模式">快速模式</span>
             <span v-if="runtimeConfigError" class="runtime-error">{{ runtimeConfigError }}</span>
           </div>
           <button class="send-button" type="button" :aria-label="primaryActionLabel" @click="handlePrimaryAction">
@@ -313,6 +441,7 @@ const handlePrimaryAction = () => {
               <div class="bubble">
                 <div v-if="message.role === 'assistant'" class="message-heading">
                   <strong>循医</strong>
+                  <span v-if="message.researchMode" class="message-mode">{{ message.researchMode === 'expert' ? '专家模式' : '快速模式' }}</span>
                 </div>
                 <RunActivity
                   v-if="message.role === 'assistant'"
@@ -331,6 +460,51 @@ const handlePrimaryAction = () => {
                   <MarkdownContent :markdown="message.content" />
                 </div>
                 <p v-else>{{ message.content }}</p>
+                <section
+                  v-if="message.role === 'assistant' && !message.pending && (message.reportMarkdown || message.reportPath)"
+                  class="report-attachment patient-report-attachment"
+                  aria-label="详细循证报告"
+                >
+                  <button
+                    class="report-attachment-card"
+                    type="button"
+                    :aria-expanded="expandedReportMessageIds.has(message.id)"
+                    @click="toggleReport(message)"
+                  >
+                    <span class="report-attachment-icon" aria-hidden="true">＋</span>
+                    <span class="report-attachment-copy">
+                      <strong>详细循证报告</strong>
+                      <small>查看研究结论、适用边界和参考文献</small>
+                    </span>
+                    <span class="report-attachment-action">{{ expandedReportMessageIds.has(message.id) ? '收起' : '展开' }}</span>
+                  </button>
+                  <section v-if="expandedReportMessageIds.has(message.id)" class="final-report" aria-label="详细循证报告正文">
+                    <header class="final-report-head">
+                      <div>
+                        <span>证据依据</span>
+                        <strong>详细循证报告</strong>
+                      </div>
+                      <small>可点击引用核验原文</small>
+                    </header>
+                    <ReportRenderer
+                      v-if="message.reportMarkdown"
+                      :markdown="message.reportMarkdown"
+                      audience="patient"
+                      @citation="openCitation($event, message.reportPath)"
+                    />
+                    <p v-else class="document-state">正在打开详细报告…</p>
+                  </section>
+                </section>
+                <div v-if="message.role === 'assistant' && !message.pending" class="message-actions patient-message-actions">
+                  <button type="button" @click="copyAnswer(message)">{{ copiedMessageId === message.id ? '已复制' : '复制回答' }}</button>
+                </div>
+                <FeedbackPanel
+                  v-if="feedbackEnabled && latestCompletedAssistantId === message.id && message.runId && intake.active.researchSessionId && !feedbackClosedRunIds.has(message.runId)"
+                  :session-id="intake.active.researchSessionId"
+                  :run-id="message.queryId || message.runId"
+                  audience="patient"
+                  @closed="closeFeedback(message.runId)"
+                />
               </div>
             </article>
             <p v-if="error" class="patient-error">{{ error }}</p>
@@ -343,6 +517,8 @@ const handlePrimaryAction = () => {
         </div>
       </div>
     </div>
+    <RightDetailPanel />
+    <RunCompletionNotices />
   </main>
 </template>
 

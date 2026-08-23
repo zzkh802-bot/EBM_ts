@@ -211,7 +211,7 @@ a { color: var(--evidence); }
   --success: #7d7a2f;
   --shadow: 0 18px 42px rgba(112, 86, 48, .10);
   --accent-soft: rgba(176, 120, 58, .14);
-  --accent-border: var(--accent-border);
+  --accent-border: rgba(176, 120, 58, .28);
   --accent-strong: rgba(176, 120, 58, .42);
   --shadow-card: 0 6px 18px rgba(112, 86, 48, .08);
   --shadow-float: 0 18px 42px rgba(84, 63, 29, .16);
@@ -228,15 +228,21 @@ a { color: var(--evidence); }
 .patient-workspace { display: grid; max-width: 1540px; grid-template-columns: 240px minmax(0, 1fr); gap: clamp(28px, 3vw, 48px); padding-top: 10px; margin: 0 auto; }
 .patient-center { min-width: 0; }
 .patient-rail { position: sticky; top: 26px; align-self: start; display: grid; gap: 10px; padding-top: 42px; }
-.patient-rail-head { color: var(--ink-faint); font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.patient-rail-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--ink-faint); font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
+.patient-rail-head button { padding: 3px 0; border: 0; background: transparent; color: var(--ink-faint); font-family: var(--sans); font-size: 11px; letter-spacing: 0; cursor: pointer; }
+.patient-rail-head button:hover { color: var(--danger); }
+.patient-rail-head button:disabled { cursor: not-allowed; opacity: .5; }
 .patient-rail-new { padding: 9px 10px; border: 1px dashed var(--line-strong); border-radius: var(--radius-btn); background: transparent; color: var(--ink-soft); font-size: 12px; transition: border-color .18s ease, color .18s ease, background .18s ease; }
 .patient-rail-new:hover { border-color: var(--jade); color: var(--jade); background: var(--jade-soft); }
+.patient-history-search input { box-sizing: border-box; width: 100%; height: 34px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 6px; outline: 0; background: rgba(255, 253, 247, .66); color: var(--ink); font-size: 12px; }
+.patient-history-search input:focus { border-color: var(--accent-strong); background: var(--paper-bright); }
 .patient-rail-list { display: grid; gap: 4px; }
 .patient-rail-list > button { display: grid; gap: 2px; width: 100%; padding: 9px 10px; border: 1px solid transparent; border-radius: var(--radius-btn); background: transparent; text-align: left; transition: border-color .18s ease, background .18s ease; }
 .patient-rail-list > button:hover, .patient-rail-list > button.active { border-color: var(--accent-border); background: rgba(246, 236, 216, .5); }
 .patient-rail-list strong { overflow: hidden; color: var(--ink-soft); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .patient-rail-list > button.active strong { color: var(--jade); font-weight: 700; }
 .patient-rail-list small { color: var(--ink-faint); font-size: 10px; }
+.patient-history-empty { padding: 10px; margin: 0; color: var(--ink-faint); font-size: 11px; text-align: center; }
 .patient-error { margin: 0 0 12px; color: var(--danger); font-size: 13px; }
 .free-chat-finished { display: grid; gap: 5px; padding: 15px; border: 1px solid var(--accent-border); border-radius: var(--radius-card); background: rgba(255, 253, 248, .7); }
 .free-chat-finished strong { font-family: var(--sans); font-size: 15px; font-weight: 700; }
@@ -259,6 +265,11 @@ a { color: var(--evidence); }
 .patient-page .attachment-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 260px; padding: 4px 6px; border-radius: 5px; background: var(--accent-soft); color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .patient-page .attachment-chip button { border: 0; background: transparent; color: inherit; cursor: pointer; }
 .patient-page .attachment-error { color: var(--danger); }
+.patient-mode-switch { display: inline-flex; min-height: 29px; overflow: hidden; border: 1px solid var(--line-strong); border-radius: 6px; }
+.patient-mode-switch button { min-width: 48px; padding: 4px 9px; border: 0; background: transparent; color: var(--ink-soft); font-size: 12px; cursor: pointer; }
+.patient-mode-switch button + button { border-left: 1px solid var(--line-strong); }
+.patient-mode-switch button.active { background: var(--jade-soft); color: var(--jade); font-weight: 700; }
+.patient-mode-switch button:disabled { cursor: not-allowed; opacity: .55; }
 
 .patient-page .chat-feed { width: min(100%, 800px); padding-top: 12px; }
 .patient-page.patient-chat .patient-center { display: flex; min-height: calc(100vh - 122px); flex-direction: column; }
@@ -272,10 +283,16 @@ a { color: var(--evidence); }
 .patient-page .chat-message.assistant .bubble { padding: 18px 22px 15px; border: 1px solid rgba(140, 104, 52, .14); border-left: 3px solid var(--jade); border-radius: 5px 16px 16px 5px; background: rgba(255, 253, 247, .9); box-shadow: var(--shadow-card); }
 .patient-page .chat-message.assistant .message-heading { margin-bottom: 14px; }
 .patient-page .chat-message.assistant .message-heading > strong { color: var(--jade); font-size: 11px; }
+.patient-page .chat-message.assistant .message-mode { color: var(--ink-faint); }
 .patient-page .chat-message.assistant .markdown-content > :first-child { margin-top: 0; }
 .patient-page .chat-message.assistant .markdown-content p, .patient-page .chat-message.assistant .markdown-content li { color: var(--ink); font-size: 15px; line-height: 1.76; }
 .patient-page .research-progress { border-color: var(--accent-soft); background: linear-gradient(100deg, rgba(246, 236, 216, .72), rgba(255, 253, 247, .65)); }
 .patient-page .research-progress.complete { border-left-color: var(--accent-strong); background: rgba(246, 236, 216, .42); }
+.patient-page .patient-report-attachment .report-attachment-card { padding: 10px 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.patient-page .patient-report-attachment .report-attachment-card:hover { border: 0; background: var(--jade-soft); box-shadow: none; transform: none; }
+.patient-page .patient-report-attachment .report-attachment-icon { border-color: var(--line-strong); background: var(--paper-bright); }
+.patient-page .patient-report-attachment .final-report { padding-right: 0; padding-left: 0; }
+.patient-page .patient-message-actions { margin-top: 12px; }
 
 
 /* Research workspace */
@@ -686,7 +703,9 @@ body.chat-mode .conversation-files-panel { position: sticky; top: 20px; display:
   .entry-choices { grid-template-columns: 1fr; }
   .entry-choice { min-height: 235px; }
   .entry-choice-icon { margin-bottom: 17px; }
-  .patient-page { padding: 20px 18px 34px; }
+  .patient-page { box-sizing: border-box; width: 100vw; max-width: 100vw; padding: 20px 18px 34px; overflow-x: hidden; }
+  .patient-top, .patient-workspace, .patient-rail, .patient-center, .patient-page .ask-bar { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; }
+  .patient-top > div small { display: none; }
   .patient-workspace { display: flex; flex-direction: column; gap: 26px; padding-top: 0; }
   .patient-rail { position: static; padding-top: 0; }
   .gemini-rail { display: none; }
@@ -704,11 +723,15 @@ body.chat-mode .conversation-files-panel { position: sticky; top: 20px; display:
   .ask-bar { grid-template-columns: minmax(0, 1fr); grid-template-areas: "context" "question" "options" "send"; padding: 16px; border-radius: 15px 15px 15px 3px; }
   .ask-bar::after { right: 16px; left: 16px; }
   .mode-context { display: grid; gap: 2px; padding-top: 12px; }
+  .mode-context span { min-width: 0; overflow-wrap: anywhere; }
   .composer-body textarea { min-height: 105px; font-size: 18px; }
   .composer-options { gap: 2px; }
   .runtime-select { width: calc(50% - 1px); justify-content: space-between; }
   .runtime-select select { max-width: calc(100% - 28px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .composer-option { width: calc(50% - 1px); }
+  .patient-mode-switch { box-sizing: border-box; width: calc(50% - 1px); }
+  .patient-mode-switch button { min-width: 0; flex: 1; }
+  .patient-page .runtime-error { width: 100%; overflow-wrap: anywhere; }
   .send-button { width: 100%; height: 43px; margin-top: 10px; border-radius: 7px; }
   .send-button .send-label { position: static; width: auto; height: auto; clip: auto; font-size: 13px; }
   .research-trajectory { display: grid; gap: 12px; padding: 19px 0; }

@@ -10,6 +10,7 @@ export type RunCompletionNotice = {
   runId?: string
   title: string
   question: string
+  workspace?: 'clinician' | 'patient'
 }
 
 export const useUiStore = defineStore('ui', () => {
