@@ -832,6 +832,9 @@ export function createPiRpcExecutor(input: {
   const execute = async (request: AgentRunInput, hooks: AgentExecutionHooks): Promise<AgentExecutionResult> => {
     if (hooks.signal.aborted) throw abortError();
     const runtimeKey = [request.provider, request.model, request.audienceMode, request.researchMode ?? "expert", request.retrievalPolicy, request.maxIterations].join("\0");
+    const reportWritingSkill = request.audienceMode === "patient"
+      ? "patient-health-report-writing"
+      : "clinical-report-writing";
     return pool.run({
       ...(request.sessionId ? { requestedSessionId: request.sessionId } : {}),
       runtimeKey,
@@ -844,7 +847,7 @@ export function createPiRpcExecutor(input: {
           "--extension", path.join(rootDir, ".pi", "extensions", "ebm-tools.ts"),
           "--no-skills",
           "--skill", path.join(rootDir, ".pi", "skills", "ebm-research", "SKILL.md"),
-          "--skill", path.join(rootDir, ".pi", "skills", "clinical-report-writing", "SKILL.md"),
+          "--skill", path.join(rootDir, ".pi", "skills", reportWritingSkill, "SKILL.md"),
           ...(request.researchMode === "quick"
             ? ["--skill", path.join(rootDir, ".pi", "skills", "quick-ebm-answer", "SKILL.md")]
             : []),
@@ -1818,11 +1821,15 @@ export function buildAgentPrompt(input: AgentRunInput, attachmentContext = ""): 
     : "可按需使用已配置的检索工具。检索顺序：每个新的临床子问题先调用 source_library_search；若返回直接相关的历史来源，优先用其 source_url 调用 web_read 复用本地归档，再用 guideline_mcp_search/read 补充或核验；guideline_mcp_retrieve 暂时停用。只有本地库无直接相关来源、需要最新版本，或需要解决指南冲突时，才转向 MCP/PubMed/web。不要把 guideline_mcp_search 的文档候选当作证据片段；只有读取文档返回的片段后才能登记证据。不要通过目录扫描寻找证据。";
   const reportInstructions = input.responseMode === "answer"
     ? "当前只需完成对话式回答：直接回应用户追问，保留必要的不确定性和引用上下文，不创建、修改或展示正式报告。"
-    : "若本轮判断为正式研究，遵循 clinical-report-writing skill：以临床总决策拆出最少的、能改变选择的循证子问题；每个分析小节先给出裁决，再解释证据如何支持或限制它，并回到当前病例的适用条件。报告标题与结构由该 skill 和实际临床决策决定，不得按文献逐篇罗列，不得把内部工具、文件路径或检索日志写给医生。不得只在聊天消息中输出摘要，正式报告必须归档为可复核的报告文件；聊天消息仍应保留自然、简洁的最终回答。";
+    : input.audienceMode === "patient"
+      ? "若本轮判断为正式研究，遵循 patient-health-report-writing skill：从患者真正要解决的健康问题组织报告，优先呈现条件性结论、当前风险、现在可以做什么、危险信号和何时就医，再用通俗但可核验的证据解释为什么；不得把医生版报告仅删减术语后交给患者。正式健康报告必须归档为可复核的报告文件，最终聊天答复另按患者健康 JSON 契约输出，不复制完整报告。"
+      : "若本轮判断为正式研究，遵循 clinical-report-writing skill：以临床总决策拆出最少的、能改变选择的循证子问题；每个分析小节先给出裁决，再解释证据如何支持或限制它，并回到当前病例的适用条件。报告标题与结构由该 skill 和实际临床决策决定，不得按文献逐篇罗列，不得把内部工具、文件路径或检索日志写给医生。不得只在聊天消息中输出摘要，正式报告必须归档为可复核的报告文件；聊天消息仍应保留自然、简洁的最终回答。";
   const reportPreflight = input.responseMode === "answer"
     ? "不要为了回答追问而重复执行正式报告流程；如需引用已有报告，直接使用当前会话中已经可见的报告内容。"
     : input.responseMode === "report"
-      ? "调用 report_write 前自检：每个关键子问题都说明了待裁决主张、直接或间接证据、证据能与不能推出什么、对病例意味着什么；关键医学判断、阈值、疗效或安全性数字紧跟编号引用；正文引用与参考文献编号完全对应。"
+      ? input.audienceMode === "patient"
+        ? "调用 report_write 前自检：报告首部已经给出条件性健康结论、风险等级、现在可以做什么、危险信号和何时就医；每个关键判断都说明证据能与不能推出什么，并与最终患者健康 JSON 保持一致；关键医学判断、阈值、疗效或安全性数字紧跟编号引用，正文引用与参考文献编号完全对应。"
+        : "调用 report_write 前自检：每个关键子问题都说明了待裁决主张、直接或间接证据、证据能与不能推出什么、对病例意味着什么；关键医学判断、阈值、疗效或安全性数字紧跟编号引用；正文引用与参考文献编号完全对应。"
       : "只有在本轮确实选择正式研究并准备写入报告时，才执行 report_write 前自检；如果是已有报告的直接追问，不调用报告写入工具。";
   return [
     input.audienceMode === "patient"

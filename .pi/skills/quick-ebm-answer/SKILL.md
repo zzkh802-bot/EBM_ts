@@ -1,11 +1,11 @@
 ---
 name: quick-ebm-answer
-description: Time-bounded evidence-based clinical answers. Use in quick mode to reach a defensible, referenced decision within two minutes without creating evidence records or a formal report.
+description: Time-bounded evidence-based clinician and patient-health answers. Use in quick mode to reach a defensible, referenced decision within two minutes without creating evidence records or a formal report.
 ---
 
 # 快速循证回答策略
 
-本技能是完整 `ebm-research` 与 `clinical-report-writing` 技能的限时执行策略，不替代其真实性、来源权威性、适用性和不确定性要求。目标是在两分钟内提供足以支持当前临床决策的专业回答，而不是完成一份缩短版正式报告。
+本技能是完整 `ebm-research` 与当前受众写作技能（医生端 `clinical-report-writing` 或患者端 `patient-health-report-writing`）的限时执行策略，不替代其真实性、来源权威性、适用性、不确定性和安全要求。目标是在两分钟内提供足以支持当前决定的可靠回答，而不是完成一份缩短版正式报告。
 
 ## 先思考，再检索
 

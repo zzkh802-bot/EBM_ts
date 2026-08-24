@@ -499,6 +499,10 @@ describe("循医研究服务 API", () => {
       const patientExpertPrompt = buildAgentPrompt({ ...promptInput({ audienceMode: "patient", researchMode: "expert", thinkingLevel: "high", responseMode: "report" }) });
       expect(patientExpertPrompt).toContain("患者健康循证研究服务");
       expect(patientExpertPrompt).toContain("患者端专家研究");
+      expect(patientExpertPrompt).toContain("patient-health-report-writing skill");
+      expect(patientExpertPrompt).not.toContain("遵循 clinical-report-writing skill");
+      expect(patientExpertPrompt).toContain("条件性健康结论、风险等级、现在可以做什么、危险信号和何时就医");
+      expect(patientExpertPrompt).toContain("与最终患者健康 JSON 保持一致");
       expect(patientExpertPrompt).toContain("最终聊天答复只输出一个合法 JSON 对象");
       expect(patientExpertPrompt).toContain("必须生成正式循证报告");
     } finally {
