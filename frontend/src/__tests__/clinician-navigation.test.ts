@@ -30,7 +30,7 @@ describe('医生工作台入口与新建问题', () => {
     expect(router.currentRoute.value.path).toBe('/clinician')
   })
 
-  it('默认开放患者端健康问答入口', async () => {
+  it('默认开放健康问答入口', async () => {
     const router = routerFor()
     await router.push('/')
     await router.isReady()
@@ -39,7 +39,6 @@ describe('医生工作台入口与新建问题', () => {
     const patientEntry = wrapper.get<HTMLButtonElement>('.entry-choice.patient')
     expect(patientEntry.element.disabled).toBe(false)
     expect(patientEntry.text()).toContain('健康问答')
-    expect(patientEntry.text()).not.toContain('我是患者')
     expect(patientEntry.text()).toContain('开始提问')
 
     await router.push('/patient/intake')

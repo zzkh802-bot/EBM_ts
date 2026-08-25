@@ -154,6 +154,7 @@ export interface PatientMessage {
   createdAt: string
   pending?: boolean
   failed?: boolean
+  stage?: AgentStage
   trace?: TraceItem[]
   progressUpdates?: ResearchProgressUpdate[]
   tools?: Array<Record<string, unknown>>

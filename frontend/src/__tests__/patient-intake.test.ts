@@ -13,7 +13,7 @@ const userMessage = (id: string, content: string, failed = false) => ({
   id, role: 'user' as const, content, createdAt: new Date().toISOString(), failed,
 })
 
-describe('患者健康问答状态', () => {
+describe('健康问答状态', () => {
   it('uses an isolated local history and does not inherit clinician research sessions', async () => {
     localStorage.setItem(STORAGE_KEYS.sessions, JSON.stringify([{ id: 'clinician-1', messages: [] }]))
     const intake = usePatientIntakeStore()

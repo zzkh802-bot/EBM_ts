@@ -9,6 +9,7 @@ const props = defineProps<{
   pending?: boolean
   startedAt?: string
   completedAt?: string
+  audience?: "patient" | "clinical"
 }>()
 
 const currentTime = ref(Date.now())
@@ -100,17 +101,25 @@ const toolActivity = computed(() => (props.tools || [])
 const activeTool = computed(() => toolActivity.value.find((tool) => tool.status === 'running'))
 const latestUpdate = computed(() => progressUpdates.value.at(-1)?.text)
 const completed = computed(() => !props.pending && !errors.value.length)
-const title = computed(() => errors.value.length ? '本轮研究未完成' : completed.value ? '本轮研究已完成' : '研究进行中')
-const fallbackCopy = computed(() => {
-  if (errors.value.length) return errors.value.at(-1)?.detail || errors.value.at(-1)?.label || '研究服务未能完成本轮任务。'
-  if (activeTool.value) return `正在${activeTool.value.label}。`
-  return props.pending ? '正在梳理临床问题并准备下一步研究。' : '已形成可回看的研究记录。'
+const isPatient = computed(() => props.audience === "patient")
+const title = computed(() => {
+  if (errors.value.length) return isPatient.value ? "本轮健康问答未完成" : "本轮研究未完成"
+  if (completed.value) return isPatient.value ? "本轮健康问答已完成" : "本轮研究已完成"
+  return isPatient.value ? "健康问答进行中" : "研究进行中"
 })
-const hasActivity = computed(() => Boolean(props.pending || errors.value.length || progressUpdates.value.length || toolActivity.value.length))
+const fallbackCopy = computed(() => {
+  if (errors.value.length) return errors.value.at(-1)?.detail || errors.value.at(-1)?.label || "研究服务未能完成本轮任务。"
+  if (activeTool.value) return `正在${activeTool.value.label}。`
+  if (props.pending) return isPatient.value ? "正在核对信息并整理建议。" : "正在梳理临床问题并准备下一步研究。"
+  return isPatient.value ? "已完成本轮健康问答。" : "已形成可回看的研究记录。"
+})
+const hasActivity = computed(() => Boolean(
+  props.pending || errors.value.length || progressUpdates.value.length || toolActivity.value.length || props.startedAt || props.completedAt,
+))
 </script>
 
 <template>
-  <section v-if="hasActivity" class="research-progress" :class="{ error: errors.length, complete: completed }" aria-label="研究进展">
+  <section v-if="hasActivity" class="research-progress" :class="{ error: errors.length, complete: completed }" :aria-label="isPatient ? '健康问答过程概览' : '研究进展'">
     <div class="research-progress-head">
       <span>{{ title }}</span>
       <small>总计 {{ elapsed }}</small>
@@ -118,7 +127,7 @@ const hasActivity = computed(() => Boolean(props.pending || errors.value.length 
 
     <p class="research-progress-current">{{ latestUpdate || fallbackCopy }}</p>
 
-    <ol v-if="progressActivity.length" class="research-progress-notes" aria-label="模型研究进展">
+    <ol v-if="progressActivity.length" class="research-progress-notes" :aria-label="isPatient ? '健康问答进展' : '模型研究进展'">
       <li v-for="update in progressActivity" :key="`${update.timestamp}-${update.text}`">
         <i aria-hidden="true" />
         <span>{{ update.text }}</span>
@@ -128,8 +137,8 @@ const hasActivity = computed(() => Boolean(props.pending || errors.value.length 
 
     <details v-if="toolActivity.length" class="research-progress-tools">
       <summary>
-        <span>{{ activeTool ? `正在${activeTool.label}` : `研究操作 · ${toolActivity.length} 项` }}</span>
-        <small>查看详情</small>
+        <span>{{ activeTool ? `正在${activeTool.label}` : `${isPatient ? '信息核对过程' : '研究操作'} · ${toolActivity.length} 项` }}</span>
+        <small>{{ isPatient ? '查看过程' : '查看详情' }}</small>
       </summary>
       <ol>
         <li v-for="tool in toolActivity" :key="tool.id" :class="tool.status">

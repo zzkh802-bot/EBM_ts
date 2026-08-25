@@ -6,7 +6,7 @@ import RunActivity from '../components/evidence/RunActivity.vue'
 import SiteCredit from '../components/shell/SiteCredit.vue'
 import { agentService, uploadAttachment } from '../services'
 import { usePatientIntakeStore } from '../stores'
-import { PATIENT_FREE_CHAT_TURN_LIMIT } from '../types/domain'
+import { PATIENT_FREE_CHAT_TURN_LIMIT, type AgentStage } from '../types/domain'
 import { newId, nowIso } from '../utils/core'
 
 const router = useRouter()
@@ -28,6 +28,11 @@ const freeChatComplete = computed(() => intake.userTurnCount >= PATIENT_FREE_CHA
 const hasConversation = computed(() => intake.active.messages.some((message) => message.role === 'user'))
 const activeHasConversation = computed(() => intake.active.messages.some((message) => message.role === 'user'))
 const researchCount = computed(() => intake.active.messages.filter((message) => message.role === 'user').length)
+const stages: Record<AgentStage, string> = {
+  planning: '正在梳理问题与检索范围', retrieving: '正在检索可用证据', tooling: '正在阅读与核验资料',
+  generating: '正在整理最终回答', network_wait: '正在等待研究服务响应', idle: '',
+}
+const stageLabel = (stage?: AgentStage) => (stage && stages[stage]) || '正在调用循证引擎…'
 const primaryActionLabel = computed(() => {
   if (!busy.value) return '提问'
   return question.value.trim() ? '加入后续追问' : '停止本轮问答'
@@ -81,12 +86,13 @@ const ask = async () => {
   const pendingId = newId('patient-assistant')
   intake.add({
     id: pendingId, role: 'assistant', content: '正在检索并整理可靠信息，请稍候…',
-    createdAt: nowIso(), pending: true, trace: [], tools: [],
+    createdAt: nowIso(), pending: true, stage: 'planning', trace: [], tools: [],
   })
   const signal = new AbortController()
   busySignal.value = signal
   const requestResearchSessionId = intake.active.researchSessionId
   let loadedServerSessionId = requestResearchSessionId
+  let currentStage = 'planning' as AgentStage
   try {
     busy.value = true
     attachmentError.value = ''
@@ -108,12 +114,14 @@ const ask = async () => {
           intake.setResearchSessionId(status.session_id)
         }
         intake.patch(pendingId, {
+          stage: status.stage || currentStage,
           trace: status.agent_trace || [],
           progressUpdates: status.progress_updates || [],
           tools: status.tools || [],
           runStartedAt: status.started_at,
           runCompletedAt: status.completed_at,
         })
+        if (status.stage) currentStage = status.stage
       },
     })
     if (data.session_id) intake.setResearchSessionId(data.session_id)
@@ -122,6 +130,7 @@ const ask = async () => {
     intake.patch(pendingId, {
       content: answerText || '这次没有生成回答，请重试。',
       pending: false,
+      stage: data.stage || 'idle',
       trace: data.agent_trace || [],
       progressUpdates: data.progress_updates || [],
       tools: data.tools || [],
@@ -273,7 +282,9 @@ const handlePrimaryAction = () => {
               <div class="bubble">
                 <div v-if="message.role === 'assistant'" class="message-heading">
                   <strong>循医</strong>
+                  <span class="message-mode">快速模式 · 低推理</span>
                 </div>
+                <div v-if="message.role === 'assistant' && message.pending" class="agent-stage" role="status">{{ stageLabel(message.stage) }}</div>
                 <RunActivity
                   v-if="message.role === 'assistant'"
                   :trace="message.trace || []"
@@ -282,12 +293,12 @@ const handlePrimaryAction = () => {
                   :pending="message.pending"
                   :started-at="message.runStartedAt"
                   :completed-at="message.runCompletedAt"
+                  audience="patient"
                 />
-                <p v-if="message.role === 'assistant' && message.pending" class="patient-answer-status" role="status">正在认真整理信息，请稍候…</p>
-                <div v-else-if="message.role === 'assistant'" class="markdown-content">
+                <div v-if="message.role === 'assistant' && !message.pending" class="markdown-content">
                   <MarkdownContent :markdown="message.content" />
                 </div>
-                <p v-else>{{ message.content }}</p>
+                <p v-if="message.role !== 'assistant'">{{ message.content }}</p>
               </div>
             </article>
             <p v-if="error" class="patient-error">{{ error }}</p>
@@ -305,6 +316,4 @@ const handlePrimaryAction = () => {
 
 <style scoped>
 .patient-error { margin: 0 0 12px; color: var(--danger); font-size: 13px; }
-.patient-answer-status { margin: 0; color: var(--ink-soft); font-size: 15px; line-height: 1.7; }
-.patient-answer-status::before { display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--jade); content: ""; animation: evidence-pulse 1.4s ease-in-out infinite; }
 </style>

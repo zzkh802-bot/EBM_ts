@@ -60,7 +60,7 @@ export const usePatientIntakeStore = defineStore('patientIntake', () => {
   }
   const add = (message: PatientMessage) => {
     active.value.messages.push(message)
-    if (message.role === 'user' && ['新的就诊准备', '健康问答'].includes(active.value.title)) active.value.title = titleFrom(message.content)
+    if (message.role === 'user' && ['健康问答'].includes(active.value.title)) active.value.title = titleFrom(message.content)
     active.value.updatedAt = nowIso()
   }
   const patch = (id: string, change: Partial<PatientMessage>) => {
