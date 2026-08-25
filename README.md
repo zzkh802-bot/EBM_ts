@@ -121,7 +121,7 @@ deepseek/deepseek-v4-flash
 The extension also registers:
 
 ```text
-xinqiong/deepseek-v4-flash
+xinqiong/deepseek-v4-flash-0731
 ```
 
 ## EBM tools

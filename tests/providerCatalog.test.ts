@@ -11,6 +11,7 @@ describe("EBM provider catalog", () => {
       api: "openai-completions",
       apiKey: "$OPENAI_API_KEY",
       baseUrl: "https://cloud.infini-ai.com/maas/deepseek-v4-flash/nvidia",
+      models: [expect.objectContaining({ id: "deepseek-v4-flash-0731" })],
     });
   });
 });

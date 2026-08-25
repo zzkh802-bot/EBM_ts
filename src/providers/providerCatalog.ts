@@ -14,8 +14,8 @@ export function registerEbmProviders(pi: Pick<ExtensionAPI, "registerProvider">)
     api: "openai-completions",
     models: [
       {
-        id: "deepseek-v4-flash",
-        name: "DeepSeek V4 Flash via Xinqiong",
+        id: "deepseek-v4-flash-0731",
+        name: "DeepSeek V4 Flash 0731 via Xinqiong",
         reasoning: true,
         thinkingLevelMap: { off: null, minimal: null, low: null, medium: null, high: "high", xhigh: null, max: "max" },
         input: ["text"],

@@ -22,7 +22,7 @@ Not required for this milestone: cloud API/multi-user auth, scheduler, subagents
 - Markdown normalization/archive and Markdown evidence add/list/read are implemented.
 - Project extension registers `evidence_add`, `evidence_list`, and `evidence_read` through Pi and emits `ebm:evidence_added`.
 - Concurrent evidence writes use Pi's file mutation queue.
-- Pi native `deepseek/deepseek-v4-flash` is the default; Xinqiong is an OpenAI-compatible endpoint using `OPENAI_API_KEY`.
+- Pi native `deepseek/deepseek-v4-flash` is the default; Xinqiong exposes the verified `deepseek-v4-flash-0731` model through its OpenAI-compatible endpoint using `OPENAI_API_KEY`.
 - Real direct calls verified DeepSeek thinking off/on, DeepSeek tool calls, and Xinqiong thinking/tool calls.
 - `npm run ebm` loads `.env`, launches native Pi TUI, and stores Pi sessions locally.
 - `web_read` (Jina → Firecrawl fallback) normalizes/archive before model exposure; `web_search` (Tavily) archives the discovery snapshot but exposes only Top-K candidate titles, URLs, provider summaries, and search-provider scores. Both return explicit provider attempts on failure.
