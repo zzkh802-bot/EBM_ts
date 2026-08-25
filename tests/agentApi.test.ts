@@ -237,6 +237,8 @@ describe("循医研究服务 API", () => {
     expect(prompt).not.toContain("患者端呈现规则（优先于本提示中其他面向临床读者的写法）");
     expect(prompt).toContain("<ref source_ids=");
     expect(hideQuickAnswerReferences("可以先休息和补充水分。[1]\n\n## 参考文献\n\n1. 内部来源")).toBe("可以先休息和补充水分。");
+    expect(hideQuickAnswerReferences("可以先休息。<ref source_ids=\"src_1\" />\n\n也可以多喝水。")).toBe("可以先休息。\n\n也可以多喝水。");
+    expect(hideQuickAnswerReferences("正文<ref source_ids=\"src_1,src_2\">引用内容</ref>正文。")).toBe("正文引用内容正文。");
   });
 
   it("turns one or more quick-mode source IDs into numbered references without evidence records", async () => {

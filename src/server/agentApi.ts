@@ -618,7 +618,7 @@ export async function loadRuntimeConfig(rootDir: string): Promise<RuntimeConfig>
   const accountAuth = await subscriptionAuthStatus(rootDir);
   const models: RuntimeModel[] = [
     {
-      provider: "xinqiong", provider_label: "芯穹 / Infini-AI", model: "deepseek-v4-flash", model_label: "DeepSeek V4 Flash",
+      provider: "xinqiong", provider_label: "芯穹 / Infini-AI", model: "deepseek-v4-flash-0731", model_label: "DeepSeek V4 Flash 0731",
       available: Boolean(env.XINQIONG_API_KEY || (env.EBM_PROVIDER === "xinqiong" && env.OPENAI_API_KEY)),
       setup_hint: "设置 XINQIONG_API_KEY；旧配置可继续使用 EBM_PROVIDER=xinqiong 与 OPENAI_API_KEY。",
     },
@@ -1192,7 +1192,7 @@ async function validateAgentRunInput(value: unknown, runtimeConfig: RuntimeConfi
   const thinkingLevel: ThinkingLevel = researchMode === "quick" ? "low" : requestedThinkingLevel;
   // Advisory only: the eighth quick-mode reminder tells the model to finish,
   // rather than terminating an in-flight answer and leaving the user empty-handed.
-  const maxIterations = researchMode === "quick" ? 8 : 48;
+  const maxIterations = audienceMode === "patient" ? 3 : researchMode === "quick" ? 8 : 48;
   // Two minutes is a quick-mode performance target, not a destructive cutoff.
   // Keep a generous fail-safe only for a genuinely stalled request.
   const requestTimeoutSeconds = researchMode === "quick" ? 600 : 3_600;
@@ -1388,7 +1388,7 @@ async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks:
   hooks.setSessionId(sessionId);
   addTrace(trace("runtime.session", request.sessionId ? "研究会话已恢复" : "研究会话已创建", sessionId));
   await initializePiSessionDirectory(rootDir, sessionId, {
-    sessionName: request.audienceMode === "patient" ? `患者端健康问答 ${sessionWorkspaceLabel(request.question)}` : sessionWorkspaceLabel(request.question),
+    sessionName: request.audienceMode === "patient" ? `健康问答 ${sessionWorkspaceLabel(request.question)}` : sessionWorkspaceLabel(request.question),
     firstPrompt: request.question,
     audienceMode: request.audienceMode,
     ...(request.userId ? { userId: request.userId } : {}),
@@ -1598,6 +1598,9 @@ export async function formatQuickAnswerReferences(sessionDir: string, answer: st
 /** Patient answers retain source traceability in their private archive but never expose citations. */
 export function hideQuickAnswerReferences(answer: string): string {
   return answer
+    // Retain source traceability in the archived run, while being defensive
+    // about both self-closing and paired markers in user-visible text.
+    .replace(/<ref\b[^>]*>(?:\s*<\/ref\s*>)?|<\/ref\s*>/gi, "")
     .replace(/\n{2,}(?:#{1,6}\s*|\*\*\s*)(?:参考文献|references?)(?:\s*\*\*)?\s*\n[\s\S]*$/i, "")
     .replace(/\s*\[(?:\d{1,3}(?:\s*,\s*\d{1,3})*)\]/g, "")
     .trim();
