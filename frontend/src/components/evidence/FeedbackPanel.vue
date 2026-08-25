@@ -3,7 +3,9 @@ import { computed, ref } from 'vue'
 import { feedbackService } from '../../services/feedback'
 import type { FeedbackRubric } from '../../types/domain'
 
-const props = defineProps<{ sessionId: string; runId: string }>()
+const props = withDefaults(defineProps<{ sessionId: string; runId: string; audience?: 'clinician' | 'patient' }>(), {
+  audience: 'clinician',
+})
 const emit = defineEmits<{ closed: [] }>()
 const rubricDefinitions: Array<{ key: FeedbackRubric; label: string }> = [
   { key: 'requirement_understanding', label: '智能体正确理解了我的需求' },
@@ -16,13 +18,25 @@ const rubricDefinitions: Array<{ key: FeedbackRubric; label: string }> = [
   { key: 'ebm_standard_compliance', label: '报告符合循证规范，引用可以回溯' },
   { key: 'time_worth', label: '综合结果和等待时间，这次使用值得' },
 ]
+const patientRubricDefinitions: Array<{ key: FeedbackRubric; label: string }> = [
+  { key: 'requirement_understanding', label: '回答正确理解了我的健康问题' },
+  { key: 'clinical_interpretation_accuracy', label: '对症状和风险的解释准确、不过度判断' },
+  { key: 'subquestion_decomposition', label: '回答覆盖了我真正需要处理的关键问题' },
+  { key: 'evidence_support', label: '回答依据可靠，重要结论有证据支撑' },
+  { key: 'report_trustworthiness', label: '回答可信，没有明显编造或夸大' },
+  { key: 'report_completeness', label: '行动建议、风险信号和就医时机完整' },
+  { key: 'report_clarity', label: '表达清楚，普通人容易理解' },
+  { key: 'ebm_standard_compliance', label: '详细依据和引用可以回溯核对' },
+  { key: 'time_worth', label: '综合结果和等待时间，这次使用值得' },
+]
+const definitions = computed(() => props.audience === 'patient' ? patientRubricDefinitions : rubricDefinitions)
 const values = ref<Partial<Record<FeedbackRubric, number>>>({})
 const comment = ref('')
 const submitted = ref(false)
 const dismissed = ref(false)
 const pending = ref(false)
 const error = ref('')
-const complete = computed(() => rubricDefinitions.every((item) => values.value[item.key] !== undefined))
+const complete = computed(() => definitions.value.every((item) => values.value[item.key] !== undefined))
 
 const choose = (key: FeedbackRubric, value: number) => { values.value[key] = value }
 const submit = async () => {
@@ -53,9 +67,9 @@ const dismiss = () => {
       <small v-if="submitted">已记录，谢谢</small>
       <small v-else>请按这份报告是否符合描述评分：1 = 完全不符合，5 = 完全符合</small>
     </div>
-    <p v-if="!submitted" class="feedback-note">只评价这份最终报告及其使用价值，不需要评价模型内部检索过程。</p>
+    <p v-if="!submitted" class="feedback-note">{{ audience === 'patient' ? '只评价这次健康回答是否清楚、可靠和有帮助。' : '只评价这份最终报告及其使用价值，不需要评价模型内部检索过程。' }}</p>
     <div v-if="!submitted" class="feedback-rubrics">
-      <div v-for="item in rubricDefinitions" :key="item.key" class="feedback-rubric">
+      <div v-for="item in definitions" :key="item.key" class="feedback-rubric">
         <span>{{ item.label }}</span>
         <div class="feedback-scale" role="group" :aria-label="item.label">
           <button v-for="score in [1, 2, 3, 4, 5]" :key="score" type="button" :class="{ selected: values[item.key] === score }" @click="choose(item.key, score)">{{ score }}</button>
@@ -72,7 +86,7 @@ const dismiss = () => {
 </template>
 
 <style scoped>
-.feedback-panel { margin-top: 18px; padding: 14px 15px; border: 1px solid rgba(49, 86, 200, .2); border-radius: 10px; background: rgba(230, 239, 255, .62); }
+.feedback-panel { margin-top: 18px; padding: 14px 15px; border: 1px solid var(--accent-border, rgba(49, 86, 200, .2)); border-radius: 8px; background: var(--accent-soft, rgba(230, 239, 255, .62)); }
 .feedback-panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 11px; color: var(--ink, #172535); }
 .feedback-panel-head span { font-weight: 700; }
 .feedback-panel-head small { color: var(--ink-faint, #8a959b); }
@@ -82,7 +96,7 @@ const dismiss = () => {
 .feedback-rubrics { display: grid; gap: 9px; }
 .feedback-rubric { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--ink-soft, #56636f); font-size: 12px; }
 .feedback-scale { display: flex; gap: 4px; }
-.feedback-scale button { min-width: 34px; padding: 4px 7px; border: 1px solid rgba(49, 86, 200, .22); border-radius: 5px; background: rgba(255, 255, 255, .7); color: var(--ink-soft, #56636f); cursor: pointer; }
+.feedback-scale button { min-width: 34px; padding: 4px 7px; border: 1px solid var(--accent-border, rgba(49, 86, 200, .22)); border-radius: 5px; background: rgba(255, 255, 255, .7); color: var(--ink-soft, #56636f); cursor: pointer; }
 .feedback-scale button.selected { background: var(--jade, #3156c8); color: #fff; }
 .feedback-comment { margin-top: 11px; color: var(--ink-soft, #56636f); font-size: 12px; }
 .feedback-comment textarea { box-sizing: border-box; width: 100%; min-height: 68px; margin-top: 8px; padding: 8px; border: 1px solid rgba(23, 37, 53, .16); border-radius: 6px; background: #fff; resize: vertical; }

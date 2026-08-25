@@ -1,12 +1,19 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import { useSessionsStore, useUiStore } from '../../stores'
+import { usePatientIntakeStore, useSessionsStore, useUiStore } from '../../stores'
 
 const sessions = useSessionsStore()
+const patientIntake = usePatientIntakeStore()
 const ui = useUiStore()
 const router = useRouter()
 
-const openNotice = (id: string, sessionId: string) => {
+const openNotice = (id: string, sessionId: string, workspace: 'clinician' | 'patient' = 'clinician') => {
+  if (workspace === 'patient') {
+    if (patientIntake.sessions.some((session) => session.id === sessionId)) patientIntake.select(sessionId)
+    ui.dismissRunNotice(id)
+    void router.push('/patient/intake')
+    return
+  }
   if (!sessions.sessions.some((session) => session.id === sessionId)) {
     ui.dismissRunNotice(id)
     void router.push('/clinician')
@@ -21,10 +28,10 @@ const openNotice = (id: string, sessionId: string) => {
 <template>
   <div v-if="ui.completionNotices.length" class="run-completion-notices" aria-live="polite" aria-label="研究完成提醒">
     <article v-for="notice in ui.completionNotices" :key="notice.id" class="run-completion-notice">
-      <button class="run-completion-main" type="button" @click="openNotice(notice.id, notice.sessionId)">
+      <button class="run-completion-main" type="button" @click="openNotice(notice.id, notice.sessionId, notice.workspace)">
         <span class="run-completion-icon" aria-hidden="true">✓</span>
         <span class="run-completion-copy">
-          <strong>本轮研究已完成</strong>
+          <strong>{{ notice.workspace === 'patient' ? '本轮健康问答已完成' : '本轮研究已完成' }}</strong>
           <small>{{ notice.title || '临床问题' }}</small>
           <em>点击查看结果</em>
         </span>

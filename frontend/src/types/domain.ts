@@ -160,6 +160,11 @@ export interface PatientMessage {
   tools?: Array<Record<string, unknown>>
   runStartedAt?: string
   runCompletedAt?: string
+  researchMode?: ResearchMode
+  reportMarkdown?: string
+  reportPath?: string
+  runId?: string
+  queryId?: string
 }
 
 export type PatientConversationMode = 'free_chat'

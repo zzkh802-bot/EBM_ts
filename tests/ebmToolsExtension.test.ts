@@ -162,6 +162,7 @@ describe("EBM Pi extension tools", () => {
     expect(loader.getSkills().skills.map((skill) => skill.name)).toEqual(expect.arrayContaining([
       "clinical-report-writing",
       "ebm-research",
+      "patient-health-report-writing",
     ]));
   });
 

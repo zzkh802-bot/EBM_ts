@@ -7,6 +7,7 @@ import {
   type AgentExecutionHooks,
   type AgentRunInput,
   type PiRpcClientLike,
+  type PiRpcClientOptions,
 } from "../src/server/agentApi.js";
 import { piSessionDirectory } from "../src/extensions/sessionPath.js";
 
@@ -107,6 +108,42 @@ const hooks = (signal = new AbortController().signal): AgentExecutionHooks => ({
 });
 
 describe("Pi RPC clinician executor", () => {
+  it("loads one audience-specific writing skill while preserving the quick-mode policy skill", async () => {
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-rpc-skills-"));
+    const cli = path.join(rootDir, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
+    await mkdir(path.dirname(cli), { recursive: true });
+    await writeFile(cli, "", "utf8");
+    await mkdir(path.join(rootDir, ".pi"), { recursive: true });
+    await writeFile(path.join(rootDir, ".pi", "models.json"), "{}\n", "utf8");
+    const options: PiRpcClientOptions[] = [];
+    const executor = createPiRpcExecutor({
+      rootDir,
+      clientFactory: (value) => {
+        options.push(value);
+        return new FakeRpcClient(`rpc-skill-${options.length}`, rootDir);
+      },
+    });
+    const variants: AgentRunInput[] = [
+      { ...request(), researchMode: "expert", maxIterations: 48, requestTimeoutSeconds: 3_600 },
+      { ...request(), audienceMode: "patient", researchMode: "expert", maxIterations: 48, requestTimeoutSeconds: 3_600 },
+      { ...request(), researchMode: "quick", thinkingLevel: "low", responseMode: "answer", maxIterations: 8 },
+      { ...request(), audienceMode: "patient", researchMode: "quick", thinkingLevel: "low", responseMode: "answer", maxIterations: 8 },
+    ];
+
+    for (const variant of variants) await executor(variant, hooks());
+
+    const skillNames = (value: PiRpcClientOptions) => value.args.flatMap((argument, index, args) =>
+      argument === "--skill" && args[index + 1]
+        ? [path.basename(path.dirname(args[index + 1]!))]
+        : []);
+    expect(options).toHaveLength(4);
+    expect(skillNames(options[0]!)).toEqual(["ebm-research", "clinical-report-writing"]);
+    expect(skillNames(options[1]!)).toEqual(["ebm-research", "patient-health-report-writing"]);
+    expect(skillNames(options[2]!)).toEqual(["ebm-research", "clinical-report-writing", "quick-ebm-answer"]);
+    expect(skillNames(options[3]!)).toEqual(["ebm-research", "patient-health-report-writing", "quick-ebm-answer"]);
+    await executor.dispose();
+  });
+
   it("aborts a model stream that stops producing activity before the total request timeout", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-rpc-stall-"));
     const cli = path.join(rootDir, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
