@@ -42,7 +42,7 @@ export class InternalAuthStore {
 
   get enabled(): boolean { return Boolean(this.accessKey); }
 
-  async register(usernameValue: unknown, passwordValue: unknown, inviteValue: unknown, clientKey = "unknown"): Promise<RegistrationResult> {
+  async register(usernameValue: unknown, displayNameValue: unknown, passwordValue: unknown, inviteValue: unknown, clientKey = "unknown"): Promise<RegistrationResult> {
     if (!this.allowAttempt(clientKey)) return { ok: false, code: "invalid_invite" };
     if (!this.accessKey || !constantTimeEqual(inviteValue, this.accessKey)) return { ok: false, code: "invalid_invite" };
     if (typeof passwordValue !== "string" || passwordValue.length < PASSWORD_MIN_LENGTH || passwordValue.length > 256) return { ok: false, code: "invalid_password" };
@@ -50,9 +50,10 @@ export class InternalAuthStore {
     if (!username) return { ok: false, code: "invalid_username" };
     if (this.userByUsername(username) || this.userByLegacyDisplayName(username)) return { ok: false, code: "username_taken" };
     const id = this.newUserId();
+    const displayName = normalizeDisplayName(displayNameValue);
     const salt = randomBytes(16).toString("hex");
     const stored: StoredUser = {
-      id, username, salt,
+      id, username, ...(displayName ? { display_name: displayName } : {}), salt,
       password_hash: hashPassword(passwordValue, salt), created_at: new Date().toISOString(),
     };
     this.users.set(id, stored);
@@ -207,6 +208,11 @@ export function normalizeUsername(value: unknown): string | undefined {
   return USERNAME_PATTERN.test(username) ? username : undefined;
 }
 
+function normalizeDisplayName(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const displayName = value.trim().replace(/\s+/g, " ");
+  return displayName ? displayName.slice(0, 80) : undefined;
+}
 
 function toPublicUser(user: StoredUser): InternalUser {
   return { id: user.id, ...(user.username ? { username: user.username } : {}), ...(user.display_name ? { display_name: user.display_name } : {}) };

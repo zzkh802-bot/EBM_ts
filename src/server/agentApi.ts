@@ -1398,6 +1398,10 @@ async function runPiRpc(input: { rootDir: string; request: AgentRunInput; hooks:
     }
     if (event.type === "message_end" && isRecord(event.message) && event.message.role === "assistant") {
       const text = contentText(event.message.content);
+      const thinking = contentThinking(event.message.content);
+      if (!text && thinking && event.message.stopReason === "toolUse") {
+        hooks.onProgress({ text: thinking, timestamp: new Date().toISOString() });
+      }
       if (text) {
         latestAnswer = text;
         if (event.message.stopReason === "toolUse") {
@@ -1864,6 +1868,12 @@ function contentText(value: unknown): string {
   if (typeof value === "string") return value;
   if (!Array.isArray(value)) return "";
   return value.map((item) => isRecord(item) && item.type === "text" && typeof item.text === "string" ? item.text : "").join("");
+}
+
+function contentThinking(value: unknown): string {
+  if (!Array.isArray(value)) return "";
+  const thinking = value.map((item) => isRecord(item) && item.type === "thinking" && typeof item.thinking === "string" ? item.thinking : "").join("");
+  return thinking.replace(/\s+/g, " ").trim().slice(0, 160);
 }
 
 function trace(kind: string, label: string, detail: string): AgentTraceEvent {

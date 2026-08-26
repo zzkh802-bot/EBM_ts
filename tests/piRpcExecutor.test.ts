@@ -168,7 +168,7 @@ describe("Pi RPC clinician executor", () => {
     await executor.dispose();
   });
 
-  it("loads separate skills for quick and expert mode", async () => {
+  it("loads audience-specific writing skills and adds the quick strategy in quick mode", async () => {
     const rootDir = await mkdtemp(path.join(os.tmpdir(), "ebm-rpc-skills-"));
     const cli = path.join(rootDir, "node_modules", "@earendil-works", "pi-coding-agent", "dist", "cli.js");
     await mkdir(path.dirname(cli), { recursive: true });
@@ -194,12 +194,12 @@ describe("Pi RPC clinician executor", () => {
     expect(expertArgs).toContain("ebm-research");
     expect(expertArgs).toContain("clinical-report-writing");
     expect(expertArgs).not.toContain("quick-ebm-answer");
+    expect(quickArgs).toContain("ebm-research");
+    expect(quickArgs).toContain("clinical-report-writing");
     expect(quickArgs).toContain("quick-ebm-answer");
-    expect(quickArgs).not.toContain("ebm-research");
-    expect(quickArgs).not.toContain("clinical-report-writing");
-    expect(healthArgs).toContain("health-answer");
-    expect(healthArgs).not.toContain("quick-ebm-answer");
-    expect(healthArgs).not.toContain("ebm-research");
+    expect(healthArgs).toContain("ebm-research");
+    expect(healthArgs).toContain("patient-health-report-writing");
+    expect(healthArgs).toContain("quick-ebm-answer");
     expect(healthArgs).not.toContain("clinical-report-writing");
     await executor.dispose();
   });
